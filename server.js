@@ -178,6 +178,14 @@ async function handleApi(req, res) {
 
     if (req.method === 'GET' && url.pathname === '/api/presets') return json(res, 200, { presets: listPresets() });
 
+    if (req.method === 'DELETE' && url.pathname.startsWith('/api/presets/')) {
+      const file = safeName(decodeURIComponent(url.pathname.split('/').pop()), '.json');
+      const fullPath = path.join(PRESETS_DIR, file);
+      if (!fs.existsSync(fullPath)) return error(res, 404, 'Пресет не найден');
+      fs.unlinkSync(fullPath);
+      return json(res, 200, { deleted: file.replace(/\.json$/i, '') });
+    }
+
     if (req.method === 'POST' && url.pathname === '/api/presets') {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const filename = safeName(body.name, '.json');

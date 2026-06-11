@@ -54,8 +54,13 @@ function renderPresets() {
     el.innerHTML = '<p class="hint">Пока пресетов нет.</p>';
     return;
   }
-  el.innerHTML = `<table><thead><tr><th>Пресет</th><th>Строки</th><th>Состав</th></tr></thead><tbody>${presets.map((p) => `
-    <tr><td><strong>${p.name}</strong></td><td>${p.items?.length ?? 0}</td><td>${(p.items ?? []).map((i) => `${i.strategy}: ${i.weightPercent}% (${i.date_from} → ${i.date_to ?? 'до конца'})`).join('<br>')}</td></tr>`).join('')}</tbody></table>`;
+  el.innerHTML = `<table><thead><tr><th>Пресет</th><th>Строки</th><th>Состав</th><th></th></tr></thead><tbody>${presets.map((p) => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.items?.length ?? 0}</td>
+      <td>${(p.items ?? []).map((i) => `${i.strategy}: ${i.weightPercent}% (${i.date_from} → ${i.date_to ?? 'до конца'})`).join('<br>')}</td>
+      <td><button class="danger" data-delete-preset="${p.name}">Удалить</button></td>
+    </tr>`).join('')}</tbody></table>`;
 }
 
 function strategyOptions(selected = '') {
@@ -109,6 +114,12 @@ async function deleteStrategy(file) {
   if (usedBy.length) message += `\n\nОна используется в пресетах:\n- ${usedBy.join('\n- ')}\n\nПресеты НЕ будут удалены. В расчетах по этой стратегии будут нули, пока ты не загрузишь стратегию с таким же именем снова.`;
   if (!confirm(message)) return;
   await api(`/api/strategies/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  await refreshAll();
+}
+
+async function deletePreset(name) {
+  if (!confirm(`Удалить пресет ${name}?\n\nСтратегии при этом НЕ удаляются.`)) return;
+  await api(`/api/presets/${encodeURIComponent(name)}`, { method: 'DELETE' });
   await refreshAll();
 }
 
@@ -218,6 +229,10 @@ $('#uploadForm').addEventListener('submit', (event) => uploadStrategy(event).cat
 $('#strategies').addEventListener('click', (event) => {
   const file = event.target.dataset.deleteStrategy;
   if (file) deleteStrategy(file).catch((err) => alert(err.message));
+});
+$('#presets').addEventListener('click', (event) => {
+  const name = event.target.dataset.deletePreset;
+  if (name) deletePreset(name).catch((err) => alert(err.message));
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
