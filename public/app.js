@@ -10,6 +10,10 @@ function fmtPct(value) {
   return `${(Number(value) * 100).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}%`;
 }
 
+function normalizeDateInput(value) {
+  return String(value || '').replace('T', ' ').trim();
+}
+
 async function api(url, options = {}) {
   const res = await fetch(url, options);
   const body = await res.json().catch(() => ({}));
@@ -50,8 +54,13 @@ function renderPresets() {
     el.innerHTML = '<p class="hint">Пока пресетов нет.</p>';
     return;
   }
-  el.innerHTML = `<table><thead><tr><th>Пресет</th><th>Строки</th><th>Состав</th></tr></thead><tbody>${presets.map((p) => `
-    <tr><td><strong>${p.name}</strong></td><td>${p.items?.length ?? 0}</td><td>${(p.items ?? []).map((i) => `${i.strategy}: ${i.weightPercent}% (${i.date_from} → ${i.date_to ?? 'до конца'})`).join('<br>')}</td></tr>`).join('')}</tbody></table>`;
+  el.innerHTML = `<table><thead><tr><th>Пресет</th><th>Строки</th><th>Состав</th><th></th></tr></thead><tbody>${presets.map((p) => `
+    <tr>
+      <td><strong>${p.name}</strong></td>
+      <td>${p.items?.length ?? 0}</td>
+      <td>${(p.items ?? []).map((i) => `${i.strategy}: ${i.weightPercent}% (${i.date_from} → ${i.date_to ?? 'до конца'})`).join('<br>')}</td>
+      <td><button class="danger" data-delete-preset="${p.name}">Удалить</button></td>
+    </tr>`).join('')}</tbody></table>`;
 }
 
 function strategyOptions(selected = '') {
@@ -93,7 +102,8 @@ async function uploadStrategy(event) {
   form.append('valueType', $('#valueType').value);
   const result = await api('/api/strategies', { method: 'POST', body: form });
   const gapText = result.gaps?.length ? `\nНайдены пропуски: ${result.gaps.length}` : '';
-  alert(`Стратегия сохранена: ${result.file}\nШаг определен: ${result.stepLabel}${gapText}`);
+  const renameText = result.renamed ? `\nИмя уже было занято, поэтому сохранено как: ${result.file}` : '';
+  alert(`Стратегия сохранена: ${result.file}${renameText}\nШаг определен: ${result.stepLabel}${gapText}`);
   event.target.reset();
   await refreshAll();
 }
@@ -101,9 +111,15 @@ async function uploadStrategy(event) {
 async function deleteStrategy(file) {
   const usedBy = presets.filter((p) => (p.items ?? []).some((i) => i.strategy === file)).map((p) => p.name);
   let message = `Удалить стратегию ${file}?`;
-  if (usedBy.length) message += `\n\nОна используется в пресетах:\n- ${usedBy.join('\n- ')}\n\nЕсли удалить, эти пресеты нельзя будет посчитать.`;
+  if (usedBy.length) message += `\n\nОна используется в пресетах:\n- ${usedBy.join('\n- ')}\n\nПресеты НЕ будут удалены. В расчетах по этой стратегии будут нули, пока ты не загрузишь стратегию с таким же именем снова.`;
   if (!confirm(message)) return;
   await api(`/api/strategies/${encodeURIComponent(file)}`, { method: 'DELETE' });
+  await refreshAll();
+}
+
+async function deletePreset(name) {
+  if (!confirm(`Удалить пресет ${name}?\n\nСтратегии при этом НЕ удаляются.`)) return;
+  await api(`/api/presets/${encodeURIComponent(name)}`, { method: 'DELETE' });
   await refreshAll();
 }
 
@@ -115,8 +131,8 @@ async function savePreset(overwrite = false) {
     items: rows.map((row) => ({
       strategy: row.querySelector('.row-strategy').value,
       weightPercent: row.querySelector('.row-weight').value,
-      date_from: row.querySelector('.row-from').value,
-      date_to: row.querySelector('.row-to').value,
+      date_from: normalizeDateInput(row.querySelector('.row-from').value),
+      date_to: normalizeDateInput(row.querySelector('.row-to').value),
       untilEnd: row.querySelector('.row-until-end').checked
     }))
   };
@@ -138,8 +154,8 @@ async function calculate() {
   const body = {
     targetType: $('#targetType').value,
     targetName: $('#targetName').value,
-    periodFrom: $('#periodFrom').value,
-    periodTo: $('#periodTo').value
+    periodFrom: normalizeDateInput($('#periodFrom').value),
+    periodTo: normalizeDateInput($('#periodTo').value)
   };
   if (!body.targetName) return alert('Выберите стратегию или пресет');
   const result = await api('/api/calculate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
@@ -213,6 +229,10 @@ $('#uploadForm').addEventListener('submit', (event) => uploadStrategy(event).cat
 $('#strategies').addEventListener('click', (event) => {
   const file = event.target.dataset.deleteStrategy;
   if (file) deleteStrategy(file).catch((err) => alert(err.message));
+});
+$('#presets').addEventListener('click', (event) => {
+  const name = event.target.dataset.deletePreset;
+  if (name) deletePreset(name).catch((err) => alert(err.message));
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));

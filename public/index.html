@@ -61,10 +61,10 @@
           <select id="targetName"></select>
         </label>
         <label>Период с
-          <input id="periodFrom" placeholder="YYYY-MM-DD HH:MM" />
+          <input id="periodFrom" type="datetime-local" step="60" />
         </label>
         <label>Период по
-          <input id="periodTo" placeholder="YYYY-MM-DD HH:MM" />
+          <input id="periodTo" type="datetime-local" step="60" />
         </label>
         <button id="calculate" type="button">Рассчитать</button>
       </div>
@@ -75,11 +75,11 @@
       <h2>4. Результат</h2>
       <div id="summary"></div>
       <div class="toggles">
-        <label><input type="checkbox" data-line="diff" checked /> diff</label>
-        <label><input type="checkbox" data-line="accum" checked /> accum</label>
-        <label><input type="checkbox" data-line="hwm" checked /> hwm</label>
-        <label><input type="checkbox" data-line="dd" checked /> dd</label>
-        <label><input type="checkbox" data-line="mdd" checked /> mdd</label>
+        <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" checked /> <span class="line-dot"></span> diff</label>
+        <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> accum</label>
+        <label style="--line-color: #16a56f"><input type="checkbox" data-line="hwm" checked /> <span class="line-dot"></span> hwm</label>
+        <label style="--line-color: #e28a00"><input type="checkbox" data-line="dd" checked /> <span class="line-dot"></span> dd</label>
+        <label style="--line-color: #cf3341"><input type="checkbox" data-line="mdd" checked /> <span class="line-dot"></span> mdd</label>
       </div>
       <svg id="chart" viewBox="0 0 900 360" role="img" aria-label="График расчета"></svg>
       <div class="table-wrap"><table id="resultTable"></table></div>
@@ -90,8 +90,8 @@
     <div class="preset-row">
       <label>Стратегия <select class="row-strategy"></select></label>
       <label>Вес, % <input class="row-weight" type="number" step="0.0001" value="100" /></label>
-      <label>Дата с <input class="row-from" placeholder="YYYY-MM-DD HH:MM" /></label>
-      <label>Дата по <input class="row-to" placeholder="YYYY-MM-DD HH:MM" /></label>
+      <label>Дата с <input class="row-from" type="datetime-local" step="60" /></label>
+      <label>Дата по <input class="row-to" type="datetime-local" step="60" /></label>
       <label class="check"><input class="row-until-end" type="checkbox" /> До конца</label>
       <button class="remove-row" type="button">Удалить строку</button>
     </div>
