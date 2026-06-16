@@ -50,6 +50,19 @@ function safeName(name, ext) {
   return `${cleaned}${ext}`;
 }
 
+
+function uniqueFileName(dir, filename) {
+  const ext = path.extname(filename);
+  const base = path.basename(filename, ext);
+  let candidate = filename;
+  let counter = 2;
+  while (fs.existsSync(path.join(dir, candidate))) {
+    candidate = `${base}_${counter}${ext}`;
+    counter += 1;
+  }
+  return candidate;
+}
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -139,11 +152,14 @@ async function handleApi(req, res) {
       const valueType = parts.valueType?.value;
       const desiredName = parts.name?.value || file?.filename || `strategy_${Date.now()}`;
       if (!file?.value) throw new Error('CSV-файл пустой или не выбран');
-      const filename = safeName(desiredName, '.csv');
+      const requestedFilename = safeName(desiredName, '.csv');
+      const filename = uniqueFileName(STRATEGIES_DIR, requestedFilename);
       const normalized = normalizeToDiffCsv(file.value, valueType);
       fs.writeFileSync(path.join(STRATEGIES_DIR, filename), normalized.csv, 'utf8');
       return json(res, 200, {
         file: filename,
+        requestedFile: requestedFilename,
+        renamed: filename !== requestedFilename,
         points: normalized.points.length,
         step: normalized.step,
         stepLabel: formatStep(normalized.step),
@@ -161,6 +177,14 @@ async function handleApi(req, res) {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/presets') return json(res, 200, { presets: listPresets() });
+
+    if (req.method === 'DELETE' && url.pathname.startsWith('/api/presets/')) {
+      const file = safeName(decodeURIComponent(url.pathname.split('/').pop()), '.json');
+      const fullPath = path.join(PRESETS_DIR, file);
+      if (!fs.existsSync(fullPath)) return error(res, 404, 'Пресет не найден');
+      fs.unlinkSync(fullPath);
+      return json(res, 200, { deleted: file.replace(/\.json$/i, '') });
+    }
 
     if (req.method === 'POST' && url.pathname === '/api/presets') {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
