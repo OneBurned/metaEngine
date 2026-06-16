@@ -638,3 +638,26 @@ Do not lose these product decisions:
 - re-uploading a strategy with the same filename makes it active again;
 - MDD is a series, not only one scalar;
 - user wants simple language and exact commands after updates.
+
+## 24. Conflict cleanup workflow
+
+If an older PR becomes hard to merge because GitHub shows many conflicts in core files, do not ask the user to resolve those conflicts manually in the GitHub web editor.
+
+Preferred approach:
+
+1. Keep the current working `main` safe.
+2. Preserve user data under `samples/`.
+3. Create a clean PR branch from the current `main`.
+4. Re-apply the intended final local-lab files in one coherent patch.
+5. Run tests and syntax checks.
+6. Open a new clean PR.
+7. After the clean PR is merged, close the old conflicted PR.
+
+Explain this to the user as:
+
+```text
+старый PR конфликтует;
+мы не чиним его руками в GitHub;
+делаем новый чистый PR поверх main;
+после merge нового PR старый можно закрыть.
+```
