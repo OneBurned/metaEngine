@@ -16,8 +16,8 @@ function fmtPct(value) {
 function normalizeDateInput(value) {
   const normalized = String(value || '').replace('T', ' ').trim();
   if (!normalized) return '';
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2})(?::\d{2})?$/);
-  return match ? `${match[1]} ${match[2]}:00` : normalized;
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2})(?::(\d{2}))?$/);
+  return match ? `${match[1]} ${match[2]}:${match[3] || '00'}` : normalized;
 }
 
 function zeroMinutes(value) {
