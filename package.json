@@ -1,0 +1,14 @@
+{
+  "name": "metaengine-local-lab",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local file-based MetaEngine strategy and preset calculator prototype.",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
