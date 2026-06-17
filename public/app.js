@@ -506,22 +506,30 @@ $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingS
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
 let activeDateInput = null;
 
-function fillDatePickerHours() {
+function fillDatePickerOptions() {
   const hourSelect = $('#datePickerHour');
-  if (!hourSelect || hourSelect.children.length) return;
-  hourSelect.innerHTML = Array.from({ length: 24 }, (_, hour) => {
-    const value = String(hour).padStart(2, '0');
-    return `<option value="${value}">${value}</option>`;
-  }).join('');
+  if (hourSelect && !hourSelect.children.length) {
+    hourSelect.innerHTML = Array.from({ length: 24 }, (_, hour) => {
+      const value = String(hour).padStart(2, '0');
+      return `<option value="${value}">${value}</option>`;
+    }).join('');
+  }
+  const minuteSelect = $('#datePickerMinute');
+  if (minuteSelect && !minuteSelect.children.length) {
+    minuteSelect.innerHTML = Array.from({ length: 60 }, (_, minute) => {
+      const value = String(minute).padStart(2, '0');
+      return `<option value="${value}">${value}</option>`;
+    }).join('');
+  }
 }
 
 function openDatePopup(input) {
   activeDateInput = input;
-  fillDatePickerHours();
+  fillDatePickerOptions();
   const parts = parseDateParts(input.value);
   $('#datePickerDate').value = parts.date;
   $('#datePickerHour').value = parts.hour;
-  $('#datePickerMinute').value = '00';
+  $('#datePickerMinute').value = parts.minute || '00';
   $('#datePickerPopup').classList.remove('hidden');
 }
 
