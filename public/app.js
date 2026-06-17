@@ -492,8 +492,8 @@ $('#targetType').addEventListener('change', renderTargetOptions);
 $('#targetName').addEventListener('change', applyTargetRange);
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
-  const picker = document.querySelector('[data-for="periodTo"]');
-  if (picker) picker.disabled = event.target.checked;
+  const pair = $('#periodTo').closest('.date-pair');
+  pair?.querySelectorAll('.date-picker, .date-open, .date-apply').forEach((item) => { item.disabled = event.target.checked; });
   if (event.target.checked) setDatePair($('#periodTo'), '');
 });
 $('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
@@ -505,19 +505,23 @@ $('#enableStrategies').addEventListener('change', (event) => {
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
-document.addEventListener('pointerdown', (event) => {
-  if (event.target.matches('.date-picker') && !event.target.value) event.target.value = defaultPickerValue();
-});
-
-document.addEventListener('focusin', (event) => {
-  if (event.target.matches('.date-picker') && !event.target.value) event.target.value = defaultPickerValue();
+document.addEventListener('click', (event) => {
+  if (event.target.matches('.date-open')) {
+    const picker = event.target.closest('.date-pair')?.querySelector('.date-picker');
+    if (!picker) return;
+    if (!picker.value) picker.value = defaultPickerValue();
+    if (typeof picker.showPicker === 'function') picker.showPicker();
+    else picker.focus();
+  }
+  if (event.target.matches('.date-apply')) {
+    const pair = event.target.closest('.date-pair');
+    const picker = pair?.querySelector('.date-picker');
+    const target = picker?.dataset.for ? document.getElementById(picker.dataset.for) : pair?.querySelector('.date-input');
+    if (picker?.value) setDatePair(target, picker.value);
+  }
 });
 
 document.addEventListener('change', (event) => {
-  if (event.target.matches('.date-picker')) {
-    const target = event.target.dataset.for ? document.getElementById(event.target.dataset.for) : event.target.closest('.date-pair')?.querySelector('.date-input');
-    setDatePair(target, event.target.value);
-  }
   if (event.target.matches('.date-input')) forceZeroMinutes(event.target);
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });

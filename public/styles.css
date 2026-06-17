@@ -35,9 +35,11 @@ button:hover { filter: brightness(.96); }
 .strategy-form label:nth-child(9),
 .strategy-form label:nth-child(10) { grid-column: span 2; }
 .strategy-form button { align-self: end; }
-.date-pair { display: grid; grid-template-columns: minmax(150px, 1fr) auto; gap: 8px; align-items: center; }
-.date-pair .date-picker { width: 52px; padding: 10px 6px; color: transparent; }
-.date-pair .date-picker::-webkit-calendar-picker-indicator { cursor: pointer; opacity: 1; }
+ .date-pair { display: grid; grid-template-columns: minmax(150px, 1fr) 42px 52px; gap: 8px; align-items: center; }
+.date-pair .date-picker { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.date-open, .date-apply { padding: 10px 8px; }
+.date-open { background: #eef2ff; color: #315efb; }
+.date-apply { background: #687386; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { border-bottom: 1px solid #e7ebf2; padding: 8px 10px; text-align: left; }
 th { background: #f7f9fc; position: sticky; top: 0; }
