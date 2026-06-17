@@ -209,7 +209,6 @@ function normalizeTradingStrategy(body) {
     periodFrom: body.periodFrom,
     periodTo: body.periodTo
   };
-  if (strategy.buyLevel >= strategy.sellLevel) throw new Error('Уровень покупки должен быть ниже уровня продажи');
   return strategy;
 }
 

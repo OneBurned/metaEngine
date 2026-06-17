@@ -685,9 +685,9 @@ Current first trading strategy:
 - RSI source: equity curve `1 + accum`;
 - visible returns still display as `accum = equity - 1`, so the start is shown as `0%`;
 - defaults: period `14`, upper `70`, lower `30`, baseline `50`;
-- trading rule: `RSI <= buyLevel` buys, `RSI >= sellLevel` sells;
-- repeated buy/sell signals are ignored when already in the corresponding position state;
-- signal affects the next point, not the same point, to avoid lookahead;
+- long-only trading rule: buy on a downward cross of `buyLevel` (`previous RSI > buyLevel && current RSI <= buyLevel`), sell on an upward cross of `sellLevel` (`previous RSI < sellLevel && current RSI >= sellLevel`);
+- the first strategy-period point is not signalable, and repeated buy/sell signals are ignored when already in the corresponding position state;
+- signal execution starts on the next point, not the same point, to avoid lookahead;
 - if the strategy period goes outside the base calculation period, warn and fill missing data by the existing missing-data rule.
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.

@@ -32,7 +32,7 @@ function zeroMinutes(value) {
 }
 
 function forceZeroMinutes(input) {
-  if (input.value) input.value = zeroMinutes(input.value);
+  if (input.value) input.value = zeroMinutes(input.value.replace(' ', 'T'));
 }
 
 function defaultStrategyName() {
@@ -111,6 +111,43 @@ function portfolioOptions(selected = '') {
   return portfolios.map((p) => `<option value="${p.file}" ${p.file === selected ? 'selected' : ''}>${p.file}</option>`).join('');
 }
 
+function portfolioByName(name) {
+  return portfolios.find((portfolio) => portfolio.file === name);
+}
+
+function targetRange(type, name) {
+  if (type === 'portfolio') {
+    const portfolio = portfolioByName(name);
+    return portfolio ? { start: portfolio.start, end: portfolio.end } : null;
+  }
+  const preset = presets.find((item) => item.name === name);
+  if (!preset) return null;
+  const starts = [];
+  const ends = [];
+  for (const item of preset.items ?? []) {
+    if (item.date_from) starts.push(item.date_from);
+    if (item.date_to) {
+      ends.push(item.date_to);
+    } else {
+      const portfolio = portfolioByName(item.portfolio ?? item.strategy);
+      if (portfolio?.end) ends.push(portfolio.end);
+    }
+  }
+  return {
+    start: starts.length ? starts.sort()[0] : '',
+    end: ends.length ? ends.sort().at(-1) : ''
+  };
+}
+
+function applyTargetRange() {
+  const range = targetRange($('#targetType').value, $('#targetName').value);
+  if (!range) return;
+  $('#periodFrom').value = range.start ? zeroMinutes(toDateInput(range.start)) : '';
+  $('#periodTo').value = range.end ? zeroMinutes(toDateInput(range.end)) : '';
+  $('#periodUntilEnd').checked = false;
+  $('#periodTo').disabled = false;
+}
+
 function renderPresetRowsOptions() {
   $$('.row-portfolio').forEach((select) => {
     const current = select.value;
@@ -122,6 +159,7 @@ function renderTargetOptions() {
   const type = $('#targetType').value;
   const items = type === 'portfolio' ? portfolios.map((p) => p.file) : presets.map((p) => p.name);
   $('#targetName').innerHTML = items.map((name) => `<option value="${name}">${name}</option>`).join('');
+  applyTargetRange();
 }
 
 function addPresetRow() {
@@ -337,17 +375,11 @@ function collectStrategyBody() {
 }
 
 
-function validateStrategyLevels(strategy) {
-  if (Number(strategy.buyLevel) >= Number(strategy.sellLevel)) {
-    throw new Error('Уровень покупки должен быть ниже уровня продажи');
-  }
-}
 
 async function saveTradingStrategy(overwrite = false) {
   const body = { ...collectStrategyBody(), overwrite };
   if (!body.name) return alert('Введите название стратегии');
   try {
-    validateStrategyLevels(body);
     await api('/api/strategies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     alert('Стратегия сохранена');
     await refreshAll();
@@ -363,7 +395,6 @@ async function calculateTradingStrategy() {
   const base = baseCalculationBody();
   if (!base.targetName) return alert('Сначала выберите портфолио или пресет в блоке расчета');
   const strategy = collectStrategyBody();
-  validateStrategyLevels(strategy);
   lastStrategyConfig = strategy;
   const result = await api('/api/strategies/calculate', {
     method: 'POST',
@@ -406,8 +437,8 @@ function renderStrategyChart() {
 }
 
 function renderStrategyTable(rows) {
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
-    <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Исполнение</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
+    <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
 function syncStrategyPeriodToCalculation() {
@@ -431,6 +462,7 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
 $('#targetType').addEventListener('change', renderTargetOptions);
+$('#targetName').addEventListener('change', applyTargetRange);
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   if (event.target.checked) $('#periodTo').value = '';
@@ -445,7 +477,7 @@ $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(fa
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
 document.addEventListener('change', (event) => {
-  if (event.target.matches('input[type="datetime-local"]')) forceZeroMinutes(event.target);
+  if (event.target.matches('.date-input')) forceZeroMinutes(event.target);
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);

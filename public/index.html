@@ -61,10 +61,10 @@
           <select id="targetName"></select>
         </label>
         <label>Период с
-          <input id="periodFrom" type="datetime-local" step="3600" />
+          <input id="periodFrom" class="date-input" type="text" placeholder="YYYY-MM-DD HH:00" />
         </label>
         <label>Период по
-          <input id="periodTo" type="datetime-local" step="3600" />
+          <input id="periodTo" class="date-input" type="text" placeholder="YYYY-MM-DD HH:00" />
         </label>
         <label class="check"><input id="periodUntilEnd" type="checkbox" /> До конца</label>
         <button id="calculate" type="button">Рассчитать</button>
@@ -76,7 +76,7 @@
       <h2>4. Исходный результат</h2>
       <div id="summary"></div>
       <div class="toggles" id="baseToggles">
-        <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" checked /> <span class="line-dot"></span> Diff</label>
+        <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> Accum</label>
         <label style="--line-color: #16a56f"><input type="checkbox" data-line="hwm" checked /> <span class="line-dot"></span> HWM</label>
         <label style="--line-color: #e28a00"><input type="checkbox" data-line="dd" checked /> <span class="line-dot"></span> DD</label>
@@ -107,10 +107,10 @@
           </label>
 
           <label>Период с
-            <input id="strategyPeriodFrom" type="datetime-local" step="3600" />
+            <input id="strategyPeriodFrom" class="date-input" type="text" placeholder="YYYY-MM-DD HH:00" />
           </label>
           <label>Период до
-            <input id="strategyPeriodTo" type="datetime-local" step="3600" />
+            <input id="strategyPeriodTo" class="date-input" type="text" placeholder="YYYY-MM-DD HH:00" />
           </label>
 
           <label>Верхний уровень
@@ -146,7 +146,7 @@
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
       <div class="toggles" id="strategyToggles">
-        <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" checked /> <span class="line-dot"></span> Diff</label>
+        <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> Accum</label>
         <label style="--line-color: #16a56f"><input type="checkbox" data-strategy-line="strategy_hwm" checked /> <span class="line-dot"></span> HWM</label>
         <label style="--line-color: #e28a00"><input type="checkbox" data-strategy-line="strategy_dd" checked /> <span class="line-dot"></span> DD</label>
@@ -161,8 +161,8 @@
     <div class="preset-row">
       <label>Портфолио <select class="row-portfolio"></select></label>
       <label>Вес, % <input class="row-weight" type="number" step="0.0001" value="100" /></label>
-      <label>Дата с <input class="row-from" type="datetime-local" step="3600" /></label>
-      <label>Дата по <input class="row-to" type="datetime-local" step="3600" /></label>
+      <label>Дата с <input class="row-from date-input" type="text" placeholder="YYYY-MM-DD HH:00" /></label>
+      <label>Дата по <input class="row-to date-input" type="text" placeholder="YYYY-MM-DD HH:00" /></label>
       <label class="check"><input class="row-until-end" type="checkbox" /> До конца</label>
       <button class="remove-row" type="button">Удалить строку</button>
     </div>

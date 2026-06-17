@@ -110,12 +110,16 @@ test('RSI trading strategy changes position next point and builds strategy resul
   assert.ok(full.summary.buyCount >= 1);
   assert.ok(full.rows.some((row) => row.signal === 'buy'));
   const buyIndex = full.rows.findIndex((row) => row.signal === 'buy');
+  assert.equal(full.rows[0].signal, '');
   assert.equal(full.rows[buyIndex].strategy_diff, 0);
-  if (buyIndex + 1 < full.rows.length) assert.equal(full.rows[buyIndex + 1].position, 1);
+  if (buyIndex + 1 < full.rows.length) {
+    assert.equal(full.rows[buyIndex + 1].execution, 'buy');
+    assert.equal(full.rows[buyIndex + 1].position, 1);
+  }
 });
 
 
-test('RSI trading strategy rejects inverted buy and sell levels', () => {
+test('RSI trading strategy allows inverted levels without validation error', () => {
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
-  assert.throws(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }), /покупки должен быть ниже/);
+  assert.doesNotThrow(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
 });
