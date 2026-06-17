@@ -154,17 +154,41 @@ function serveStatic(req, res) {
   fs.createReadStream(fullPath).pipe(res);
 }
 
+function portfolioLastTimestamp(file) {
+  const loaded = readPortfolioFile(path.join(PORTFOLIOS_DIR, file));
+  return loaded.points.at(-1)?.timestamp;
+}
+
+function presetLastTimestamp(preset) {
+  const ends = (preset.items ?? [])
+    .map((item) => item.portfolio ?? item.strategy)
+    .filter(Boolean)
+    .map((file) => {
+      const safeFile = safeName(file, '.csv');
+      const fullPath = path.join(PORTFOLIOS_DIR, safeFile);
+      if (!fs.existsSync(fullPath)) return null;
+      return readPortfolioFile(fullPath).points.at(-1)?.timestamp ?? null;
+    })
+    .filter((value) => value !== null && value !== undefined);
+  return ends.length ? Math.max(...ends) : null;
+}
+
 async function calculateTarget(body) {
   const from = parseTimestamp(body.periodFrom);
-  const to = parseTimestamp(body.periodTo);
-  if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
+  let to = body.periodUntilEnd ? null : parseTimestamp(body.periodTo);
   if (body.targetType === 'portfolio') {
     const file = safeName(body.targetName, '.csv');
+    if (to === null) to = portfolioLastTimestamp(file);
+    if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания портфолио');
+    if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
     return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to);
   }
   if (body.targetType === 'preset') {
     const file = safeName(body.targetName, '.json');
     const preset = JSON.parse(fs.readFileSync(path.join(PRESETS_DIR, file), 'utf8'));
+    if (to === null) to = presetLastTimestamp(preset);
+    if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания пресета');
+    if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
     return calculatePreset(preset, PORTFOLIOS_DIR, from, to);
   }
   throw new Error('Выберите портфолио или пресет');
@@ -172,7 +196,7 @@ async function calculateTarget(body) {
 
 function normalizeTradingStrategy(body) {
   const name = safeName(body.name || defaultStrategyName(), '.json').replace(/\.json$/i, '');
-  return {
+  const strategy = {
     name,
     type: 'rsi',
     created_at: body.created_at || new Date().toISOString(),
@@ -185,6 +209,8 @@ function normalizeTradingStrategy(body) {
     periodFrom: body.periodFrom,
     periodTo: body.periodTo
   };
+  if (strategy.buyLevel >= strategy.sellLevel) throw new Error('Уровень покупки должен быть ниже уровня продажи');
+  return strategy;
 }
 
 async function handleApi(req, res) {

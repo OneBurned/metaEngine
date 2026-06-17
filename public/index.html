@@ -61,72 +61,26 @@
           <select id="targetName"></select>
         </label>
         <label>Период с
-          <input id="periodFrom" type="datetime-local" step="60" />
+          <input id="periodFrom" type="datetime-local" step="3600" />
         </label>
         <label>Период по
-          <input id="periodTo" type="datetime-local" step="60" />
+          <input id="periodTo" type="datetime-local" step="3600" />
         </label>
+        <label class="check"><input id="periodUntilEnd" type="checkbox" /> До конца</label>
         <button id="calculate" type="button">Рассчитать</button>
       </div>
       <div id="warningBox" class="warning hidden"></div>
     </section>
 
-    <section class="card">
-      <label class="switch-line"><input id="enableStrategies" type="checkbox" /> Включить стратегии</label>
-      <div id="strategyPanel" class="hidden">
-        <h2>4. Стратегии</h2>
-        <p class="hint">Стратегия применяется к тому портфолио/пресету и периоду, которые выбраны в блоке “3. Расчет”.</p>
-        <div class="grid-form">
-          <label>Название стратегии
-            <input id="tradingStrategyName" />
-          </label>
-          <label>Тип стратегии
-            <select id="tradingStrategyType">
-              <option value="rsi">RSI</option>
-            </select>
-          </label>
-          <label>Период стратегии с
-            <input id="strategyPeriodFrom" type="datetime-local" step="60" />
-          </label>
-          <label>Период стратегии по
-            <input id="strategyPeriodTo" type="datetime-local" step="60" />
-          </label>
-          <label>RSI период
-            <input id="rsiPeriod" type="number" value="14" min="1" step="1" />
-          </label>
-          <label>Верхний уровень
-            <input id="rsiUpper" type="number" value="70" step="0.1" />
-          </label>
-          <label>Нижний уровень
-            <input id="rsiLower" type="number" value="30" step="0.1" />
-          </label>
-          <label>Базовая линия
-            <input id="rsiBaseline" type="number" value="50" step="0.1" />
-          </label>
-          <label>Купить на
-            <input id="buyLevel" type="number" value="30" step="0.1" />
-          </label>
-          <label>Продать на
-            <input id="sellLevel" type="number" value="70" step="0.1" />
-          </label>
-          <button id="saveTradingStrategy" type="button">Сохранить стратегию</button>
-          <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
-        </div>
-        <p class="hint">RSI считается по equity-кривой. Сигнал применяется со следующей точки: без подглядывания в будущее.</p>
-        <div id="tradingStrategies"></div>
-        <div id="strategyWarningBox" class="warning hidden"></div>
-      </div>
-    </section>
-
     <section class="card hidden" id="resultCard">
-      <h2>5. Исходный результат</h2>
+      <h2>4. Исходный результат</h2>
       <div id="summary"></div>
       <div class="toggles" id="baseToggles">
-        <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" checked /> <span class="line-dot"></span> diff</label>
-        <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> accum</label>
-        <label style="--line-color: #16a56f"><input type="checkbox" data-line="hwm" checked /> <span class="line-dot"></span> hwm</label>
-        <label style="--line-color: #e28a00"><input type="checkbox" data-line="dd" checked /> <span class="line-dot"></span> dd</label>
-        <label style="--line-color: #cf3341"><input type="checkbox" data-line="mdd" checked /> <span class="line-dot"></span> mdd</label>
+        <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" checked /> <span class="line-dot"></span> Diff</label>
+        <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> Accum</label>
+        <label style="--line-color: #16a56f"><input type="checkbox" data-line="hwm" checked /> <span class="line-dot"></span> HWM</label>
+        <label style="--line-color: #e28a00"><input type="checkbox" data-line="dd" checked /> <span class="line-dot"></span> DD</label>
+        <label style="--line-color: #cf3341"><input type="checkbox" data-line="mdd" checked /> <span class="line-dot"></span> MDD</label>
         <label id="strategyOverlayToggle" class="hidden" style="--line-color: #8e44ad"><input type="checkbox" data-strategy-overlay checked /> <span class="line-dot"></span> <span id="strategyOverlayName">RSI</span></label>
       </div>
       <svg id="chart" viewBox="0 0 900 360" role="img" aria-label="График расчета"></svg>
@@ -137,15 +91,66 @@
       <div class="table-wrap"><table id="resultTable"></table></div>
     </section>
 
+    <section class="card">
+      <label class="switch-line"><input id="enableStrategies" type="checkbox" /> Включить стратегии</label>
+      <div id="strategyPanel" class="hidden">
+        <h2>5. Стратегии</h2>
+        <p class="hint">Стратегия применяется к тому портфолио/пресету и периоду, которые выбраны в блоке “3. Расчет”.</p>
+        <div class="strategy-form">
+          <label>Тип стратегии
+            <select id="tradingStrategyType">
+              <option value="rsi">RSI</option>
+            </select>
+          </label>
+          <label>Название стратегии
+            <input id="tradingStrategyName" />
+          </label>
+
+          <label>Период с
+            <input id="strategyPeriodFrom" type="datetime-local" step="3600" />
+          </label>
+          <label>Период до
+            <input id="strategyPeriodTo" type="datetime-local" step="3600" />
+          </label>
+
+          <label>Верхний уровень
+            <input id="rsiUpper" type="number" value="70" step="0.1" />
+          </label>
+          <label>Базовая линия
+            <input id="rsiBaseline" type="number" value="50" step="0.1" />
+          </label>
+          <label>Нижний уровень
+            <input id="rsiLower" type="number" value="30" step="0.1" />
+          </label>
+
+          <label>Купить на
+            <input id="buyLevel" type="number" value="30" step="0.1" />
+          </label>
+          <label>Продать на
+            <input id="sellLevel" type="number" value="70" step="0.1" />
+          </label>
+          <label>RSI период
+            <input id="rsiPeriod" type="number" value="14" min="1" step="1" />
+          </label>
+
+          <button id="saveTradingStrategy" type="button">Сохранить стратегию</button>
+          <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
+        </div>
+        <p class="hint">RSI считается по equity-кривой. Сигнал применяется со следующей точки: без подглядывания в будущее.</p>
+        <div id="tradingStrategies"></div>
+        <div id="strategyWarningBox" class="warning hidden"></div>
+      </div>
+    </section>
+
     <section class="card hidden" id="strategyResultCard">
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
       <div class="toggles" id="strategyToggles">
-        <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" checked /> <span class="line-dot"></span> strategy_diff</label>
-        <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> strategy_accum</label>
-        <label style="--line-color: #16a56f"><input type="checkbox" data-strategy-line="strategy_hwm" checked /> <span class="line-dot"></span> strategy_hwm</label>
-        <label style="--line-color: #e28a00"><input type="checkbox" data-strategy-line="strategy_dd" checked /> <span class="line-dot"></span> strategy_dd</label>
-        <label style="--line-color: #cf3341"><input type="checkbox" data-strategy-line="strategy_mdd" checked /> <span class="line-dot"></span> strategy_mdd</label>
+        <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" checked /> <span class="line-dot"></span> Diff</label>
+        <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> Accum</label>
+        <label style="--line-color: #16a56f"><input type="checkbox" data-strategy-line="strategy_hwm" checked /> <span class="line-dot"></span> HWM</label>
+        <label style="--line-color: #e28a00"><input type="checkbox" data-strategy-line="strategy_dd" checked /> <span class="line-dot"></span> DD</label>
+        <label style="--line-color: #cf3341"><input type="checkbox" data-strategy-line="strategy_mdd" checked /> <span class="line-dot"></span> MDD</label>
       </div>
       <svg id="strategyChart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
@@ -156,8 +161,8 @@
     <div class="preset-row">
       <label>Портфолио <select class="row-portfolio"></select></label>
       <label>Вес, % <input class="row-weight" type="number" step="0.0001" value="100" /></label>
-      <label>Дата с <input class="row-from" type="datetime-local" step="60" /></label>
-      <label>Дата по <input class="row-to" type="datetime-local" step="60" /></label>
+      <label>Дата с <input class="row-from" type="datetime-local" step="3600" /></label>
+      <label>Дата по <input class="row-to" type="datetime-local" step="3600" /></label>
       <label class="check"><input class="row-until-end" type="checkbox" /> До конца</label>
       <button class="remove-row" type="button">Удалить строку</button>
     </div>

@@ -14,11 +14,25 @@ function fmtPct(value) {
 }
 
 function normalizeDateInput(value) {
-  return String(value || '').replace('T', ' ').trim();
+  const normalized = String(value || '').replace('T', ' ').trim();
+  if (!normalized) return '';
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2} \d{2})(?::\d{2})?$/);
+  return match ? `${match[1]}:00` : normalized;
 }
 
 function toDateInput(value) {
-  return String(value || '').replace(' ', 'T').slice(0, 16);
+  const normalized = normalizeDateInput(value);
+  return normalized.replace(' ', 'T').slice(0, 16);
+}
+
+function zeroMinutes(value) {
+  const normalized = String(value || '');
+  if (!normalized) return '';
+  return `${normalized.slice(0, 13)}:00`;
+}
+
+function forceZeroMinutes(input) {
+  if (input.value) input.value = zeroMinutes(input.value);
 }
 
 function defaultStrategyName() {
@@ -191,7 +205,8 @@ function baseCalculationBody() {
     targetType: $('#targetType').value,
     targetName: $('#targetName').value,
     periodFrom: normalizeDateInput($('#periodFrom').value),
-    periodTo: normalizeDateInput($('#periodTo').value)
+    periodTo: normalizeDateInput($('#periodTo').value),
+    periodUntilEnd: $('#periodUntilEnd').checked
   };
 }
 
@@ -248,8 +263,9 @@ function showResult(result) {
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
     <tr><th>Конец</th><td>${result.summary.end}</td></tr>
     <tr><th>Точек</th><td>${result.summary.points}</td></tr>
-    <tr><th>Итоговый accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
-    <tr><th>Худший MDD</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
+    <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
+    <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
+    <tr><th>MDD</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
   </tbody></table>`;
   renderChart();
   renderRsiChart();
@@ -257,7 +273,7 @@ function showResult(result) {
 }
 
 function renderResultTable(rows) {
-  $('#resultTable').innerHTML = `<thead><tr><th>Дата</th><th>diff</th><th>accum</th><th>hwm</th><th>dd</th><th>mdd</th></tr></thead><tbody>${rows.map((r) => `
+  $('#resultTable').innerHTML = `<thead><tr><th>Дата</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
     <tr><td>${r.time}</td><td>${fmtPct(r.diff)}</td><td>${fmtPct(r.accum)}</td><td>${fmtPct(r.hwm)}</td><td>${fmtPct(r.dd)}</td><td>${fmtPct(r.mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
@@ -320,10 +336,18 @@ function collectStrategyBody() {
   };
 }
 
+
+function validateStrategyLevels(strategy) {
+  if (Number(strategy.buyLevel) >= Number(strategy.sellLevel)) {
+    throw new Error('Уровень покупки должен быть ниже уровня продажи');
+  }
+}
+
 async function saveTradingStrategy(overwrite = false) {
   const body = { ...collectStrategyBody(), overwrite };
   if (!body.name) return alert('Введите название стратегии');
   try {
+    validateStrategyLevels(body);
     await api('/api/strategies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
     alert('Стратегия сохранена');
     await refreshAll();
@@ -339,6 +363,7 @@ async function calculateTradingStrategy() {
   const base = baseCalculationBody();
   if (!base.targetName) return alert('Сначала выберите портфолио или пресет в блоке расчета');
   const strategy = collectStrategyBody();
+  validateStrategyLevels(strategy);
   lastStrategyConfig = strategy;
   const result = await api('/api/strategies/calculate', {
     method: 'POST',
@@ -360,8 +385,9 @@ function showStrategyResult(result, name) {
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
     <tr><th>Конец</th><td>${result.summary.end}</td></tr>
     <tr><th>Точек</th><td>${result.summary.points}</td></tr>
-    <tr><th>Итоговый accum стратегии</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
-    <tr><th>Худший MDD стратегии</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
+    <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
+    <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
+    <tr><th>MDD</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
     <tr><th>Покупок</th><td>${result.summary.buyCount}</td></tr>
     <tr><th>Продаж</th><td>${result.summary.sellCount}</td></tr>
   </tbody></table>`;
@@ -380,13 +406,13 @@ function renderStrategyChart() {
 }
 
 function renderStrategyTable(rows) {
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Позиция</th><th>source_diff</th><th>strategy_diff</th><th>strategy_accum</th><th>strategy_hwm</th><th>strategy_dd</th><th>strategy_mdd</th></tr></thead><tbody>${rows.map((r) => `
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
     <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
 function syncStrategyPeriodToCalculation() {
-  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) $('#strategyPeriodFrom').value = $('#periodFrom').value;
-  if ($('#periodTo').value && !$('#strategyPeriodTo').value) $('#strategyPeriodTo').value = $('#periodTo').value;
+  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) $('#strategyPeriodFrom').value = zeroMinutes($('#periodFrom').value);
+  if ($('#periodTo').value && !$('#strategyPeriodTo').value) $('#strategyPeriodTo').value = zeroMinutes($('#periodTo').value);
 }
 
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
@@ -405,6 +431,10 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
 $('#targetType').addEventListener('change', renderTargetOptions);
+$('#periodUntilEnd').addEventListener('change', (event) => {
+  $('#periodTo').disabled = event.target.checked;
+  if (event.target.checked) $('#periodTo').value = '';
+});
 $('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
 $('#enableStrategies').addEventListener('change', (event) => {
   $('#strategyPanel').classList.toggle('hidden', !event.target.checked);
@@ -414,6 +444,9 @@ $('#enableStrategies').addEventListener('change', (event) => {
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
+document.addEventListener('change', (event) => {
+  if (event.target.matches('input[type="datetime-local"]')) forceZeroMinutes(event.target);
+});
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);
 

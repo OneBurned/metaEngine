@@ -46,6 +46,7 @@ test('calculates accum, hwm, dd and mdd series', () => {
   const result = calculateFromDiffs(grid, diffs);
   assert.deepEqual(result.rows.map((row) => Number(row.dd.toFixed(2))), [0, -0.02, -0.05, -0.01, -0.08, -0.03]);
   assert.deepEqual(result.rows.map((row) => Number(row.mdd.toFixed(2))), [0, -0.02, -0.05, -0.05, -0.08, -0.08]);
+  assert.equal(result.summary.hwm, 0);
 });
 
 test('rejects overlapping rebalance periods for the same portfolio', () => {
@@ -111,4 +112,10 @@ test('RSI trading strategy changes position next point and builds strategy resul
   const buyIndex = full.rows.findIndex((row) => row.signal === 'buy');
   assert.equal(full.rows[buyIndex].strategy_diff, 0);
   if (buyIndex + 1 < full.rows.length) assert.equal(full.rows[buyIndex + 1].position, 1);
+});
+
+
+test('RSI trading strategy rejects inverted buy and sell levels', () => {
+  const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
+  assert.throws(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }), /покупки должен быть ниже/);
 });

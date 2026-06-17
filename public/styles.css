@@ -45,3 +45,21 @@ th { background: #f7f9fc; position: sticky; top: 0; }
   main { padding: 12px; }
   .preset-row, .grid-form { grid-template-columns: 1fr; }
 }
+
+.strategy-form {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(190px, 1fr));
+  gap: 18px 12px;
+  align-items: end;
+}
+.strategy-form label:nth-child(1),
+.strategy-form label:nth-child(2) { grid-column: span 1; }
+.strategy-form button { align-self: end; }
+
+@media (max-width: 900px) {
+  .strategy-form { grid-template-columns: repeat(2, minmax(190px, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .strategy-form { grid-template-columns: 1fr; }
+}
