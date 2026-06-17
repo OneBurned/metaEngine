@@ -86,3 +86,17 @@ th { background: #f7f9fc; position: sticky; top: 0; }
   margin: 0 auto;
   cursor: pointer;
 }
+
+.date-pair {
+  grid-template-columns: minmax(0, 1fr) 34px 38px;
+  gap: 4px;
+}
+.date-open,
+.date-apply {
+  min-width: 0;
+  padding: 8px 4px;
+  text-align: center;
+  white-space: nowrap;
+}
+.date-open { font-size: 15px; }
+.date-apply { font-size: 12px; }
