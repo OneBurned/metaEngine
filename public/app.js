@@ -16,23 +16,28 @@ function fmtPct(value) {
 function normalizeDateInput(value) {
   const normalized = String(value || '').replace('T', ' ').trim();
   if (!normalized) return '';
-  const match = normalized.match(/^(\d{4}-\d{2}-\d{2} \d{2})(?::\d{2})?$/);
-  return match ? `${match[1]}:00` : normalized;
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2})(?::\d{2})?$/);
+  return match ? `${match[1]} ${match[2]}:00` : normalized;
 }
 
-function toDateInput(value) {
-  const normalized = normalizeDateInput(value);
-  return normalized.replace(' ', 'T').slice(0, 16);
+function toPickerValue(value) {
+  return normalizeDateInput(value).replace(' ', 'T').slice(0, 16);
 }
 
 function zeroMinutes(value) {
-  const normalized = String(value || '');
-  if (!normalized) return '';
-  return `${normalized.slice(0, 13)}:00`;
+  return normalizeDateInput(value);
+}
+
+function setDatePair(input, value) {
+  if (!input) return;
+  input.value = zeroMinutes(value);
+  const pair = input.closest('.date-pair');
+  const picker = pair?.querySelector('.date-picker');
+  if (picker) picker.value = input.value ? toPickerValue(input.value) : '';
 }
 
 function forceZeroMinutes(input) {
-  if (input.value) input.value = zeroMinutes(input.value.replace(' ', 'T'));
+  setDatePair(input, input.value);
 }
 
 function defaultStrategyName() {
@@ -142,8 +147,8 @@ function targetRange(type, name) {
 function applyTargetRange() {
   const range = targetRange($('#targetType').value, $('#targetName').value);
   if (!range) return;
-  $('#periodFrom').value = range.start ? zeroMinutes(toDateInput(range.start)) : '';
-  $('#periodTo').value = range.end ? zeroMinutes(toDateInput(range.end)) : '';
+  setDatePair($('#periodFrom'), range.start || '');
+  setDatePair($('#periodTo'), range.end || '');
   $('#periodUntilEnd').checked = false;
   $('#periodTo').disabled = false;
 }
@@ -162,15 +167,29 @@ function renderTargetOptions() {
   applyTargetRange();
 }
 
+function applyPortfolioRangeToPresetRow(row, overwrite = false) {
+  const portfolio = portfolioByName(row.querySelector('.row-portfolio').value);
+  if (!portfolio) return;
+  const fromInput = row.querySelector('.row-from');
+  const toInput = row.querySelector('.row-to');
+  if (overwrite || !fromInput.value) setDatePair(fromInput, portfolio.start || '');
+  if (overwrite || !toInput.value) setDatePair(toInput, portfolio.end || '');
+}
+
 function addPresetRow() {
   const template = $('#presetRowTemplate').content.cloneNode(true);
   const row = template.querySelector('.preset-row');
   row.querySelector('.row-portfolio').innerHTML = portfolioOptions();
+  row.querySelector('.row-portfolio').addEventListener('change', () => applyPortfolioRangeToPresetRow(row, true));
   row.querySelector('.row-until-end').addEventListener('change', (event) => {
-    row.querySelector('.row-to').disabled = event.target.checked;
-    if (event.target.checked) row.querySelector('.row-to').value = '';
+    const toInput = row.querySelector('.row-to');
+    const toPicker = row.querySelector('.row-to-picker');
+    toInput.disabled = event.target.checked;
+    if (toPicker) toPicker.disabled = event.target.checked;
+    if (event.target.checked) setDatePair(toInput, '');
   });
   row.querySelector('.remove-row').addEventListener('click', () => row.remove());
+  applyPortfolioRangeToPresetRow(row);
   $('#presetRows').appendChild(template);
 }
 
@@ -442,8 +461,8 @@ function renderStrategyTable(rows) {
 }
 
 function syncStrategyPeriodToCalculation() {
-  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) $('#strategyPeriodFrom').value = zeroMinutes($('#periodFrom').value);
-  if ($('#periodTo').value && !$('#strategyPeriodTo').value) $('#strategyPeriodTo').value = zeroMinutes($('#periodTo').value);
+  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value);
+  if ($('#periodTo').value && !$('#strategyPeriodTo').value) setDatePair($('#strategyPeriodTo'), $('#periodTo').value);
 }
 
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
@@ -465,7 +484,9 @@ $('#targetType').addEventListener('change', renderTargetOptions);
 $('#targetName').addEventListener('change', applyTargetRange);
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
-  if (event.target.checked) $('#periodTo').value = '';
+  const picker = document.querySelector('[data-for="periodTo"]');
+  if (picker) picker.disabled = event.target.checked;
+  if (event.target.checked) setDatePair($('#periodTo'), '');
 });
 $('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
 $('#enableStrategies').addEventListener('change', (event) => {
@@ -477,6 +498,10 @@ $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(fa
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
 document.addEventListener('change', (event) => {
+  if (event.target.matches('.date-picker')) {
+    const target = event.target.dataset.for ? document.getElementById(event.target.dataset.for) : event.target.closest('.date-pair')?.querySelector('.date-input');
+    setDatePair(target, event.target.value);
+  }
   if (event.target.matches('.date-input')) forceZeroMinutes(event.target);
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
