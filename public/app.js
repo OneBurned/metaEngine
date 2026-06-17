@@ -20,10 +20,6 @@ function normalizeDateInput(value) {
   return match ? `${match[1]} ${match[2]}:00` : normalized;
 }
 
-function toPickerValue(value) {
-  return normalizeDateInput(value).replace(' ', 'T').slice(0, 16);
-}
-
 function zeroMinutes(value) {
   return normalizeDateInput(value);
 }
@@ -31,15 +27,18 @@ function zeroMinutes(value) {
 function setDatePair(input, value) {
   if (!input) return;
   input.value = zeroMinutes(value);
-  const pair = input.closest('.date-pair');
-  const picker = pair?.querySelector('.date-picker');
-  if (picker) picker.value = input.value ? toPickerValue(input.value) : '';
 }
 
-function defaultPickerValue() {
+function defaultDateParts() {
   const now = new Date();
   const pad = (value) => String(value).padStart(2, '0');
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+  return { date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`, hour: pad(now.getHours()), minute: '00' };
+}
+
+function parseDateParts(value) {
+  const normalized = normalizeDateInput(value);
+  const match = normalized.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2})$/);
+  return match ? { date: match[1], hour: match[2], minute: match[3] } : defaultDateParts();
 }
 
 function forceZeroMinutes(input) {
@@ -493,7 +492,7 @@ $('#targetName').addEventListener('change', applyTargetRange);
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');
-  pair?.querySelectorAll('.date-picker, .date-open, .date-apply').forEach((item) => { item.disabled = event.target.checked; });
+  pair?.querySelectorAll('.date-open').forEach((item) => { item.disabled = event.target.checked; });
   if (event.target.checked) setDatePair($('#periodTo'), '');
 });
 $('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
@@ -505,20 +504,47 @@ $('#enableStrategies').addEventListener('change', (event) => {
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
+let activeDateInput = null;
+
+function fillDatePickerHours() {
+  const hourSelect = $('#datePickerHour');
+  if (!hourSelect || hourSelect.children.length) return;
+  hourSelect.innerHTML = Array.from({ length: 24 }, (_, hour) => {
+    const value = String(hour).padStart(2, '0');
+    return `<option value="${value}">${value}</option>`;
+  }).join('');
+}
+
+function openDatePopup(input) {
+  activeDateInput = input;
+  fillDatePickerHours();
+  const parts = parseDateParts(input.value);
+  $('#datePickerDate').value = parts.date;
+  $('#datePickerHour').value = parts.hour;
+  $('#datePickerMinute').value = '00';
+  $('#datePickerPopup').classList.remove('hidden');
+}
+
+function closeDatePopup() {
+  $('#datePickerPopup').classList.add('hidden');
+  activeDateInput = null;
+}
+
 document.addEventListener('click', (event) => {
   if (event.target.matches('.date-open')) {
-    const picker = event.target.closest('.date-pair')?.querySelector('.date-picker');
-    if (!picker) return;
-    if (!picker.value) picker.value = defaultPickerValue();
-    if (typeof picker.showPicker === 'function') picker.showPicker();
-    else picker.focus();
+    const input = event.target.closest('.date-pair')?.querySelector('.date-input');
+    if (input && !input.disabled) openDatePopup(input);
   }
-  if (event.target.matches('.date-apply')) {
-    const pair = event.target.closest('.date-pair');
-    const picker = pair?.querySelector('.date-picker');
-    const target = picker?.dataset.for ? document.getElementById(picker.dataset.for) : pair?.querySelector('.date-input');
-    if (picker?.value) setDatePair(target, picker.value);
-  }
+});
+
+$('#datePickerApply').addEventListener('click', () => {
+  if (!activeDateInput) return;
+  setDatePair(activeDateInput, `${$('#datePickerDate').value} ${$('#datePickerHour').value}:${$('#datePickerMinute').value || '00'}`);
+  closeDatePopup();
+});
+$('#datePickerCancel').addEventListener('click', closeDatePopup);
+$('#datePickerPopup').addEventListener('click', (event) => {
+  if (event.target.id === 'datePickerPopup') closeDatePopup();
 });
 
 document.addEventListener('change', (event) => {
