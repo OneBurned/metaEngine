@@ -36,6 +36,12 @@ function setDatePair(input, value) {
   if (picker) picker.value = input.value ? toPickerValue(input.value) : '';
 }
 
+function defaultPickerValue() {
+  const now = new Date();
+  const pad = (value) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:00`;
+}
+
 function forceZeroMinutes(input) {
   setDatePair(input, input.value);
 }
@@ -157,6 +163,8 @@ function renderPresetRowsOptions() {
   $$('.row-portfolio').forEach((select) => {
     const current = select.value;
     select.innerHTML = portfolioOptions(current);
+    const row = select.closest('.preset-row');
+    if (row) applyPortfolioRangeToPresetRow(row);
   });
 }
 
@@ -497,6 +505,14 @@ $('#enableStrategies').addEventListener('change', (event) => {
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
+document.addEventListener('pointerdown', (event) => {
+  if (event.target.matches('.date-picker') && !event.target.value) event.target.value = defaultPickerValue();
+});
+
+document.addEventListener('focusin', (event) => {
+  if (event.target.matches('.date-picker') && !event.target.value) event.target.value = defaultPickerValue();
+});
+
 document.addEventListener('change', (event) => {
   if (event.target.matches('.date-picker')) {
     const target = event.target.dataset.for ? document.getElementById(event.target.dataset.for) : event.target.closest('.date-pair')?.querySelector('.date-input');

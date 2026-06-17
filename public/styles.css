@@ -65,3 +65,22 @@ th { background: #f7f9fc; position: sticky; top: 0; }
   main { padding: 12px; }
   .preset-row, .grid-form, .strategy-form { grid-template-columns: 1fr; }
 }
+
+.date-pair .date-picker {
+  width: 38px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+}
+.date-pair .date-picker::-webkit-datetime-edit,
+.date-pair .date-picker::-webkit-inner-spin-button,
+.date-pair .date-picker::-webkit-clear-button { display: none; }
+.date-pair .date-picker::-webkit-calendar-picker-indicator {
+  width: 24px;
+  height: 24px;
+  margin: 0 auto;
+  cursor: pointer;
+}
