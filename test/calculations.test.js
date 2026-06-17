@@ -9,6 +9,8 @@ const {
   normalizeToDiffCsv,
   calculateFromDiffs,
   calculatePreset,
+  calculateRsiFromEquity,
+  calculateRsiTradingStrategy,
   validatePresetItems
 } = require('../lib/calculations');
 
@@ -44,27 +46,27 @@ test('calculates accum, hwm, dd and mdd series', () => {
   const result = calculateFromDiffs(grid, diffs);
   assert.deepEqual(result.rows.map((row) => Number(row.dd.toFixed(2))), [0, -0.02, -0.05, -0.01, -0.08, -0.03]);
   assert.deepEqual(result.rows.map((row) => Number(row.mdd.toFixed(2))), [0, -0.02, -0.05, -0.05, -0.08, -0.08]);
+  assert.equal(result.summary.hwm, 0);
 });
 
-test('rejects overlapping rebalance periods for the same strategy', () => {
+test('rejects overlapping rebalance periods for the same portfolio', () => {
   assert.throws(() => validatePresetItems([
-    { strategy: 'a.csv', date_from: '2024-01-01 00:00', date_to: '2025-01-01 00:00' },
-    { strategy: 'a.csv', date_from: '2024-06-01 00:00', date_to: null }
+    { portfolio: 'a.csv', date_from: '2024-01-01 00:00', date_to: '2025-01-01 00:00' },
+    { portfolio: 'a.csv', date_from: '2024-06-01 00:00', date_to: null }
   ]), /пересекаются/);
 
   assert.doesNotThrow(() => validatePresetItems([
-    { strategy: 'a.csv', date_from: '2024-01-01 00:00', date_to: '2025-01-01 00:00' },
-    { strategy: 'a.csv', date_from: '2025-01-01 00:00', date_to: null }
+    { portfolio: 'a.csv', date_from: '2024-01-01 00:00', date_to: '2025-01-01 00:00' },
+    { portfolio: 'a.csv', date_from: '2025-01-01 00:00', date_to: null }
   ]));
 });
 
-
-test('preset uses zero diffs for deleted strategy files and keeps calculating', () => {
+test('preset uses zero diffs for deleted portfolio files and keeps calculating', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'metaengine-test-'));
   const preset = {
-    name: 'missing_strategy_preset',
+    name: 'missing_portfolio_preset',
     items: [
-      { strategy: 'deleted.csv', weight: 1, weightPercent: 100, date_from: '2024-01-06 00:00', date_to: null }
+      { portfolio: 'deleted.csv', weight: 1, weightPercent: 100, date_from: '2024-01-06 00:00', date_to: null }
     ]
   };
 
@@ -73,5 +75,51 @@ test('preset uses zero diffs for deleted strategy files and keeps calculating', 
   assert.equal(result.rows.length, 3);
   assert.deepEqual(result.rows.map((row) => row.diff), [0, 0, 0]);
   assert.equal(result.summary.finalAccum, 0);
-  assert.equal(result.warnings[0].reason, 'strategy_file_missing_zero');
+  assert.equal(result.warnings[0].reason, 'portfolio_file_missing_zero');
+});
+
+test('calculates RSI from equity curve', () => {
+  const grid = Array.from({ length: 18 }, (_, i) => i);
+  const diffs = [0, 0.01, 0.01, -0.01, 0.02, -0.02, 0.01, 0.01, -0.01, 0.02, -0.01, 0.01, 0.01, -0.02, 0.03, 0.01, -0.01, 0.02];
+  const base = calculateFromDiffs(grid, diffs);
+  const rsi = calculateRsiFromEquity(base.rows, 14);
+  assert.equal(rsi.slice(0, 14).every((row) => row.rsi === null), true);
+  assert.equal(typeof rsi[14].rsi, 'number');
+  assert.ok(rsi[14].rsi >= 0 && rsi[14].rsi <= 100);
+});
+
+test('RSI trading strategy changes position next point and builds strategy result', () => {
+  const grid = Array.from({ length: 20 }, (_, i) => i);
+  const diffs = [0, -0.02, -0.02, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, -0.01, -0.01];
+  const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
+  const result = calculateRsiTradingStrategy(base, {
+    rsiPeriod: 3,
+    buyLevel: 40,
+    sellLevel: 60,
+    upperLevel: 60,
+    lowerLevel: 40,
+    baseline: 50,
+    periodFrom: '1970-01-01 00:00',
+    periodTo: '1970-01-01 00:00'
+  });
+
+  assert.equal(result.rows.length, 1);
+  assert.equal(result.rows[0].strategy_diff, 0);
+
+  const full = calculateRsiTradingStrategy(base, { rsiPeriod: 3, buyLevel: 40, sellLevel: 60 });
+  assert.ok(full.summary.buyCount >= 1);
+  assert.ok(full.rows.some((row) => row.signal === 'buy'));
+  const buyIndex = full.rows.findIndex((row) => row.signal === 'buy');
+  assert.equal(full.rows[0].signal, '');
+  assert.equal(full.rows[buyIndex].strategy_diff, 0);
+  if (buyIndex + 1 < full.rows.length) {
+    assert.equal(full.rows[buyIndex + 1].execution, 'buy');
+    assert.equal(full.rows[buyIndex + 1].position, 1);
+  }
+});
+
+
+test('RSI trading strategy allows inverted levels without validation error', () => {
+  const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
+  assert.doesNotThrow(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
 });
