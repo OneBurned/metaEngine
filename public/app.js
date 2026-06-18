@@ -673,7 +673,7 @@ $('#periodUntilEnd').addEventListener('change', (event) => {
   if (event.target.checked) setDatePair($('#periodTo'), '');
   updateStrategyCalculateAvailability(true);
 });
-$('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
+$('#calculate').addEventListener('click', () => withLoadingButton($('#calculate'), 'Рассчитывается', calculate).catch((err) => alert(err.message)));
 $('#enableStrategies').addEventListener('change', (event) => {
   $('#strategyPanel').classList.toggle('hidden', !event.target.checked);
   if (event.target.checked && !$('#tradingStrategyName').value) $('#tradingStrategyName').value = defaultStrategyName();
@@ -681,7 +681,7 @@ $('#enableStrategies').addEventListener('change', (event) => {
   updateStrategyCalculateAvailability(event.target.checked);
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
-$('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Стратегия рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
+$('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
 $('#openCsvExport').addEventListener('click', openCsvExportPopup);
 $('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
 $('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));

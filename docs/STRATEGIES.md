@@ -71,5 +71,5 @@ Rules:
 - the disabled button should expose a tooltip explaining why it is disabled;
 - the strategy panel should show a warning box if the user enables strategies before running the base calculation;
 - if the base calculation inputs change after a calculation, the strategy button is disabled until the user recalculates block 3;
-- while the strategy is calculating, the button is disabled and its text changes to `Стратегия рассчитывается.`, `Стратегия рассчитывается..`, `Стратегия рассчитывается...`;
+- while the strategy is calculating, the button is disabled and its text changes to `Рассчитывается.`, `Рассчитывается..`, `Рассчитывается...`;
 - when the calculation finishes or fails, the original button text is restored.

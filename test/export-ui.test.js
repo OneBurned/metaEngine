@@ -52,8 +52,20 @@ test('strategy calculation requires a current base result and explains disabled 
 
 test('strategy calculation button shows animated loading text while running', () => {
   assert.match(app, /function withLoadingButton\(/);
-  assert.match(app, /Стратегия рассчитывается/);
+  assert.match(app, /Рассчитывается/);
   assert.match(app, /setInterval/);
   assert.match(app, /'\.'\.repeat\(dots\)/);
   assert.match(app, /clearInterval\(timer\)/);
+});
+
+
+test('main calculation button uses the shared loading text', () => {
+  assert.match(app, /withLoadingButton\(\$\('#calculate'\), 'Рассчитывается', calculate\)/);
+});
+
+test('CSV export card is rendered after strategy result card', () => {
+  const strategyIndex = html.indexOf('id="strategyResultCard"');
+  const exportIndex = html.indexOf('id="exportCard"');
+  assert.ok(strategyIndex >= 0);
+  assert.ok(exportIndex > strategyIndex);
 });
