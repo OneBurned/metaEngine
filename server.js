@@ -11,10 +11,10 @@ const {
   findGaps,
   calculatePortfolio,
   calculatePreset,
-  calculateRsiTradingStrategy,
   validatePresetItems,
   formatNumber
 } = require('./lib/calculations');
+const tradingStrategies = require('./strategies');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -331,7 +331,7 @@ async function handleApi(req, res) {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const baseResult = await calculateTarget(body);
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
-      const result = calculateRsiTradingStrategy(baseResult, strategy);
+      const result = tradingStrategies.calculateTradingStrategy(baseResult, strategy);
       return json(res, 200, { baseResult, strategyResult: result, strategy });
     }
 

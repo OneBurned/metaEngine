@@ -23,6 +23,18 @@ This is not the final production stack. The repository defaults still say produc
 
 The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly.
 
+## Documentation map
+
+```text
+README.md                 Human-facing project overview and run guide
+AGENTS.md                 Required workflow rules for AI agents
+docs/PROJECT_CONTEXT.md   Full project context and product decisions
+docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
+docs/CSV_EXPORT.md        CSV export behavior and API
+```
+
+Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
+
 ## 2. User communication rules
 
 The user is not a coder. Communicate simply.
@@ -76,8 +88,8 @@ public/app.js                     Browser UI behavior
 public/styles.css                 Browser UI styling
 test/calculations.test.js         Unit tests for calculations
 README.md                         Human-facing usage docs
-docs/agent-handoff-local-lab.md   This AI-agent handoff document
-samples/strategies                Uploaded normalized strategy CSV files
+docs/PROJECT_CONTEXT.md           Project context for future AI agents
+samples/strategies                Saved trading strategy JSON configs
 samples/presets                   Saved preset JSON files
 samples/runs                      Saved calculation run JSON files
 ```

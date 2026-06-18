@@ -9,10 +9,10 @@ const {
   normalizeToDiffCsv,
   calculateFromDiffs,
   calculatePreset,
-  calculateRsiFromEquity,
-  calculateRsiTradingStrategy,
   validatePresetItems
 } = require('../lib/calculations');
+const { calculateRsiFromEquity } = require('../strategies/rsi');
+const { calculateTradingStrategy, getStrategy } = require('../strategies');
 
 test('formats timestamps as YYYY-MM-DD HH:MM without shifting the Unix time', () => {
   assert.equal(formatTimestamp(1777557600000), '2026-04-30 14:00');
@@ -78,6 +78,15 @@ test('preset uses zero diffs for deleted portfolio files and keeps calculating',
   assert.equal(result.warnings[0].reason, 'portfolio_file_missing_zero');
 });
 
+
+test('strategy registry exposes the RSI module', () => {
+  const rsi = getStrategy('rsi');
+  assert.ok(rsi);
+  assert.equal(rsi.type, 'rsi');
+  assert.equal(typeof rsi.calculate, 'function');
+  assert.equal(typeof rsi.calculateRsiFromEquity, 'function');
+});
+
 test('calculates RSI from equity curve', () => {
   const grid = Array.from({ length: 18 }, (_, i) => i);
   const diffs = [0, 0.01, 0.01, -0.01, 0.02, -0.02, 0.01, 0.01, -0.01, 0.02, -0.01, 0.01, 0.01, -0.02, 0.03, 0.01, -0.01, 0.02];
@@ -92,7 +101,7 @@ test('RSI trading strategy changes position next point and builds strategy resul
   const grid = Array.from({ length: 20 }, (_, i) => i);
   const diffs = [0, -0.02, -0.02, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, 0.03, 0.03, 0.03, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, -0.01, -0.01];
   const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
-  const result = calculateRsiTradingStrategy(base, {
+  const result = calculateTradingStrategy(base, {
     rsiPeriod: 3,
     buyLevel: 40,
     sellLevel: 60,
@@ -106,7 +115,7 @@ test('RSI trading strategy changes position next point and builds strategy resul
   assert.equal(result.rows.length, 1);
   assert.equal(result.rows[0].strategy_diff, 0);
 
-  const full = calculateRsiTradingStrategy(base, { rsiPeriod: 3, buyLevel: 40, sellLevel: 60 });
+  const full = calculateTradingStrategy(base, { rsiPeriod: 3, buyLevel: 40, sellLevel: 60 });
   assert.ok(full.summary.buyCount >= 1);
   assert.ok(full.rows.some((row) => row.signal === 'buy'));
   const buyIndex = full.rows.findIndex((row) => row.signal === 'buy');
@@ -121,5 +130,5 @@ test('RSI trading strategy changes position next point and builds strategy resul
 
 test('RSI trading strategy allows inverted levels without validation error', () => {
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
-  assert.doesNotThrow(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
+  assert.doesNotThrow(() => calculateTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
 });
