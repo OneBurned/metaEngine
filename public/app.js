@@ -361,6 +361,7 @@ function updateStrategyCalculateAvailability(showMessage = false) {
 async function withLoadingButton(button, loadingText, action) {
   const originalText = button.textContent;
   const originalTitle = button.title;
+  const originalDisabled = button.disabled;
   let dots = 0;
   button.disabled = true;
   button.title = loadingText;
@@ -376,6 +377,7 @@ async function withLoadingButton(button, loadingText, action) {
     clearInterval(timer);
     button.textContent = originalText;
     button.title = originalTitle;
+    button.disabled = originalDisabled;
     updateStrategyCalculateAvailability();
   }
 }

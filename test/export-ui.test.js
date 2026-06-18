@@ -56,6 +56,7 @@ test('strategy calculation button shows animated loading text while running', ()
   assert.match(app, /setInterval/);
   assert.match(app, /'\.'\.repeat\(dots\)/);
   assert.match(app, /clearInterval\(timer\)/);
+  assert.match(app, /button\.disabled = originalDisabled/);
 });
 
 
@@ -63,7 +64,10 @@ test('main calculation button uses the shared loading text', () => {
   assert.match(app, /withLoadingButton\(\$\('#calculate'\), 'Рассчитывается', calculate\)/);
 });
 
-test('CSV export card is rendered after strategy result card', () => {
+test('CSV export card is rendered after strategy result card without a fixed number in the heading', () => {
+  assert.match(html, /<h2>Экспорт CSV<\/h2>/);
+  assert.doesNotMatch(html, /<h2>7\. Экспорт CSV<\/h2>/);
+
   const strategyIndex = html.indexOf('id="strategyResultCard"');
   const exportIndex = html.indexOf('id="exportCard"');
   assert.ok(strategyIndex >= 0);
