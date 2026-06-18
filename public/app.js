@@ -647,8 +647,12 @@ async function exportCsv() {
 }
 
 function syncStrategyPeriodToCalculation() {
-  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value);
-  if ($('#periodTo').value && !$('#strategyPeriodTo').value) setDatePair($('#strategyPeriodTo'), $('#periodTo').value);
+  setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value || '');
+  setDatePair($('#strategyPeriodTo'), $('#periodTo').value || '');
+}
+
+function syncStrategyPeriodIfEnabled() {
+  if (!$('#strategyPanel').classList.contains('hidden')) syncStrategyPeriodToCalculation();
 }
 
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
@@ -666,13 +670,14 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
-$('#targetType').addEventListener('change', () => { renderTargetOptions(); updateStrategyCalculateAvailability(true); });
-$('#targetName').addEventListener('change', () => { applyTargetRange(); updateStrategyCalculateAvailability(true); });
+$('#targetType').addEventListener('change', () => { renderTargetOptions(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#targetName').addEventListener('change', () => { applyTargetRange(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');
   pair?.querySelectorAll('.date-open').forEach((item) => { item.disabled = event.target.checked; });
   if (event.target.checked) setDatePair($('#periodTo'), '');
+  syncStrategyPeriodIfEnabled();
   updateStrategyCalculateAvailability(true);
 });
 $('#calculate').addEventListener('click', () => withLoadingButton($('#calculate'), 'Рассчитывается', calculate).catch((err) => alert(err.message)));
@@ -734,7 +739,10 @@ document.addEventListener('click', (event) => {
 $('#datePickerApply').addEventListener('click', () => {
   if (!activeDateInput) return;
   setDatePair(activeDateInput, `${$('#datePickerDate').value} ${$('#datePickerHour').value}:${$('#datePickerMinute').value || '00'}`);
-  if (activeDateInput.closest('#strategyPanel') === null) updateStrategyCalculateAvailability(true);
+  if (activeDateInput.closest('#strategyPanel') === null) {
+    syncStrategyPeriodIfEnabled();
+    updateStrategyCalculateAvailability(true);
+  }
   closeDatePopup();
 });
 $('#datePickerCancel').addEventListener('click', closeDatePopup);
@@ -745,7 +753,10 @@ $('#datePickerPopup').addEventListener('click', (event) => {
 document.addEventListener('change', (event) => {
   if (event.target.matches('.date-input')) {
     forceZeroMinutes(event.target);
-    if (event.target.closest('#strategyPanel') === null) updateStrategyCalculateAvailability(true);
+    if (event.target.closest('#strategyPanel') === null) {
+      syncStrategyPeriodIfEnabled();
+      updateStrategyCalculateAvailability(true);
+    }
   }
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });

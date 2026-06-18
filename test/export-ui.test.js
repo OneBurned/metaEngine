@@ -73,3 +73,17 @@ test('CSV export card is rendered after strategy result card without a fixed num
   assert.ok(strategyIndex >= 0);
   assert.ok(exportIndex > strategyIndex);
 });
+
+
+test('strategy dates are synced from block 3 calculation dates', () => {
+  assert.match(app, /function syncStrategyPeriodIfEnabled\(\)/);
+  assert.match(app, /setDatePair\(\$\('#strategyPeriodFrom'\), \$\('#periodFrom'\)\.value \|\| ''\)/);
+  assert.match(app, /setDatePair\(\$\('#strategyPeriodTo'\), \$\('#periodTo'\)\.value \|\| ''\)/);
+  assert.match(app, new RegExp("syncStrategyPeriodIfEnabled\\(\\);\\n\\s*updateStrategyCalculateAvailability\\(true\\)"));
+});
+
+test('disabled buttons have an explicit muted style', () => {
+  const styles = fs.readFileSync('public/styles.css', 'utf8');
+  assert.match(styles, /button:disabled \{ background: #aeb7c8/);
+  assert.match(styles, /cursor: not-allowed/);
+});

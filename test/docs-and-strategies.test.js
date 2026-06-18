@@ -43,3 +43,9 @@ test('CSV export docs are split into a focused module document', () => {
   assert.match(csvExportDoc, /GET \/api\/portfolios\/portfolio_a\.csv\/export\?columns=timestamp,mdd/);
   assert.match(csvExportDoc, /Do not replace this with a fixed dropdown/);
 });
+
+test('AGENTS requires concrete terminal and browser check instructions after changes', () => {
+  assert.match(agents, /Финальные инструкции пользователю после изменений/);
+  assert.match(agents, /команды для терминала/);
+  assert.match(agents, /ручных сценариев/);
+});

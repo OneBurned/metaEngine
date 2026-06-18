@@ -73,3 +73,5 @@ Rules:
 - if the base calculation inputs change after a calculation, the strategy button is disabled until the user recalculates block 3;
 - while the strategy is calculating, the button is disabled and its text changes to `Рассчитывается.`, `Рассчитывается..`, `Рассчитывается...`;
 - when the calculation finishes or fails, the original button text is restored.
+
+Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.

@@ -14,6 +14,7 @@ button { background: #315efb; color: white; border: 0; cursor: pointer; font-wei
 button.secondary { background: #687386; }
 button.danger { background: #cf3341; }
 button:disabled, input:disabled, select:disabled { opacity: .62; cursor: not-allowed; }
+button:disabled { background: #aeb7c8; color: white; filter: none; box-shadow: none; }
 button:hover { filter: brightness(.96); }
 .hint { color: #687386; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
