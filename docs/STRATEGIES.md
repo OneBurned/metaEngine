@@ -60,3 +60,16 @@ When adding a new strategy:
 3. Keep shared time-series math in `lib/calculations.js` when it is not strategy-specific.
 4. Add tests for the new module and registry.
 5. Update `README.md`, `AGENTS.md` if process/context changes, `docs/PROJECT_CONTEXT.md`, and this document.
+
+## Strategy calculation UX
+
+The strategy calculation button must not look frozen while a calculation is running.
+
+Rules:
+
+- the trading strategy button is disabled until the base calculation from block **“3. Расчет”** is available;
+- the disabled button should expose a tooltip explaining why it is disabled;
+- the strategy panel should show a warning box if the user enables strategies before running the base calculation;
+- if the base calculation inputs change after a calculation, the strategy button is disabled until the user recalculates block 3;
+- while the strategy is calculating, the button is disabled and its text changes to `Стратегия рассчитывается.`, `Стратегия рассчитывается..`, `Стратегия рассчитывается...`;
+- when the calculation finishes or fails, the original button text is restored.

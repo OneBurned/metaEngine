@@ -2,6 +2,7 @@ let portfolios = [];
 let presets = [];
 let tradingStrategies = [];
 let lastResult = null;
+let lastResultKey = null;
 let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
@@ -309,10 +310,82 @@ function baseCalculationBody() {
   };
 }
 
+function calculationKey(body = baseCalculationBody()) {
+  return JSON.stringify({
+    targetType: body.targetType,
+    targetName: body.targetName,
+    periodFrom: body.periodFrom,
+    periodTo: body.periodTo,
+    periodUntilEnd: body.periodUntilEnd
+  });
+}
+
+function strategyReadinessMessage() {
+  const body = baseCalculationBody();
+  if (!body.targetName) return 'Сначала выберите портфолио или пресет в блоке “3. Расчет”.';
+  if (!lastResult?.rows?.length) return 'Сначала выполните расчет в блоке “3. Расчет”. Стратегия применяется к уже рассчитанному портфолио или пресету.';
+  if (lastResultKey !== calculationKey(body)) return 'Расчет в блоке “3. Расчет” изменился. Пересчитайте его перед запуском стратегии.';
+  return '';
+}
+
+function showStrategyMessage(message, kind = 'strategy-readiness') {
+  const box = $('#strategyWarningBox');
+  box.dataset.kind = kind;
+  box.classList.remove('hidden');
+  box.textContent = message;
+}
+
+function clearStrategyMessage(kind = '') {
+  const box = $('#strategyWarningBox');
+  if (kind && box.dataset.kind !== kind) return;
+  box.classList.add('hidden');
+  box.textContent = '';
+  delete box.dataset.kind;
+}
+
+function updateStrategyCalculateAvailability(showMessage = false) {
+  const button = $('#calculateTradingStrategy');
+  if (!button) return false;
+  const message = strategyReadinessMessage();
+  const ready = !message;
+  button.disabled = !ready;
+  button.title = message;
+  if (ready) {
+    clearStrategyMessage('strategy-readiness');
+  } else if (showMessage && !$('#strategyPanel').classList.contains('hidden')) {
+    showStrategyMessage(message, 'strategy-readiness');
+  }
+  return ready;
+}
+
+async function withLoadingButton(button, loadingText, action) {
+  const originalText = button.textContent;
+  const originalTitle = button.title;
+  let dots = 0;
+  button.disabled = true;
+  button.title = loadingText;
+  button.textContent = `${loadingText}.`;
+  const timer = setInterval(() => {
+    dots = (dots % 3) + 1;
+    button.textContent = `${loadingText}${'.'.repeat(dots)}`;
+  }, 450);
+
+  try {
+    return await action();
+  } finally {
+    clearInterval(timer);
+    button.textContent = originalText;
+    button.title = originalTitle;
+    updateStrategyCalculateAvailability();
+  }
+}
+
 async function calculate() {
   const body = baseCalculationBody();
   if (!body.targetName) return alert('Выберите портфолио или пресет');
+  const currentKey = calculationKey(body);
   const result = await api('/api/calculate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  result.calculationKey = currentKey;
   lastStrategyResult = null;
   $('#strategyResultCard').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
@@ -331,22 +404,20 @@ function showWarning(result) {
   box.classList.remove('hidden');
   const sample = result.warnings.slice(0, 15).map((w) => `${w.portfolio ? `${w.portfolio}: ` : ''}${w.display}`).join('\n');
   box.innerHTML = `Шаг определен как ${stepLabel(result.step)}, но найдены пропуски: ${result.warnings.length}.\n\n<button id="continueCalc">Продолжить расчет</button> <button id="showGaps" class="secondary">Показать пропуски</button> <button id="cancelCalc" class="danger">Отменить</button><pre class="hidden" id="gapLog">${sample}${result.warnings.length > 15 ? '\n...' : ''}</pre>`;
-  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult); };
+  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult); updateStrategyCalculateAvailability(); };
   $('#showGaps').onclick = () => $('#gapLog').classList.toggle('hidden');
   $('#cancelCalc').onclick = () => { pendingResult = null; box.classList.add('hidden'); };
 }
 
 function showStrategyWarnings(warnings) {
-  const box = $('#strategyWarningBox');
   if (!warnings?.length) {
-    box.classList.add('hidden');
-    box.innerHTML = '';
+    clearStrategyMessage('strategy-warning');
     return;
   }
-  box.classList.remove('hidden');
   const sample = warnings.slice(0, 15).map((w) => w.display).join('\n');
-  box.textContent = `Период стратегии выходит за данные расчета или содержит пропуски. Заполнено по правилу отсутствующих данных: ${warnings.length}.\n${sample}${warnings.length > 15 ? '\n...' : ''}`;
+  showStrategyMessage(`Период стратегии выходит за данные расчета или содержит пропуски. Заполнено по правилу отсутствующих данных: ${warnings.length}.\n${sample}${warnings.length > 15 ? '\n...' : ''}`, 'strategy-warning');
 }
+
 
 function stepLabel(step) {
   if (step === 300000) return '5 минут';
@@ -357,6 +428,7 @@ function stepLabel(step) {
 
 function showResult(result) {
   lastResult = result;
+  lastResultKey = result.calculationKey ?? calculationKey();
   $('#resultCard').classList.remove('hidden');
   $('#summary').innerHTML = `<table><tbody>
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
@@ -369,6 +441,7 @@ function showResult(result) {
   renderChart();
   renderRsiChart();
   renderResultTable(result.rows);
+  updateStrategyCalculateAvailability();
 }
 
 function renderResultTable(rows) {
@@ -453,8 +526,8 @@ async function saveTradingStrategy(overwrite = false) {
 }
 
 async function calculateTradingStrategy() {
+  if (!updateStrategyCalculateAvailability(true)) return;
   const base = baseCalculationBody();
-  if (!base.targetName) return alert('Сначала выберите портфолио или пресет в блоке расчета');
   const strategy = collectStrategyBody();
   lastStrategyConfig = strategy;
   const result = await api('/api/strategies/calculate', {
@@ -467,6 +540,7 @@ async function calculateTradingStrategy() {
   showResult(result.baseResult);
   showStrategyResult(result.strategyResult, result.strategy.name);
   showStrategyWarnings(result.strategyResult.warnings);
+  updateStrategyCalculateAvailability();
 }
 
 function showStrategyResult(result, name) {
@@ -590,22 +664,24 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
-$('#targetType').addEventListener('change', renderTargetOptions);
-$('#targetName').addEventListener('change', applyTargetRange);
+$('#targetType').addEventListener('change', () => { renderTargetOptions(); updateStrategyCalculateAvailability(true); });
+$('#targetName').addEventListener('change', () => { applyTargetRange(); updateStrategyCalculateAvailability(true); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');
   pair?.querySelectorAll('.date-open').forEach((item) => { item.disabled = event.target.checked; });
   if (event.target.checked) setDatePair($('#periodTo'), '');
+  updateStrategyCalculateAvailability(true);
 });
 $('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
 $('#enableStrategies').addEventListener('change', (event) => {
   $('#strategyPanel').classList.toggle('hidden', !event.target.checked);
   if (event.target.checked && !$('#tradingStrategyName').value) $('#tradingStrategyName').value = defaultStrategyName();
   if (event.target.checked) syncStrategyPeriodToCalculation();
+  updateStrategyCalculateAvailability(event.target.checked);
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
-$('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
+$('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Стратегия рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
 $('#openCsvExport').addEventListener('click', openCsvExportPopup);
 $('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
 $('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));
@@ -656,6 +732,7 @@ document.addEventListener('click', (event) => {
 $('#datePickerApply').addEventListener('click', () => {
   if (!activeDateInput) return;
   setDatePair(activeDateInput, `${$('#datePickerDate').value} ${$('#datePickerHour').value}:${$('#datePickerMinute').value || '00'}`);
+  if (activeDateInput.closest('#strategyPanel') === null) updateStrategyCalculateAvailability(true);
   closeDatePopup();
 });
 $('#datePickerCancel').addEventListener('click', closeDatePopup);
@@ -664,7 +741,10 @@ $('#datePickerPopup').addEventListener('click', (event) => {
 });
 
 document.addEventListener('change', (event) => {
-  if (event.target.matches('.date-input')) forceZeroMinutes(event.target);
+  if (event.target.matches('.date-input')) {
+    forceZeroMinutes(event.target);
+    if (event.target.closest('#strategyPanel') === null) updateStrategyCalculateAvailability(true);
+  }
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);
@@ -674,4 +754,4 @@ if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
 $('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
 $('#tradingStrategyName').value = defaultStrategyName();
-refreshAll().catch((err) => alert(err.message));
+refreshAll().then(() => updateStrategyCalculateAvailability()).catch((err) => alert(err.message));

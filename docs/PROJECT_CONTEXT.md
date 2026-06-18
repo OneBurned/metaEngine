@@ -704,6 +704,8 @@ Current first trading strategy:
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.
 
+Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the strategy calculation button is disabled until block “3. Расчет” has a current base result, the disabled button explains why via tooltip, and the button shows animated “Стратегия рассчитывается...” text while the strategy is running.
+
 Graph layout:
 
 1. base portfolio/preset graph and table;

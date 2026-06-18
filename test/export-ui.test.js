@@ -40,3 +40,20 @@ test('server CSV export uses columns query and not fixed format presets', () => 
   assert.doesNotMatch(server, /exportFormat/);
   assert.doesNotMatch(server, /searchParams\.get\('format'\)/);
 });
+
+test('strategy calculation requires a current base result and explains disabled state', () => {
+  assert.match(app, /function strategyReadinessMessage\(\)/);
+  assert.match(app, /Сначала выполните расчет в блоке “3\. Расчет”/);
+  assert.match(app, /Расчет в блоке “3\. Расчет” изменился/);
+  assert.match(app, /button\.disabled = !ready/);
+  assert.match(app, /button\.title = message/);
+  assert.match(app, /showStrategyMessage\(message, 'strategy-readiness'\)/);
+});
+
+test('strategy calculation button shows animated loading text while running', () => {
+  assert.match(app, /function withLoadingButton\(/);
+  assert.match(app, /Стратегия рассчитывается/);
+  assert.match(app, /setInterval/);
+  assert.match(app, /'\.'\.repeat\(dots\)/);
+  assert.match(app, /clearInterval\(timer\)/);
+});
