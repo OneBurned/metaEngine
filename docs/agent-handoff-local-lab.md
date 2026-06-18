@@ -733,3 +733,12 @@ Date input UX rule:
 - Minute selection must offer `00–59` and preserve the selected minute when writing back to the text field.
 - Default minutes are `00` only when no minute is provided.
 - `Diff` is off by default on all charts, but can be enabled manually by toggle.
+
+
+## Экспорт CSV и valueType upload
+
+- В выпадающем списке загрузки портфолио порядок должен быть `accum`, потом `diff`.
+- Последний выбор `accum/diff` запоминается в браузере через localStorage и не сбрасывается после загрузки.
+- Экспорт должен поддерживать сохраненные портфолио и текущие рассчитанные результаты.
+- Минимальные форматы экспорта: `timestamp_accum`, `timestamp_diff`, `timestamp_diff_accum_hwm_dd_mdd`.
+- Для портфолио экспорт строится из сохраненного `timestamp,diff`, а `accum/hwm/dd/mdd` пересчитываются на полный период файла.

@@ -15,6 +15,8 @@ button.secondary { background: #687386; }
 button.danger { background: #cf3341; }
 button:hover { filter: brightness(.96); }
 .hint { color: #687386; }
+.export-panel { margin-top: 18px; border-top: 1px solid #e7ebf2; padding-top: 14px; }
+.export-panel h3 { margin-top: 0; }
 .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
 .actions button { width: auto; }
 .preset-row { display: grid; grid-template-columns: minmax(240px, 2fr) minmax(100px, .75fr) minmax(260px, 1.25fr) minmax(260px, 1.25fr) minmax(120px, .7fr) minmax(150px, .8fr); gap: 12px; align-items: end; border: 1px solid #e1e6ef; padding: 12px; border-radius: 12px; margin-top: 10px; overflow: hidden; }

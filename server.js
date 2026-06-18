@@ -12,7 +12,8 @@ const {
   calculatePortfolio,
   calculatePreset,
   calculateRsiTradingStrategy,
-  validatePresetItems
+  validatePresetItems,
+  formatNumber
 } = require('./lib/calculations');
 
 const ROOT = __dirname;
@@ -173,6 +174,27 @@ function presetLastTimestamp(preset) {
   return ends.length ? Math.max(...ends) : null;
 }
 
+function exportRowsCsv(rows, format) {
+  const columns = format === 'timestamp_accum'
+    ? ['timestamp', 'accum']
+    : format === 'timestamp_diff'
+      ? ['timestamp', 'diff']
+      : ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+  const cell = (row, key) => {
+    if (key === 'timestamp') return row.time || formatTimestamp(row.timestamp);
+    return formatNumber(row[key] ?? 0);
+  };
+  return `${columns.join(',')}\n${rows.map((row) => columns.map((key) => cell(row, key)).join(',')).join('\n')}\n`;
+}
+
+function calculateStoredPortfolio(file) {
+  const loaded = readPortfolioFile(path.join(PORTFOLIOS_DIR, file));
+  if (!loaded.points.length) throw new Error('Портфолио пустое');
+  const from = loaded.points[0].timestamp;
+  const to = loaded.points.at(-1).timestamp;
+  return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to, loaded.step);
+}
+
 async function calculateTarget(body) {
   const from = parseTimestamp(body.periodFrom);
   let to = body.periodUntilEnd ? null : parseTimestamp(body.periodTo);
@@ -235,6 +257,20 @@ async function handleApi(req, res) {
         step: normalized.step,
         stepLabel: formatStep(normalized.step),
         gaps: normalized.gaps.map(formatTimestamp)
+      });
+    }
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/portfolios/') && url.pathname.endsWith('/export')) {
+      const parts = url.pathname.split('/');
+      const file = safeName(decodeURIComponent(parts.at(-2)), '.csv');
+      const fullPath = path.join(PORTFOLIOS_DIR, file);
+      if (!fs.existsSync(fullPath)) return error(res, 404, 'Портфолио не найдено');
+      const format = url.searchParams.get('format') || 'timestamp_accum';
+      const result = calculateStoredPortfolio(file);
+      const csv = exportRowsCsv(result.rows, format);
+      return send(res, 200, csv, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="${file.replace(/\.csv$/i, '')}_${format}.csv"`
       });
     }
 

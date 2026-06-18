@@ -5,9 +5,15 @@ let lastResult = null;
 let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
+const VALUE_TYPE_STORAGE_KEY = 'metaengine.lastPortfolioValueType';
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+function initializeValueTypeMemory() {
+  const stored = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
+  if (stored === 'accum' || stored === 'diff') $('#valueType').value = stored;
+}
 
 function fmtPct(value) {
   return `${(Number(value) * 100).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}%`;
@@ -68,6 +74,7 @@ async function refreshAll() {
   renderTradingStrategies();
   renderPresetRowsOptions();
   renderTargetOptions();
+  renderExportOptions();
 }
 
 function renderPortfolios() {
@@ -174,6 +181,14 @@ function renderTargetOptions() {
   applyTargetRange();
 }
 
+function renderExportOptions() {
+  const select = $('#exportPortfolioName');
+  if (!select) return;
+  const current = select.value;
+  select.innerHTML = portfolios.map((p) => `<option value="${p.file}" ${p.file === current ? 'selected' : ''}>${p.file}</option>`).join('');
+}
+
+
 function applyPortfolioRangeToPresetRow(row, overwrite = false) {
   const portfolio = portfolioByName(row.querySelector('.row-portfolio').value);
   if (!portfolio) return;
@@ -208,11 +223,13 @@ async function uploadPortfolio(event) {
   form.append('file', file);
   form.append('name', $('#portfolioName').value || file.name.replace(/\.csv$/i, ''));
   form.append('valueType', $('#valueType').value);
+  localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value);
   const result = await api('/api/portfolios', { method: 'POST', body: form });
   const gapText = result.gaps?.length ? `\nНайдены пропуски: ${result.gaps.length}` : '';
   const renameText = result.renamed ? `\nИмя уже было занято, поэтому сохранено как: ${result.file}` : '';
   alert(`Портфолио сохранено: ${result.file}${renameText}\nШаг определен: ${result.stepLabel}${gapText}`);
   event.target.reset();
+  $('#valueType').value = localStorage.getItem(VALUE_TYPE_STORAGE_KEY) || 'accum';
   await refreshAll();
 }
 
@@ -472,6 +489,63 @@ function syncStrategyPeriodToCalculation() {
   if ($('#periodTo').value && !$('#strategyPeriodTo').value) setDatePair($('#strategyPeriodTo'), $('#periodTo').value);
 }
 
+function valueForExport(row, key) {
+  if (key === 'timestamp') return row.time || row.timestamp;
+  if (key === 'diff') return row.diff ?? row.source_diff ?? row.strategy_diff ?? 0;
+  if (key === 'accum') return row.accum ?? row.strategy_accum ?? 0;
+  if (key === 'hwm') return row.hwm ?? row.strategy_hwm ?? 0;
+  if (key === 'dd') return row.dd ?? row.strategy_dd ?? 0;
+  if (key === 'mdd') return row.mdd ?? row.strategy_mdd ?? 0;
+  return row[key] ?? '';
+}
+
+function rowsToCsv(rows, format) {
+  const columns = format === 'timestamp_accum'
+    ? ['timestamp', 'accum']
+    : format === 'timestamp_diff'
+      ? ['timestamp', 'diff']
+      : ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+  return `${columns.join(',')}\n${rows.map((row) => columns.map((key) => valueForExport(row, key)).join(',')).join('\n')}\n`;
+}
+
+function downloadText(filename, text) {
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+async function exportCsv() {
+  const sourceType = $('#exportSourceType').value;
+  const format = $('#exportFormat').value;
+  if (sourceType === 'portfolio') {
+    const name = $('#exportPortfolioName').value;
+    if (!name) return alert('Выберите портфолио для экспорта');
+    const response = await fetch(`/api/portfolios/${encodeURIComponent(name)}/export?format=${encodeURIComponent(format)}`);
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      throw new Error(body.error || 'Ошибка экспорта');
+    }
+    return downloadText(name.replace(/\.csv$/i, `_${format}.csv`), await response.text());
+  }
+  if (sourceType === 'baseResult') {
+    if (!lastResult?.rows?.length) return alert('Сначала рассчитайте портфолио или пресет');
+    return downloadText(`base_result_${format}.csv`, rowsToCsv(lastResult.rows, format));
+  }
+  if (sourceType === 'strategyResult') {
+    if (!lastStrategyResult?.rows?.length) return alert('Сначала рассчитайте торговую стратегию');
+    return downloadText(`strategy_result_${format}.csv`, rowsToCsv(lastStrategyResult.rows, format));
+  }
+}
+
+initializeValueTypeMemory();
+$('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
+$('#exportCsv').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
 $('#portfolios').addEventListener('click', (event) => {
   const file = event.target.dataset.deletePortfolio;

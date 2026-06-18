@@ -24,14 +24,38 @@
         </label>
         <label>Что во второй колонке?
           <select id="valueType">
-            <option value="diff">diff</option>
             <option value="accum">accum</option>
+            <option value="diff">diff</option>
           </select>
         </label>
         <button type="submit">Загрузить портфолио</button>
       </form>
       <p class="hint">После загрузки файл сохраняется в <code>samples/portfolios</code> всегда как <code>timestamp,diff</code>.</p>
       <div id="portfolios"></div>
+      <div class="export-panel">
+        <h3>Экспорт CSV</h3>
+        <div class="grid-form">
+          <label>Что экспортируем?
+            <select id="exportSourceType">
+              <option value="portfolio">Портфолио из списка</option>
+              <option value="baseResult">Текущий исходный результат</option>
+              <option value="strategyResult">Текущий результат стратегии</option>
+            </select>
+          </label>
+          <label>Портфолио
+            <select id="exportPortfolioName"></select>
+          </label>
+          <label>Формат
+            <select id="exportFormat">
+              <option value="timestamp_accum">дата + accum</option>
+              <option value="timestamp_diff">дата + diff</option>
+              <option value="timestamp_diff_accum_hwm_dd_mdd">дата + diff + accum + hwm + dd + mdd</option>
+            </select>
+          </label>
+          <button id="exportCsv" type="button">Экспорт CSV</button>
+        </div>
+        <p class="hint">Для портфолио экспорт строится из сохраненного <code>timestamp,diff</code>. Формат “дата + accum” даст файл, похожий на загрузку через accum.</p>
+      </div>
     </section>
 
     <section class="card">
