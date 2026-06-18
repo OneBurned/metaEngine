@@ -87,3 +87,9 @@ test('disabled buttons have an explicit muted style', () => {
   assert.match(styles, /button:disabled \{ background: #aeb7c8/);
   assert.match(styles, /cursor: not-allowed/);
 });
+
+
+test('strategy loading does not clear its own disabled state before request starts', () => {
+  assert.match(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*const readiness = strategyReadinessMessage\\(\\)"));
+  assert.doesNotMatch(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*if \\(!updateStrategyCalculateAvailability\\(true\\)\\) return;"));
+});

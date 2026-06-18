@@ -528,7 +528,12 @@ async function saveTradingStrategy(overwrite = false) {
 }
 
 async function calculateTradingStrategy() {
-  if (!updateStrategyCalculateAvailability(true)) return;
+  const readiness = strategyReadinessMessage();
+  if (readiness) {
+    showStrategyMessage(readiness, 'strategy-readiness');
+    updateStrategyCalculateAvailability();
+    return;
+  }
   const base = baseCalculationBody();
   const strategy = collectStrategyBody();
   lastStrategyConfig = strategy;
