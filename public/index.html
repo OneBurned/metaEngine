@@ -45,16 +45,18 @@
           <label>Портфолио
             <select id="exportPortfolioName"></select>
           </label>
-          <label>Формат
-            <select id="exportFormat">
-              <option value="timestamp_accum">дата + accum</option>
-              <option value="timestamp_diff">дата + diff</option>
-              <option value="timestamp_diff_accum_hwm_dd_mdd">дата + diff + accum + hwm + dd + mdd</option>
-            </select>
-          </label>
+          <fieldset class="export-columns">
+            <legend>Тумблеры колонок экспорта</legend>
+            <label><input type="checkbox" class="export-column" value="timestamp" checked disabled /> <span>дата</span></label>
+            <label><input type="checkbox" class="export-column" value="diff" /> <span>diff</span></label>
+            <label><input type="checkbox" class="export-column" value="accum" checked /> <span>accum</span></label>
+            <label><input type="checkbox" class="export-column" value="hwm" /> <span>hwm</span></label>
+            <label><input type="checkbox" class="export-column" value="dd" /> <span>dd</span></label>
+            <label><input type="checkbox" class="export-column" value="mdd" /> <span>mdd</span></label>
+          </fieldset>
           <button id="exportCsv" type="button">Экспорт CSV</button>
         </div>
-        <p class="hint">Для портфолио экспорт строится из сохраненного <code>timestamp,diff</code>. Формат “дата + accum” даст файл, похожий на загрузку через accum.</p>
+        <p class="hint">Выбирай любые колонки тумблерами: например “дата + mdd”, “дата + accum” или полный набор. Для портфолио экспорт строится из сохраненного <code>timestamp,diff</code>.</p>
       </div>
     </section>
 

@@ -123,3 +123,22 @@ test('RSI trading strategy allows inverted levels without validation error', () 
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
   assert.doesNotThrow(() => calculateRsiTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
 });
+
+test('CSV export UI uses column toggles instead of fixed format dropdown', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+
+  assert.doesNotMatch(html, /id="exportFormat"/);
+  assert.match(html, /Тумблеры колонок экспорта/);
+  assert.match(html, /например “дата \+ mdd”/);
+  for (const column of ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd']) {
+    assert.match(html, new RegExp(`class="export-column" value="${column}"`));
+  }
+  assert.match(app, /selectedExportColumns/);
+  assert.match(app, /columns=\$\{encodeURIComponent\(columns\.join\(','\)\)\}/);
+  assert.match(server, /normalizeExportColumns/);
+  assert.match(server, /url\.searchParams\.get\('columns'\)/);
+  assert.doesNotMatch(server, /timestamp_accum/);
+  assert.doesNotMatch(server, /timestamp_diff_accum_hwm_dd_mdd/);
+});

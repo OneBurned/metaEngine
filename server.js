@@ -174,12 +174,19 @@ function presetLastTimestamp(preset) {
   return ends.length ? Math.max(...ends) : null;
 }
 
-function exportRowsCsv(rows, format) {
-  const columns = format === 'timestamp_accum'
-    ? ['timestamp', 'accum']
-    : format === 'timestamp_diff'
-      ? ['timestamp', 'diff']
-      : ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+const EXPORT_COLUMNS = new Set(['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd']);
+
+function normalizeExportColumns(value) {
+  const requested = String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const columns = requested.filter((item) => EXPORT_COLUMNS.has(item));
+  if (!columns.includes('timestamp')) columns.unshift('timestamp');
+  return [...new Set(columns.length ? columns : ['timestamp', 'accum'])];
+}
+
+function exportRowsCsv(rows, columns) {
   const cell = (row, key) => {
     if (key === 'timestamp') return row.time || formatTimestamp(row.timestamp);
     return formatNumber(row[key] ?? 0);
@@ -265,12 +272,13 @@ async function handleApi(req, res) {
       const file = safeName(decodeURIComponent(parts.at(-2)), '.csv');
       const fullPath = path.join(PORTFOLIOS_DIR, file);
       if (!fs.existsSync(fullPath)) return error(res, 404, 'Портфолио не найдено');
-      const format = url.searchParams.get('format') || 'timestamp_accum';
+      const columns = normalizeExportColumns(url.searchParams.get('columns'));
       const result = calculateStoredPortfolio(file);
-      const csv = exportRowsCsv(result.rows, format);
+      const csv = exportRowsCsv(result.rows, columns);
+      const slug = columns.join('_');
       return send(res, 200, csv, {
         'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${file.replace(/\.csv$/i, '')}_${format}.csv"`
+        'content-disposition': `attachment; filename="${file.replace(/\.csv$/i, '')}_${slug}.csv"`
       });
     }
 

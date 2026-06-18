@@ -499,12 +499,17 @@ function valueForExport(row, key) {
   return row[key] ?? '';
 }
 
-function rowsToCsv(rows, format) {
-  const columns = format === 'timestamp_accum'
-    ? ['timestamp', 'accum']
-    : format === 'timestamp_diff'
-      ? ['timestamp', 'diff']
-      : ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+function selectedExportColumns() {
+  const columns = $$('.export-column:checked').map((input) => input.value);
+  if (!columns.includes('timestamp')) columns.unshift('timestamp');
+  return [...new Set(columns)];
+}
+
+function exportColumnsSlug(columns) {
+  return columns.join('_');
+}
+
+function rowsToCsv(rows, columns) {
   return `${columns.join(',')}\n${rows.map((row) => columns.map((key) => valueForExport(row, key)).join(',')).join('\n')}\n`;
 }
 
@@ -522,24 +527,25 @@ function downloadText(filename, text) {
 
 async function exportCsv() {
   const sourceType = $('#exportSourceType').value;
-  const format = $('#exportFormat').value;
+  const columns = selectedExportColumns();
+  const slug = exportColumnsSlug(columns);
   if (sourceType === 'portfolio') {
     const name = $('#exportPortfolioName').value;
     if (!name) return alert('Выберите портфолио для экспорта');
-    const response = await fetch(`/api/portfolios/${encodeURIComponent(name)}/export?format=${encodeURIComponent(format)}`);
+    const response = await fetch(`/api/portfolios/${encodeURIComponent(name)}/export?columns=${encodeURIComponent(columns.join(','))}`);
     if (!response.ok) {
       const body = await response.json().catch(() => ({}));
       throw new Error(body.error || 'Ошибка экспорта');
     }
-    return downloadText(name.replace(/\.csv$/i, `_${format}.csv`), await response.text());
+    return downloadText(name.replace(/\.csv$/i, `_${slug}.csv`), await response.text());
   }
   if (sourceType === 'baseResult') {
     if (!lastResult?.rows?.length) return alert('Сначала рассчитайте портфолио или пресет');
-    return downloadText(`base_result_${format}.csv`, rowsToCsv(lastResult.rows, format));
+    return downloadText(`base_result_${slug}.csv`, rowsToCsv(lastResult.rows, columns));
   }
   if (sourceType === 'strategyResult') {
     if (!lastStrategyResult?.rows?.length) return alert('Сначала рассчитайте торговую стратегию');
-    return downloadText(`strategy_result_${format}.csv`, rowsToCsv(lastStrategyResult.rows, format));
+    return downloadText(`strategy_result_${slug}.csv`, rowsToCsv(lastStrategyResult.rows, columns));
   }
 }
 
