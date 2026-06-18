@@ -12,7 +12,8 @@ const {
   calculatePortfolio,
   calculatePreset,
   calculateRsiTradingStrategy,
-  validatePresetItems
+  validatePresetItems,
+  formatNumber
 } = require('./lib/calculations');
 
 const ROOT = __dirname;
@@ -25,6 +26,44 @@ const RUNS_DIR = path.join(SAMPLES_DIR, 'runs');
 const PORT = Number(process.env.PORT || 5173);
 
 for (const dir of [PORTFOLIOS_DIR, TRADING_STRATEGIES_DIR, PRESETS_DIR, RUNS_DIR]) fs.mkdirSync(dir, { recursive: true });
+
+const CSV_EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+
+function parseCsvExportColumns(value) {
+  const requested = String(value || 'timestamp,diff,accum,hwm,dd,mdd')
+    .split(',')
+    .map((column) => column.trim().toLowerCase())
+    .filter(Boolean);
+  const columns = [...new Set(['timestamp', ...requested])];
+  const unknown = columns.filter((column) => !CSV_EXPORT_COLUMNS.includes(column));
+  if (unknown.length) throw new Error(`Неизвестные колонки CSV: ${unknown.join(', ')}`);
+  return columns;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function portfolioRowsToCsv(rows, columns) {
+  const lines = rows.map((row) => columns.map((column) => {
+    if (column === 'timestamp') return csvCell(row.timestamp);
+    return csvCell(formatNumber(row[column]));
+  }).join(','));
+  return `${columns.join(',')}\n${lines.join('\n')}\n`;
+}
+
+function exportPortfolioCsv(file, columns) {
+  const safeFile = safeName(file, '.csv');
+  const fullPath = path.join(PORTFOLIOS_DIR, safeFile);
+  if (!fs.existsSync(fullPath)) throw new Error('Портфолио не найдено');
+  const loaded = readPortfolioFile(fullPath);
+  const first = loaded.points[0]?.timestamp;
+  const last = loaded.points.at(-1)?.timestamp;
+  if (first === undefined || last === undefined) throw new Error('Портфолио пустое');
+  const result = calculatePortfolio(fullPath, first, last);
+  return portfolioRowsToCsv(result.rows, columns);
+}
 
 function send(res, status, body, headers = {}) {
   const payload = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body);
@@ -216,6 +255,17 @@ async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
     if (req.method === 'GET' && url.pathname === '/api/portfolios') return json(res, 200, { portfolios: listPortfolios() });
+
+    if (req.method === 'GET' && url.pathname.startsWith('/api/portfolios/') && url.pathname.endsWith('/export')) {
+      const encoded = url.pathname.slice('/api/portfolios/'.length, -'/export'.length);
+      const file = decodeURIComponent(encoded);
+      const columns = parseCsvExportColumns(url.searchParams.get('columns'));
+      const csv = exportPortfolioCsv(file, columns);
+      return send(res, 200, csv, {
+        'content-type': 'text/csv; charset=utf-8',
+        'content-disposition': `attachment; filename="portfolio_${columns.join('_')}.csv"`
+      });
+    }
 
     if (req.method === 'POST' && url.pathname === '/api/portfolios') {
       const parts = parseMultipart(await readBody(req), req.headers['content-type'] || '');

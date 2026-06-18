@@ -697,3 +697,38 @@ Graph layout:
 1. base portfolio/preset graph and table;
 2. RSI subgraph with level lines when RSI strategy overlay is enabled;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+## Экспорт CSV
+
+В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.
+
+В popup выбирается источник экспорта:
+
+- сохраненное портфолио;
+- текущий исходный результат расчета;
+- текущий результат торговой стратегии.
+
+Колонка `timestamp` / дата всегда включена и не отключается. Остальные колонки выбираются независимыми тумблерами:
+
+- `diff`;
+- `accum`;
+- `hwm`;
+- `dd`;
+- `mdd`.
+
+Можно экспортировать любые комбинации, например `timestamp,mdd`, `timestamp,accum` или `timestamp,diff,accum,hwm,dd,mdd`. Для текущего исходного результата и текущего результата торговой стратегии CSV собирается в браузере из уже рассчитанных строк.
+
+Для сохраненного портфолио frontend вызывает backend endpoint с параметром `columns`, например:
+
+```text
+GET /api/portfolios/portfolio_a.csv/export?columns=timestamp,mdd
+```
+
+Сохраненные портфолио лежат как `timestamp,diff`, поэтому сервер при экспорте пересчитывает полный ряд портфолио и отдает только выбранные колонки: `accum`, `hwm`, `dd`, `mdd` строятся из сохраненного `diff`.
+
+Имена скачиваемых файлов отражают источник и выбранные колонки, например:
+
+```text
+portfolio_timestamp_mdd.csv
+base_result_timestamp_accum.csv
+strategy_result_timestamp_diff_accum_mdd.csv
+```

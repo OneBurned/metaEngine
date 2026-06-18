@@ -9,6 +9,40 @@ let lastStrategyConfig = null;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
+const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
+
+function exportFileName(prefix, columns) {
+  return `${prefix}_${columns.join('_')}.csv`;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function rowValueForColumn(row, column, prefix = '') {
+  if (column === 'timestamp') return row.timestamp ?? row.time ?? '';
+  return row[`${prefix}${column}`] ?? row[column] ?? '';
+}
+
+function rowsToCsv(rows, columns, prefix = '') {
+  const header = columns.join(',');
+  const lines = rows.map((row) => columns.map((column) => csvCell(rowValueForColumn(row, column, prefix))).join(','));
+  return `${header}\n${lines.join('\n')}\n`;
+}
+
+function downloadCsv(filename, csv) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  URL.revokeObjectURL(link.href);
+  link.remove();
+}
+
 function fmtPct(value) {
   return `${(Number(value) * 100).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}%`;
 }
@@ -208,6 +242,7 @@ async function uploadPortfolio(event) {
   form.append('file', file);
   form.append('name', $('#portfolioName').value || file.name.replace(/\.csv$/i, ''));
   form.append('valueType', $('#valueType').value);
+  localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value);
   const result = await api('/api/portfolios', { method: 'POST', body: form });
   const gapText = result.gaps?.length ? `\nНайдены пропуски: ${result.gaps.length}` : '';
   const renameText = result.renamed ? `\nИмя уже было занято, поэтому сохранено как: ${result.file}` : '';
@@ -467,6 +502,74 @@ function renderStrategyTable(rows) {
     <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
+function renderCsvPortfolioOptions() {
+  const select = $('#csvPortfolioName');
+  if (!select) return;
+  select.innerHTML = portfolios.map((p) => `<option value="${p.file}">${p.file}</option>`).join('');
+}
+
+function selectedExportColumns() {
+  return EXPORT_COLUMNS.filter((column) => column === 'timestamp' || $(`[data-export-column="${column}"]`)?.checked);
+}
+
+function updateCsvExportPopupState() {
+  const source = $('#csvExportSource').value;
+  const portfolioMode = source === 'portfolio';
+  $('#csvPortfolioLabel').classList.toggle('hidden', !portfolioMode);
+  const hasPortfolio = portfolios.length > 0;
+  const canExport = (source === 'portfolio' && hasPortfolio) || (source === 'base_result' && !!lastResult?.rows?.length) || (source === 'strategy_result' && !!lastStrategyResult?.rows?.length);
+  $('#csvExportApply').disabled = !canExport;
+  const hints = {
+    portfolio: hasPortfolio ? 'Сервер экспортирует выбранное портфолио и пересчитает accum/HWM/DD/MDD из timestamp,diff.' : 'Сначала загрузите портфолио.',
+    base_result: lastResult?.rows?.length ? 'CSV будет собран из текущего исходного результата расчета.' : 'Сначала выполните расчет.',
+    strategy_result: lastStrategyResult?.rows?.length ? 'CSV будет собран из текущего результата торговой стратегии.' : 'Сначала рассчитайте торговую стратегию.'
+  };
+  $('#csvExportHint').textContent = hints[source];
+}
+
+function openCsvExportPopup() {
+  renderCsvPortfolioOptions();
+  updateCsvExportPopupState();
+  $('#csvExportPopup').classList.remove('hidden');
+}
+
+function closeCsvExportPopup() {
+  $('#csvExportPopup').classList.add('hidden');
+}
+
+async function exportCsv() {
+  const source = $('#csvExportSource').value;
+  const columns = selectedExportColumns();
+  if (!columns.includes('timestamp')) columns.unshift('timestamp');
+
+  if (source === 'portfolio') {
+    const portfolio = $('#csvPortfolioName').value;
+    if (!portfolio) return alert('Выберите сохраненное портфолио');
+    const url = `/api/portfolios/${encodeURIComponent(portfolio)}/export?columns=${encodeURIComponent(columns.join(','))}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Не удалось экспортировать портфолио');
+    }
+    downloadCsv(exportFileName('portfolio', columns), await res.text());
+    closeCsvExportPopup();
+    return;
+  }
+
+  if (source === 'base_result') {
+    if (!lastResult?.rows?.length) return alert('Сначала выполните расчет');
+    downloadCsv(exportFileName('base_result', columns), rowsToCsv(lastResult.rows, columns));
+    closeCsvExportPopup();
+    return;
+  }
+
+  if (source === 'strategy_result') {
+    if (!lastStrategyResult?.rows?.length) return alert('Сначала рассчитайте торговую стратегию');
+    downloadCsv(exportFileName('strategy_result', columns), rowsToCsv(lastStrategyResult.rows, columns, 'strategy_'));
+    closeCsvExportPopup();
+  }
+}
+
 function syncStrategyPeriodToCalculation() {
   if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value);
   if ($('#periodTo').value && !$('#strategyPeriodTo').value) setDatePair($('#strategyPeriodTo'), $('#periodTo').value);
@@ -503,6 +606,11 @@ $('#enableStrategies').addEventListener('change', (event) => {
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
+$('#openCsvExport').addEventListener('click', openCsvExportPopup);
+$('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
+$('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));
+$('#csvExportCancel').addEventListener('click', closeCsvExportPopup);
+$('#csvExportPopup').addEventListener('click', (event) => { if (event.target.id === 'csvExportPopup') closeCsvExportPopup(); });
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
 let activeDateInput = null;
 
@@ -561,6 +669,9 @@ document.addEventListener('change', (event) => {
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);
 
+const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
+if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
+$('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
 $('#tradingStrategyName').value = defaultStrategyName();
 refreshAll().catch((err) => alert(err.message));
