@@ -23,6 +23,18 @@ This is not the final production stack. The repository defaults still say produc
 
 The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly.
 
+## Documentation map
+
+```text
+README.md                 Human-facing project overview and run guide
+AGENTS.md                 Required workflow rules for AI agents
+docs/PROJECT_CONTEXT.md   Full project context and product decisions
+docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
+docs/CSV_EXPORT.md        CSV export behavior and API
+```
+
+Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
+
 ## 2. User communication rules
 
 The user is not a coder. Communicate simply.
@@ -76,8 +88,8 @@ public/app.js                     Browser UI behavior
 public/styles.css                 Browser UI styling
 test/calculations.test.js         Unit tests for calculations
 README.md                         Human-facing usage docs
-docs/agent-handoff-local-lab.md   This AI-agent handoff document
-samples/strategies                Uploaded normalized strategy CSV files
+docs/PROJECT_CONTEXT.md           Project context for future AI agents
+samples/strategies                Saved trading strategy JSON configs
 samples/presets                   Saved preset JSON files
 samples/runs                      Saved calculation run JSON files
 ```
@@ -692,8 +704,45 @@ Current first trading strategy:
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.
 
+Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the strategy calculation button is disabled until block “3. Расчет” has a current base result, the disabled button explains why via tooltip, and the button shows animated “Рассчитывается...” text while the strategy is running.
+
 Graph layout:
 
 1. base portfolio/preset graph and table;
 2. RSI subgraph with level lines when RSI strategy overlay is enabled;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+## Экспорт CSV
+
+В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.
+
+В popup выбирается источник экспорта:
+
+- сохраненное портфолио;
+- текущий исходный результат расчета;
+- текущий результат торговой стратегии.
+
+Колонка `timestamp` / дата всегда включена и не отключается. Остальные колонки выбираются независимыми тумблерами:
+
+- `diff`;
+- `accum`;
+- `hwm`;
+- `dd`;
+- `mdd`.
+
+Можно экспортировать любые комбинации, например `timestamp,mdd`, `timestamp,accum` или `timestamp,diff,accum,hwm,dd,mdd`. Для текущего исходного результата и текущего результата торговой стратегии CSV собирается в браузере из уже рассчитанных строк.
+
+Для сохраненного портфолио frontend вызывает backend endpoint с параметром `columns`, например:
+
+```text
+GET /api/portfolios/portfolio_a.csv/export?columns=timestamp,mdd
+```
+
+Сохраненные портфолио лежат как `timestamp,diff`, поэтому сервер при экспорте пересчитывает полный ряд портфолио и отдает только выбранные колонки: `accum`, `hwm`, `dd`, `mdd` строятся из сохраненного `diff`.
+
+Имена скачиваемых файлов отражают источник и выбранные колонки, например:
+
+```text
+portfolio_timestamp_mdd.csv
+base_result_timestamp_accum.csv
+strategy_result_timestamp_diff_accum_mdd.csv
+```

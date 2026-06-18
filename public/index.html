@@ -24,8 +24,8 @@
         </label>
         <label>Что во второй колонке?
           <select id="valueType">
-            <option value="diff">diff</option>
             <option value="accum">accum</option>
+            <option value="diff">diff</option>
           </select>
         </label>
         <button type="submit">Загрузить портфолио</button>
@@ -142,6 +142,7 @@
       </div>
     </section>
 
+
     <section class="card hidden" id="strategyResultCard">
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
@@ -154,6 +155,14 @@
       </div>
       <svg id="strategyChart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
+    </section>
+
+
+
+    <section class="card" id="exportCard">
+      <h2>Экспорт CSV</h2>
+      <p class="hint">Экспортируйте сохраненное портфолио, текущий исходный результат или текущий результат торговой стратегии с выбранными колонками.</p>
+      <button id="openCsvExport" type="button">Экспорт CSV</button>
     </section>
   </main>
 
@@ -179,6 +188,36 @@
       <div class="actions">
         <button id="datePickerApply" type="button">OK</button>
         <button id="datePickerCancel" class="secondary" type="button">Отмена</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div id="csvExportPopup" class="date-popup hidden" aria-hidden="true">
+    <div class="date-popup-card export-popup-card" role="dialog" aria-modal="true" aria-labelledby="csvExportTitle">
+      <h3 id="csvExportTitle">Экспорт CSV</h3>
+      <label>Источник
+        <select id="csvExportSource">
+          <option value="portfolio">Сохраненное портфолио</option>
+          <option value="base_result">Текущий исходный результат</option>
+          <option value="strategy_result">Текущий результат стратегии</option>
+        </select>
+      </label>
+      <label id="csvPortfolioLabel">Портфолио
+        <select id="csvPortfolioName"></select>
+      </label>
+      <div class="export-columns" aria-label="Колонки CSV">
+        <label class="switch-line"><input type="checkbox" data-export-column="timestamp" checked disabled /> Дата</label>
+        <label class="switch-line"><input type="checkbox" data-export-column="diff" checked /> diff</label>
+        <label class="switch-line"><input type="checkbox" data-export-column="accum" checked /> accum</label>
+        <label class="switch-line"><input type="checkbox" data-export-column="hwm" checked /> HWM</label>
+        <label class="switch-line"><input type="checkbox" data-export-column="dd" checked /> DD</label>
+        <label class="switch-line"><input type="checkbox" data-export-column="mdd" checked /> MDD</label>
+      </div>
+      <p id="csvExportHint" class="hint"></p>
+      <div class="actions">
+        <button id="csvExportApply" type="button">Скачать CSV</button>
+        <button id="csvExportCancel" class="secondary" type="button">Отмена</button>
       </div>
     </div>
   </div>

@@ -2,12 +2,47 @@ let portfolios = [];
 let presets = [];
 let tradingStrategies = [];
 let lastResult = null;
+let lastResultKey = null;
 let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
+
+const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
+
+function exportFileName(prefix, columns) {
+  return `${prefix}_${columns.join('_')}.csv`;
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? '' : String(value);
+  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function rowValueForColumn(row, column, prefix = '') {
+  if (column === 'timestamp') return row.timestamp ?? row.time ?? '';
+  return row[`${prefix}${column}`] ?? row[column] ?? '';
+}
+
+function rowsToCsv(rows, columns, prefix = '') {
+  const header = columns.join(',');
+  const lines = rows.map((row) => columns.map((column) => csvCell(rowValueForColumn(row, column, prefix))).join(','));
+  return `${header}\n${lines.join('\n')}\n`;
+}
+
+function downloadCsv(filename, csv) {
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  URL.revokeObjectURL(link.href);
+  link.remove();
+}
 
 function fmtPct(value) {
   return `${(Number(value) * 100).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}%`;
@@ -208,6 +243,7 @@ async function uploadPortfolio(event) {
   form.append('file', file);
   form.append('name', $('#portfolioName').value || file.name.replace(/\.csv$/i, ''));
   form.append('valueType', $('#valueType').value);
+  localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value);
   const result = await api('/api/portfolios', { method: 'POST', body: form });
   const gapText = result.gaps?.length ? `\nНайдены пропуски: ${result.gaps.length}` : '';
   const renameText = result.renamed ? `\nИмя уже было занято, поэтому сохранено как: ${result.file}` : '';
@@ -274,10 +310,84 @@ function baseCalculationBody() {
   };
 }
 
+function calculationKey(body = baseCalculationBody()) {
+  return JSON.stringify({
+    targetType: body.targetType,
+    targetName: body.targetName,
+    periodFrom: body.periodFrom,
+    periodTo: body.periodTo,
+    periodUntilEnd: body.periodUntilEnd
+  });
+}
+
+function strategyReadinessMessage() {
+  const body = baseCalculationBody();
+  if (!body.targetName) return 'Сначала выберите портфолио или пресет в блоке “3. Расчет”.';
+  if (!lastResult?.rows?.length) return 'Сначала выполните расчет в блоке “3. Расчет”. Стратегия применяется к уже рассчитанному портфолио или пресету.';
+  if (lastResultKey !== calculationKey(body)) return 'Расчет в блоке “3. Расчет” изменился. Пересчитайте его перед запуском стратегии.';
+  return '';
+}
+
+function showStrategyMessage(message, kind = 'strategy-readiness') {
+  const box = $('#strategyWarningBox');
+  box.dataset.kind = kind;
+  box.classList.remove('hidden');
+  box.textContent = message;
+}
+
+function clearStrategyMessage(kind = '') {
+  const box = $('#strategyWarningBox');
+  if (kind && box.dataset.kind !== kind) return;
+  box.classList.add('hidden');
+  box.textContent = '';
+  delete box.dataset.kind;
+}
+
+function updateStrategyCalculateAvailability(showMessage = false) {
+  const button = $('#calculateTradingStrategy');
+  if (!button) return false;
+  const message = strategyReadinessMessage();
+  const ready = !message;
+  button.disabled = !ready;
+  button.title = message;
+  if (ready) {
+    clearStrategyMessage('strategy-readiness');
+  } else if (showMessage && !$('#strategyPanel').classList.contains('hidden')) {
+    showStrategyMessage(message, 'strategy-readiness');
+  }
+  return ready;
+}
+
+async function withLoadingButton(button, loadingText, action) {
+  const originalText = button.textContent;
+  const originalTitle = button.title;
+  const originalDisabled = button.disabled;
+  let dots = 0;
+  button.disabled = true;
+  button.title = loadingText;
+  button.textContent = `${loadingText}.`;
+  const timer = setInterval(() => {
+    dots = (dots % 3) + 1;
+    button.textContent = `${loadingText}${'.'.repeat(dots)}`;
+  }, 450);
+
+  try {
+    return await action();
+  } finally {
+    clearInterval(timer);
+    button.textContent = originalText;
+    button.title = originalTitle;
+    button.disabled = originalDisabled;
+    updateStrategyCalculateAvailability();
+  }
+}
+
 async function calculate() {
   const body = baseCalculationBody();
   if (!body.targetName) return alert('Выберите портфолио или пресет');
+  const currentKey = calculationKey(body);
   const result = await api('/api/calculate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  result.calculationKey = currentKey;
   lastStrategyResult = null;
   $('#strategyResultCard').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
@@ -296,22 +406,20 @@ function showWarning(result) {
   box.classList.remove('hidden');
   const sample = result.warnings.slice(0, 15).map((w) => `${w.portfolio ? `${w.portfolio}: ` : ''}${w.display}`).join('\n');
   box.innerHTML = `Шаг определен как ${stepLabel(result.step)}, но найдены пропуски: ${result.warnings.length}.\n\n<button id="continueCalc">Продолжить расчет</button> <button id="showGaps" class="secondary">Показать пропуски</button> <button id="cancelCalc" class="danger">Отменить</button><pre class="hidden" id="gapLog">${sample}${result.warnings.length > 15 ? '\n...' : ''}</pre>`;
-  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult); };
+  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult); updateStrategyCalculateAvailability(); };
   $('#showGaps').onclick = () => $('#gapLog').classList.toggle('hidden');
   $('#cancelCalc').onclick = () => { pendingResult = null; box.classList.add('hidden'); };
 }
 
 function showStrategyWarnings(warnings) {
-  const box = $('#strategyWarningBox');
   if (!warnings?.length) {
-    box.classList.add('hidden');
-    box.innerHTML = '';
+    clearStrategyMessage('strategy-warning');
     return;
   }
-  box.classList.remove('hidden');
   const sample = warnings.slice(0, 15).map((w) => w.display).join('\n');
-  box.textContent = `Период стратегии выходит за данные расчета или содержит пропуски. Заполнено по правилу отсутствующих данных: ${warnings.length}.\n${sample}${warnings.length > 15 ? '\n...' : ''}`;
+  showStrategyMessage(`Период стратегии выходит за данные расчета или содержит пропуски. Заполнено по правилу отсутствующих данных: ${warnings.length}.\n${sample}${warnings.length > 15 ? '\n...' : ''}`, 'strategy-warning');
 }
+
 
 function stepLabel(step) {
   if (step === 300000) return '5 минут';
@@ -322,6 +430,7 @@ function stepLabel(step) {
 
 function showResult(result) {
   lastResult = result;
+  lastResultKey = result.calculationKey ?? calculationKey();
   $('#resultCard').classList.remove('hidden');
   $('#summary').innerHTML = `<table><tbody>
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
@@ -334,6 +443,7 @@ function showResult(result) {
   renderChart();
   renderRsiChart();
   renderResultTable(result.rows);
+  updateStrategyCalculateAvailability();
 }
 
 function renderResultTable(rows) {
@@ -418,8 +528,13 @@ async function saveTradingStrategy(overwrite = false) {
 }
 
 async function calculateTradingStrategy() {
+  const readiness = strategyReadinessMessage();
+  if (readiness) {
+    showStrategyMessage(readiness, 'strategy-readiness');
+    updateStrategyCalculateAvailability();
+    return;
+  }
   const base = baseCalculationBody();
-  if (!base.targetName) return alert('Сначала выберите портфолио или пресет в блоке расчета');
   const strategy = collectStrategyBody();
   lastStrategyConfig = strategy;
   const result = await api('/api/strategies/calculate', {
@@ -432,6 +547,7 @@ async function calculateTradingStrategy() {
   showResult(result.baseResult);
   showStrategyResult(result.strategyResult, result.strategy.name);
   showStrategyWarnings(result.strategyResult.warnings);
+  updateStrategyCalculateAvailability();
 }
 
 function showStrategyResult(result, name) {
@@ -467,9 +583,81 @@ function renderStrategyTable(rows) {
     <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
+function renderCsvPortfolioOptions() {
+  const select = $('#csvPortfolioName');
+  if (!select) return;
+  select.innerHTML = portfolios.map((p) => `<option value="${p.file}">${p.file}</option>`).join('');
+}
+
+function selectedExportColumns() {
+  return EXPORT_COLUMNS.filter((column) => column === 'timestamp' || $(`[data-export-column="${column}"]`)?.checked);
+}
+
+function updateCsvExportPopupState() {
+  const source = $('#csvExportSource').value;
+  const portfolioMode = source === 'portfolio';
+  $('#csvPortfolioLabel').classList.toggle('hidden', !portfolioMode);
+  const hasPortfolio = portfolios.length > 0;
+  const canExport = (source === 'portfolio' && hasPortfolio) || (source === 'base_result' && !!lastResult?.rows?.length) || (source === 'strategy_result' && !!lastStrategyResult?.rows?.length);
+  $('#csvExportApply').disabled = !canExport;
+  const hints = {
+    portfolio: hasPortfolio ? 'Сервер экспортирует выбранное портфолио и пересчитает accum/HWM/DD/MDD из timestamp,diff.' : 'Сначала загрузите портфолио.',
+    base_result: lastResult?.rows?.length ? 'CSV будет собран из текущего исходного результата расчета.' : 'Сначала выполните расчет.',
+    strategy_result: lastStrategyResult?.rows?.length ? 'CSV будет собран из текущего результата торговой стратегии.' : 'Сначала рассчитайте торговую стратегию.'
+  };
+  $('#csvExportHint').textContent = hints[source];
+}
+
+function openCsvExportPopup() {
+  renderCsvPortfolioOptions();
+  updateCsvExportPopupState();
+  $('#csvExportPopup').classList.remove('hidden');
+}
+
+function closeCsvExportPopup() {
+  $('#csvExportPopup').classList.add('hidden');
+}
+
+async function exportCsv() {
+  const source = $('#csvExportSource').value;
+  const columns = selectedExportColumns();
+  if (!columns.includes('timestamp')) columns.unshift('timestamp');
+
+  if (source === 'portfolio') {
+    const portfolio = $('#csvPortfolioName').value;
+    if (!portfolio) return alert('Выберите сохраненное портфолио');
+    const url = `/api/portfolios/${encodeURIComponent(portfolio)}/export?columns=${encodeURIComponent(columns.join(','))}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error || 'Не удалось экспортировать портфолио');
+    }
+    downloadCsv(exportFileName('portfolio', columns), await res.text());
+    closeCsvExportPopup();
+    return;
+  }
+
+  if (source === 'base_result') {
+    if (!lastResult?.rows?.length) return alert('Сначала выполните расчет');
+    downloadCsv(exportFileName('base_result', columns), rowsToCsv(lastResult.rows, columns));
+    closeCsvExportPopup();
+    return;
+  }
+
+  if (source === 'strategy_result') {
+    if (!lastStrategyResult?.rows?.length) return alert('Сначала рассчитайте торговую стратегию');
+    downloadCsv(exportFileName('strategy_result', columns), rowsToCsv(lastStrategyResult.rows, columns, 'strategy_'));
+    closeCsvExportPopup();
+  }
+}
+
 function syncStrategyPeriodToCalculation() {
-  if ($('#periodFrom').value && !$('#strategyPeriodFrom').value) setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value);
-  if ($('#periodTo').value && !$('#strategyPeriodTo').value) setDatePair($('#strategyPeriodTo'), $('#periodTo').value);
+  setDatePair($('#strategyPeriodFrom'), $('#periodFrom').value || '');
+  setDatePair($('#strategyPeriodTo'), $('#periodTo').value || '');
+}
+
+function syncStrategyPeriodIfEnabled() {
+  if (!$('#strategyPanel').classList.contains('hidden')) syncStrategyPeriodToCalculation();
 }
 
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
@@ -487,22 +675,30 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
-$('#targetType').addEventListener('change', renderTargetOptions);
-$('#targetName').addEventListener('change', applyTargetRange);
+$('#targetType').addEventListener('change', () => { renderTargetOptions(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#targetName').addEventListener('change', () => { applyTargetRange(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');
   pair?.querySelectorAll('.date-open').forEach((item) => { item.disabled = event.target.checked; });
   if (event.target.checked) setDatePair($('#periodTo'), '');
+  syncStrategyPeriodIfEnabled();
+  updateStrategyCalculateAvailability(true);
 });
-$('#calculate').addEventListener('click', () => calculate().catch((err) => alert(err.message)));
+$('#calculate').addEventListener('click', () => withLoadingButton($('#calculate'), 'Рассчитывается', calculate).catch((err) => alert(err.message)));
 $('#enableStrategies').addEventListener('change', (event) => {
   $('#strategyPanel').classList.toggle('hidden', !event.target.checked);
   if (event.target.checked && !$('#tradingStrategyName').value) $('#tradingStrategyName').value = defaultStrategyName();
   if (event.target.checked) syncStrategyPeriodToCalculation();
+  updateStrategyCalculateAvailability(event.target.checked);
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
-$('#calculateTradingStrategy').addEventListener('click', () => calculateTradingStrategy().catch((err) => alert(err.message)));
+$('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
+$('#openCsvExport').addEventListener('click', openCsvExportPopup);
+$('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
+$('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));
+$('#csvExportCancel').addEventListener('click', closeCsvExportPopup);
+$('#csvExportPopup').addEventListener('click', (event) => { if (event.target.id === 'csvExportPopup') closeCsvExportPopup(); });
 $$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
 let activeDateInput = null;
 
@@ -548,6 +744,10 @@ document.addEventListener('click', (event) => {
 $('#datePickerApply').addEventListener('click', () => {
   if (!activeDateInput) return;
   setDatePair(activeDateInput, `${$('#datePickerDate').value} ${$('#datePickerHour').value}:${$('#datePickerMinute').value || '00'}`);
+  if (activeDateInput.closest('#strategyPanel') === null) {
+    syncStrategyPeriodIfEnabled();
+    updateStrategyCalculateAvailability(true);
+  }
   closeDatePopup();
 });
 $('#datePickerCancel').addEventListener('click', closeDatePopup);
@@ -556,11 +756,20 @@ $('#datePickerPopup').addEventListener('click', (event) => {
 });
 
 document.addEventListener('change', (event) => {
-  if (event.target.matches('.date-input')) forceZeroMinutes(event.target);
+  if (event.target.matches('.date-input')) {
+    forceZeroMinutes(event.target);
+    if (event.target.closest('#strategyPanel') === null) {
+      syncStrategyPeriodIfEnabled();
+      updateStrategyCalculateAvailability(true);
+    }
+  }
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);
 
+const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
+if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
+$('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
 $('#tradingStrategyName').value = defaultStrategyName();
-refreshAll().catch((err) => alert(err.message));
+refreshAll().then(() => updateStrategyCalculateAvailability()).catch((err) => alert(err.message));
