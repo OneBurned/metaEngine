@@ -42,15 +42,36 @@ The user is not a coder. Communicate simply.
 
 Do not say only “pull latest” or “update branch”. Give exact commands.
 
-Preferred format after any code update:
+Preferred format when the user checks an open PR before merge:
 
 ```bash
 cd /workspaces/metaEngine
 # stop server with Ctrl+C if it is running
-git switch <branch>
-git pull --ff-only
+git fetch
+gh pr checkout <PR_NUMBER>
+git status
+git log --oneline --decorate -5
+npm test
 npm start
 ```
+
+Use `main` commands only after the user says the PR has been merged or the task
+should be cemented:
+
+```bash
+cd /workspaces/metaEngine
+# stop server with Ctrl+C if it is running
+git switch main
+git pull --ff-only
+git status
+git log --oneline --decorate -5
+npm test
+npm start
+```
+
+Do not ask the user to run `git remote add origin` for normal PR checking. Do
+not tell the user to switch to a local sandbox branch such as `work` unless that
+branch is confirmed to be the real GitHub PR branch.
 
 Then tell the user to refresh the browser:
 
@@ -88,7 +109,7 @@ public/index.html                 Browser UI markup
 public/app.js                     Browser UI behavior
 public/styles.css                 Browser UI styling
 test/calculations.test.js         Unit and UI contract tests
-docs/TIMEFRAMES.md                Timeframe conversion rules         Unit tests for calculations
+docs/TIMEFRAMES.md                Timeframe conversion rules
 README.md                         Human-facing usage docs
 docs/PROJECT_CONTEXT.md           Project context for future AI agents
 samples/strategies                Saved trading strategy JSON configs
