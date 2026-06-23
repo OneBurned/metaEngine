@@ -220,7 +220,7 @@ async function calculateTarget(body) {
     if (to === null) to = portfolioLastTimestamp(file);
     if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания портфолио');
     if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
-    return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to);
+    return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to, { timeframe: body.timeframe });
   }
   if (body.targetType === 'preset') {
     const file = safeName(body.targetName, '.json');
@@ -228,7 +228,7 @@ async function calculateTarget(body) {
     if (to === null) to = presetLastTimestamp(preset);
     if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания пресета');
     if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
-    return calculatePreset(preset, PORTFOLIOS_DIR, from, to);
+    return calculatePreset(preset, PORTFOLIOS_DIR, from, to, { timeframe: body.timeframe });
   }
   throw new Error('Выберите портфолио или пресет');
 }
@@ -357,7 +357,7 @@ async function handleApi(req, res) {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const result = await calculateTarget(body);
       const runId = crypto.randomUUID();
-      const payload = { runId, targetType: body.targetType, targetName: body.targetName, periodFrom: body.periodFrom, periodTo: body.periodTo, ...result };
+      const payload = { runId, targetType: body.targetType, targetName: body.targetName, periodFrom: body.periodFrom, periodTo: body.periodTo, timeframe: body.timeframe, ...result };
       fs.writeFileSync(path.join(RUNS_DIR, `${runId}.json`), JSON.stringify(payload, null, 2), 'utf8');
       return json(res, 200, payload);
     }

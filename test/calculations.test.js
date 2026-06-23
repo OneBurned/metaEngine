@@ -132,3 +132,50 @@ test('RSI trading strategy allows inverted levels without validation error', () 
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
   assert.doesNotThrow(() => calculateTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
 });
+
+test('builds strict daily timeframe boundaries inside selected period', () => {
+  const { buildTimeframeBoundaries } = require('../lib/calculations');
+  assert.deepEqual(
+    buildTimeframeBoundaries(parseTimestamp('2024-01-10 13:00'), parseTimestamp('2024-03-20 18:00'), '1d').map(formatTimestamp).filter((_, index, arr) => index === 0 || index === arr.length - 1),
+    ['2024-01-11 00:00', '2024-03-20 00:00']
+  );
+  assert.deepEqual(
+    buildTimeframeBoundaries(parseTimestamp('2024-01-10 00:00'), parseTimestamp('2024-03-20 00:00'), '1d').map(formatTimestamp).filter((_, index, arr) => index === 0 || index === arr.length - 1),
+    ['2024-01-10 00:00', '2024-03-20 00:00']
+  );
+});
+
+test('builds strict monthly and yearly boundaries inside selected period', () => {
+  const { buildTimeframeBoundaries } = require('../lib/calculations');
+  assert.deepEqual(
+    buildTimeframeBoundaries(parseTimestamp('2024-01-10 13:00'), parseTimestamp('2024-03-20 18:00'), '1M').map(formatTimestamp),
+    ['2024-02-01 00:00', '2024-03-01 00:00']
+  );
+  assert.deepEqual(
+    buildTimeframeBoundaries(parseTimestamp('2024-01-01 00:00'), parseTimestamp('2026-06-01 00:00'), '1Y').map(formatTimestamp),
+    ['2024-01-01 00:00', '2025-01-01 00:00', '2026-01-01 00:00']
+  );
+});
+
+test('converts hourly rows to daily rows through accum checkpoints', () => {
+  const { convertRowsToTimeframe, HOUR_MS } = require('../lib/calculations');
+  const from = parseTimestamp('2024-01-01 00:00');
+  const to = parseTimestamp('2024-01-03 00:00');
+  const grid = Array.from({ length: 49 }, (_, i) => from + i * HOUR_MS);
+  const diffs = grid.map((_, index) => index === 0 ? 0 : 0.01);
+  const hourly = calculateFromDiffs(grid, diffs);
+  const daily = convertRowsToTimeframe(hourly.rows, from, to, HOUR_MS, '1d');
+
+  assert.deepEqual(daily.rows.map((row) => row.time), ['2024-01-01 00:00', '2024-01-02 00:00', '2024-01-03 00:00']);
+  assert.equal(daily.rows[0].diff, 0);
+  assert.equal(Number(daily.rows[1].diff.toFixed(12)), Number((Math.pow(1.01, 24) - 1).toFixed(12)));
+  assert.equal(Number(daily.rows[2].diff.toFixed(12)), Number((Math.pow(1.01, 24) - 1).toFixed(12)));
+});
+
+test('rejects conversion from hourly rows to a smaller timeframe', () => {
+  const { convertRowsToTimeframe, HOUR_MS } = require('../lib/calculations');
+  const from = parseTimestamp('2024-01-01 00:00');
+  const grid = [from, from + HOUR_MS];
+  const hourly = calculateFromDiffs(grid, [0, 0.01]);
+  assert.throws(() => convertRowsToTimeframe(hourly.rows, from, from + HOUR_MS, HOUR_MS, '15m'), /Нельзя честно построить 15m из 1h/);
+});

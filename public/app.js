@@ -12,6 +12,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
 const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
+const MONTH_YEAR_TIMEFRAMES = new Set(['1M', '1Y']);
 
 function exportFileName(prefix, columns) {
   return `${prefix}_${columns.join('_')}.csv`;
@@ -306,7 +307,8 @@ function baseCalculationBody() {
     targetName: $('#targetName').value,
     periodFrom: normalizeDateInput($('#periodFrom').value),
     periodTo: normalizeDateInput($('#periodTo').value),
-    periodUntilEnd: $('#periodUntilEnd').checked
+    periodUntilEnd: $('#periodUntilEnd').checked,
+    timeframe: $('#timeframe').value
   };
 }
 
@@ -316,7 +318,8 @@ function calculationKey(body = baseCalculationBody()) {
     targetName: body.targetName,
     periodFrom: body.periodFrom,
     periodTo: body.periodTo,
-    periodUntilEnd: body.periodUntilEnd
+    periodUntilEnd: body.periodUntilEnd,
+    timeframe: body.timeframe
   });
 }
 
@@ -422,10 +425,14 @@ function showStrategyWarnings(warnings) {
 
 
 function stepLabel(step) {
+  const labels = { '1m': '1 минута', '5m': '5 минут', '15m': '15 минут', '1h': '1 час', '1d': '1 день', '1M': '1 месяц', '1Y': '1 год' };
+  if (labels[step]) return labels[step];
+  if (step === 60000) return '1 минута';
   if (step === 300000) return '5 минут';
+  if (step === 900000) return '15 минут';
   if (step === 3600000) return '1 час';
   if (step === 86400000) return '1 день';
-  return `${Math.round(step / 60000)} минут`;
+  return `${Math.round(Number(step) / 60000)} минут`;
 }
 
 function showResult(result) {
@@ -435,6 +442,7 @@ function showResult(result) {
   $('#summary').innerHTML = `<table><tbody>
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
     <tr><th>Конец</th><td>${result.summary.end}</td></tr>
+    <tr><th>Таймфрейм</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
     <tr><th>Точек</th><td>${result.summary.points}</td></tr>
     <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
     <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
@@ -451,8 +459,8 @@ function renderResultTable(rows) {
     <tr><td>${r.time}</td><td>${fmtPct(r.diff)}</td><td>${fmtPct(r.accum)}</td><td>${fmtPct(r.hwm)}</td><td>${fmtPct(r.dd)}</td><td>${fmtPct(r.mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
-function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) {
-  if (!rows?.length) return;
+function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key, mode = 'line') {
+  if (!rows?.length || !keys.length) { svg.innerHTML = ''; return; }
   const width = 900, height = 360, pad = 42;
   const values = rows.flatMap((row) => keys.map((key) => row[key])).filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
   const min = Math.min(...values, 0);
@@ -461,11 +469,20 @@ function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) 
   const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
   const y = (v) => height - pad - ((v - min) / span) * (height - pad * 2);
   const zeroY = y(0);
-  const lines = keys.map((key) => {
+  const barKey = mode === 'bar' ? keys.find((key) => key.endsWith('diff') || key === 'diff') : null;
+  const barWidth = Math.max(2, ((width - pad * 2) / Math.max(rows.length, 1)) * 0.68);
+  const bars = barKey ? rows.map((row, i) => {
+    const value = row[barKey] ?? 0;
+    const top = Math.min(y(value), zeroY);
+    const heightValue = Math.max(Math.abs(y(value) - zeroY), 1);
+    return `<rect x="${(x(i) - barWidth / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${heightValue.toFixed(2)}" fill="${colors[barKey]}" opacity="0.55"/>`;
+  }).join('') : '';
+  const lineKeys = keys.filter((key) => key !== barKey);
+  const lines = lineKeys.map((key) => {
     const points = rows.map((row, i) => `${x(i).toFixed(2)},${y(row[key] ?? 0).toFixed(2)}`).join(' ');
     return `<polyline fill="none" stroke="${colors[key]}" stroke-width="2" points="${points}"/><text x="${width - pad + 4}" y="${y(rows.at(-1)[key] ?? 0).toFixed(2)}" fill="${colors[key]}" font-size="12">${labelAccessor(key)}</text>`;
   }).join('');
-  svg.innerHTML = `<line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#cfd6e3"/><text x="8" y="${pad}" font-size="12">${fmtPct(max)}</text><text x="8" y="${height - pad}" font-size="12">${fmtPct(min)}</text>${lines}`;
+  svg.innerHTML = `<line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#cfd6e3"/><text x="8" y="${pad}" font-size="12">${fmtPct(max)}</text><text x="8" y="${height - pad}" font-size="12">${fmtPct(min)}</text>${bars}${lines}`;
 }
 
 function renderChart() {
@@ -474,7 +491,7 @@ function renderChart() {
   const active = new Set($$('.toggles input:checked').map((input) => input.dataset.line).filter(Boolean));
   const keys = ['diff', 'accum', 'hwm', 'dd', 'mdd'].filter((key) => active.has(key));
   const colors = { diff: '#7c8a9b', accum: '#315efb', hwm: '#16a56f', dd: '#e28a00', mdd: '#cf3341' };
-  renderLineChart(svg, lastResult.rows, keys, colors);
+  renderLineChart(svg, lastResult.rows, keys, colors, (key) => key, $('#chartMode').value);
 }
 
 function renderRsiChart() {
@@ -557,6 +574,7 @@ function showStrategyResult(result, name) {
   $('#strategySummary').innerHTML = `<table><tbody>
     <tr><th>Начало</th><td>${result.summary.start}</td></tr>
     <tr><th>Конец</th><td>${result.summary.end}</td></tr>
+    <tr><th>Таймфрейм</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
     <tr><th>Точек</th><td>${result.summary.points}</td></tr>
     <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
     <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
@@ -575,7 +593,7 @@ function renderStrategyChart() {
   const active = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
   const keys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => active.has(key));
   const colors = { strategy_diff: '#7c8a9b', strategy_accum: '#315efb', strategy_hwm: '#16a56f', strategy_dd: '#e28a00', strategy_mdd: '#cf3341' };
-  renderLineChart(svg, lastStrategyResult.rows, keys, colors);
+  renderLineChart(svg, lastStrategyResult.rows, keys, colors, (key) => key.replace('strategy_', ''), $('#strategyChartMode').value);
 }
 
 function renderStrategyTable(rows) {
@@ -677,6 +695,16 @@ $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
 $('#targetType').addEventListener('change', () => { renderTargetOptions(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
 $('#targetName').addEventListener('change', () => { applyTargetRange(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#timeframe').addEventListener('change', (event) => {
+  const mode = MONTH_YEAR_TIMEFRAMES.has(event.target.value) ? 'bar' : 'line';
+  $('#chartMode').value = mode;
+  $('#strategyChartMode').value = mode;
+  updateStrategyCalculateAvailability(true);
+  renderChart();
+  renderStrategyChart();
+});
+$('#chartMode').addEventListener('change', renderChart);
+$('#strategyChartMode').addEventListener('change', renderStrategyChart);
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');

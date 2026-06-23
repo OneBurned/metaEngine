@@ -31,6 +31,7 @@ AGENTS.md                 Required workflow rules for AI agents
 docs/PROJECT_CONTEXT.md   Full project context and product decisions
 docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
 docs/CSV_EXPORT.md        CSV export behavior and API
+docs/TIMEFRAMES.md        Timeframe conversion and histogram chart mode
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -86,7 +87,8 @@ lib/calculations.js               Calculation and CSV normalization logic
 public/index.html                 Browser UI markup
 public/app.js                     Browser UI behavior
 public/styles.css                 Browser UI styling
-test/calculations.test.js         Unit tests for calculations
+test/calculations.test.js         Unit and UI contract tests
+docs/TIMEFRAMES.md                Timeframe conversion rules         Unit tests for calculations
 README.md                         Human-facing usage docs
 docs/PROJECT_CONTEXT.md           Project context for future AI agents
 samples/strategies                Saved trading strategy JSON configs
@@ -143,6 +145,7 @@ Current tests cover:
 
 - timestamp parsing and formatting;
 - CSV normalization;
+- timeframe boundary generation and safe aggregation;
 - `accum → diff` conversion;
 - `accum`, `hwm`, `dd`, `mdd` series;
 - overlap validation for rebalance periods;
