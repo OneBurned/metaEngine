@@ -179,3 +179,28 @@ test('rejects conversion from hourly rows to a smaller timeframe', () => {
   const hourly = calculateFromDiffs(grid, [0, 0.01]);
   assert.throws(() => convertRowsToTimeframe(hourly.rows, from, from + HOUR_MS, HOUR_MS, '15m'), /Нельзя честно построить 15m из 1h/);
 });
+
+test('timeframe and chart mode controls live in the calculation block', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  const calculationBlock = html.slice(html.indexOf('<h2>3. Расчет</h2>'), html.indexOf('<section class="card hidden" id="resultCard">'));
+  assert.ok(calculationBlock.includes('id="timeframe"'));
+  assert.ok(calculationBlock.includes('id="chartMode"'));
+  assert.ok(calculationBlock.indexOf('id="timeframe"') < calculationBlock.indexOf('id="chartMode"'));
+  assert.ok(!html.slice(html.indexOf('<section class="card hidden" id="resultCard">'), html.indexOf('<svg id="chart"')).includes('id="chartMode"'));
+});
+
+test('chart histogram mode enables diff and colors bars by sign', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  assert.ok(app.includes('checkedLine(\'[data-line="diff"]\')'));
+  assert.ok(app.includes("value > 0 ? '#16a56f' : value < 0 ? '#cf3341'"));
+  assert.ok(!app.includes('MONTH_YEAR_TIMEFRAMES.has(event.target.value) ? \'bar\' : \'line\''));
+});
+
+test('target selection syncs calculation timeframe from portfolio or preset metadata', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const server = fs.readFileSync(path.join(__dirname, '..', 'server.js'), 'utf8');
+  assert.ok(app.includes('function sourceTimeframeForTarget'));
+  assert.ok(app.includes('function syncTimeframeToTarget'));
+  assert.ok(server.includes('timeframe: timeframeFromStep(step)'));
+  assert.ok(server.includes('function presetSourceStep'));
+});

@@ -98,11 +98,12 @@ The result chart has a display mode selector:
 - `Линия`;
 - `Гистограмма`.
 
-For `1M` and `1Y`, the UI switches the default chart mode to `Гистограмма`.
+The chart mode is selected in block **“3. Расчет”** next to the timeframe selector. The UI does not switch monthly/yearly results to histogram automatically; the user chooses the chart mode explicitly.
 
 In histogram mode:
 
-- `diff` is displayed as bars;
-- `accum`, `hwm`, `dd`, and `mdd` remain line series over the bars.
+- `diff` is automatically enabled and displayed as bars;
+- `accum`, `hwm`, `dd`, and `mdd` remain line series over the bars;
+- positive `diff` bars are green, negative bars are red, and zero bars keep the neutral gray color.
 
 This keeps monthly/yearly period returns readable without changing the meaning of cumulative and drawdown metrics.

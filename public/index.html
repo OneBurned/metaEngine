@@ -78,6 +78,12 @@
             <option value="1Y">1Y</option>
           </select>
         </label>
+        <label>Вид графика
+          <select id="chartMode">
+            <option value="line">Линия</option>
+            <option value="bar">Гистограмма</option>
+          </select>
+        </label>
         <button id="calculate" type="button">Рассчитать</button>
       </div>
       <div id="warningBox" class="warning hidden"></div>
@@ -86,14 +92,6 @@
     <section class="card hidden" id="resultCard">
       <h2>4. Исходный результат</h2>
       <div id="summary"></div>
-      <div class="chart-controls">
-        <label>Вид графика
-          <select id="chartMode">
-            <option value="line">Линия</option>
-            <option value="bar">Гистограмма</option>
-          </select>
-        </label>
-      </div>
       <div class="toggles" id="baseToggles">
         <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> Accum</label>

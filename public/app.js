@@ -185,6 +185,31 @@ function targetRange(type, name) {
   };
 }
 
+function sourceTimeframeForTarget(type, name) {
+  if (type === 'portfolio') return portfolioByName(name)?.timeframe ?? '1h';
+  const preset = presets.find((item) => item.name === name);
+  return preset?.timeframe ?? '1h';
+}
+
+function syncTimeframeToTarget() {
+  const timeframe = sourceTimeframeForTarget($('#targetType').value, $('#targetName').value);
+  if ($(`#timeframe option[value="${timeframe}"]`)) $('#timeframe').value = timeframe;
+}
+
+function checkedLine(selector, checked = true) {
+  const input = $(selector);
+  if (input) input.checked = checked;
+}
+
+function applyChartModeSideEffects(mode, scope = 'base') {
+  if (mode !== 'bar') return;
+  if (scope === 'strategy') {
+    checkedLine('[data-strategy-line="strategy_diff"]');
+  } else {
+    checkedLine('[data-line="diff"]');
+  }
+}
+
 function applyTargetRange() {
   const range = targetRange($('#targetType').value, $('#targetName').value);
   if (!range) return;
@@ -208,6 +233,7 @@ function renderTargetOptions() {
   const items = type === 'portfolio' ? portfolios.map((p) => p.file) : presets.map((p) => p.name);
   $('#targetName').innerHTML = items.map((name) => `<option value="${name}">${name}</option>`).join('');
   applyTargetRange();
+  syncTimeframeToTarget();
 }
 
 function applyPortfolioRangeToPresetRow(row, overwrite = false) {
@@ -471,11 +497,12 @@ function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key, 
   const zeroY = y(0);
   const barKey = mode === 'bar' ? keys.find((key) => key.endsWith('diff') || key === 'diff') : null;
   const barWidth = Math.max(2, ((width - pad * 2) / Math.max(rows.length, 1)) * 0.68);
+  const barColor = (value) => value > 0 ? '#16a56f' : value < 0 ? '#cf3341' : colors[barKey];
   const bars = barKey ? rows.map((row, i) => {
     const value = row[barKey] ?? 0;
     const top = Math.min(y(value), zeroY);
     const heightValue = Math.max(Math.abs(y(value) - zeroY), 1);
-    return `<rect x="${(x(i) - barWidth / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${heightValue.toFixed(2)}" fill="${colors[barKey]}" opacity="0.55"/>`;
+    return `<rect x="${(x(i) - barWidth / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${barWidth.toFixed(2)}" height="${heightValue.toFixed(2)}" fill="${barColor(value)}" opacity="0.68"/>`;
   }).join('') : '';
   const lineKeys = keys.filter((key) => key !== barKey);
   const lines = lineKeys.map((key) => {
@@ -488,6 +515,7 @@ function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key, 
 function renderChart() {
   const svg = $('#chart');
   if (!lastResult?.rows?.length) return;
+  applyChartModeSideEffects($('#chartMode').value);
   const active = new Set($$('.toggles input:checked').map((input) => input.dataset.line).filter(Boolean));
   const keys = ['diff', 'accum', 'hwm', 'dd', 'mdd'].filter((key) => active.has(key));
   const colors = { diff: '#7c8a9b', accum: '#315efb', hwm: '#16a56f', dd: '#e28a00', mdd: '#cf3341' };
@@ -590,6 +618,7 @@ function showStrategyResult(result, name) {
 function renderStrategyChart() {
   const svg = $('#strategyChart');
   if (!lastStrategyResult?.rows?.length) return;
+  applyChartModeSideEffects($('#strategyChartMode').value, 'strategy');
   const active = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
   const keys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => active.has(key));
   const colors = { strategy_diff: '#7c8a9b', strategy_accum: '#315efb', strategy_hwm: '#16a56f', strategy_dd: '#e28a00', strategy_mdd: '#cf3341' };
@@ -693,18 +722,15 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
-$('#targetType').addEventListener('change', () => { renderTargetOptions(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
-$('#targetName').addEventListener('change', () => { applyTargetRange(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
-$('#timeframe').addEventListener('change', (event) => {
-  const mode = MONTH_YEAR_TIMEFRAMES.has(event.target.value) ? 'bar' : 'line';
-  $('#chartMode').value = mode;
-  $('#strategyChartMode').value = mode;
+$('#targetType').addEventListener('change', () => { renderTargetOptions(); syncTimeframeToTarget(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#targetName').addEventListener('change', () => { applyTargetRange(); syncTimeframeToTarget(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#timeframe').addEventListener('change', () => {
   updateStrategyCalculateAvailability(true);
   renderChart();
   renderStrategyChart();
 });
-$('#chartMode').addEventListener('change', renderChart);
-$('#strategyChartMode').addEventListener('change', renderStrategyChart);
+$('#chartMode').addEventListener('change', () => { applyChartModeSideEffects($('#chartMode').value); renderChart(); });
+$('#strategyChartMode').addEventListener('change', () => { applyChartModeSideEffects($('#strategyChartMode').value, 'strategy'); renderStrategyChart(); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
   const pair = $('#periodTo').closest('.date-pair');
