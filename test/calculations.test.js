@@ -219,12 +219,28 @@ test('chart histogram and line modes toggle standard metric sets', () => {
   assert.ok(app.includes('checkedLine(\'[data-line="accum"]\', mode === \'line\')'));
   assert.ok(app.includes('checkedLine(\'[data-line="hwm"]\', mode === \'line\')'));
   assert.ok(app.includes('checkedLine(\'[data-line="dd"]\', mode === \'line\')'));
-  assert.ok(app.includes('checkedLine(\'[data-line="mdd"]\', true)'));
+  assert.ok(app.includes('checkedLine(\'[data-line="mdd"]\', mode === \'line\')'));
   assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_diff"]\', mode === \'bar\')'));
   assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_accum"]\', mode === \'line\')'));
-  assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_mdd"]\', true)'));
+  assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_mdd"]\', mode === \'line\')'));
   assert.ok(app.includes("value > 0 ? '#16a56f' : value < 0 ? '#cf3341'"));
   assert.ok(!app.includes('MONTH_YEAR_TIMEFRAMES.has(event.target.value) ? \'bar\' : \'line\''));
+});
+
+test('new calculations reset display and strategy timeframes to the fresh calculation timeframe', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(app.includes('showResult(result, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('showResult(pendingResult, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('resetSelectValue($(\'#displayTimeframe\'), calculationTimeframe)'));
+  assert.ok(app.includes('resetSelectValue($(\'#strategyTimeframe\'), calculationTimeframe)'));
+  assert.ok(app.includes('showStrategyResult(result.strategyResult, result.strategy.name, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('resetSelectValue($(\'#strategyDisplayTimeframe\'), calculationTimeframe)'));
+  assert.ok(!app.includes('lastResult = result.baseResult'));
+  assert.ok(!app.includes('showResult(result.baseResult)'));
+  assert.ok(html.includes('id="displayRecalcStatus"'));
+  assert.ok(html.includes('id="strategyDisplayRecalcStatus"'));
+  assert.ok(app.includes('function rerenderWithStatus'));
 });
 
 test('strategy calculation rejects timeframe lower than base calculation', () => {

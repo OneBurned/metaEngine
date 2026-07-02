@@ -44,6 +44,16 @@ Block 4 display timeframe     = 1d
 
 The base result is calculated on hourly rows, while the visible summary/chart/table in block 4 are aggregated to daily checkpoints.
 
+After a new calculation, the display timeframe resets to the freshly calculated timeframe. This prevents an old larger display timeframe from making the user think that a new smaller-timeframe calculation did not change the result.
+
+When the user changes a display timeframe, the UI briefly shows:
+
+```text
+Пересчитывается...
+```
+
+This is a visual hint that the summary/chart/table are being re-aggregated locally.
+
 ## Aggregation model
 
 The converter works through equity/accum checkpoints:
@@ -122,8 +132,7 @@ The chart mode is a display setting, not a calculation setting. Block **3. Ра�
 In histogram mode:
 
 - `diff` is automatically enabled and displayed as bars;
-- `accum`, `hwm`, and `dd` are turned off;
-- `mdd` remains available as a line over the bars;
+- `accum`, `hwm`, `dd`, and `mdd` are turned off;
 - positive `diff` bars are green, negative bars are red, and zero bars keep the neutral gray color.
 - switching back to `Линия` restores the standard visible set: `diff` off, `accum`/`hwm`/`dd`/`mdd` on.
 

@@ -38,7 +38,7 @@ Keep documentation updated after functional changes. Update the thematic docs wh
 
 ## 2. User communication rules
 
-The user is not a coder. Communicate simply.
+The user is not a coder. Communicate simply. Do not explain implementation details with variable names, object fields, or code-like assignments unless the user explicitly asks for code-level detail. Explain behavior in product/UI terms instead.
 
 Do not say only “pull latest” or “update branch”. Give exact commands.
 

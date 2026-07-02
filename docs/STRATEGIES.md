@@ -84,4 +84,6 @@ If the user selects a lower strategy timeframe than the available base calculati
 
 Block **“6. Итог торговли по стратегии”** has a separate **ТФ для отображения** and `Вид Diff`, so a strategy can be calculated on one timeframe and displayed on the same or a larger timeframe.
 
+After a new base calculation in block **“3. Расчет”**, the strategy calculation timeframe in block **“5. Стратегии”** resets to the fresh base calculation timeframe. After a new strategy calculation, block **“6. Итог торговли по стратегии”** displays the fresh strategy calculation timeframe by default. The user can then manually choose a larger display timeframe.
+
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.

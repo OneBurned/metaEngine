@@ -31,6 +31,10 @@ function syncTimeframeOptions(select, sourceTimeframe) {
   if (!allowed.has(select.value)) select.value = sourceTimeframe;
 }
 
+function resetSelectValue(select, value) {
+  if (select && select.querySelector(`option[value="${value}"]`)) select.value = value;
+}
+
 function exportFileName(prefix, columns) {
   return `${prefix}_${columns.join('_')}.csv`;
 }
@@ -224,13 +228,13 @@ function applyChartModeSideEffects(mode, scope = 'base') {
     checkedLine('[data-strategy-line="strategy_accum"]', mode === 'line');
     checkedLine('[data-strategy-line="strategy_hwm"]', mode === 'line');
     checkedLine('[data-strategy-line="strategy_dd"]', mode === 'line');
-    checkedLine('[data-strategy-line="strategy_mdd"]', true);
+    checkedLine('[data-strategy-line="strategy_mdd"]', mode === 'line');
   } else {
     checkedLine('[data-line="diff"]', mode === 'bar');
     checkedLine('[data-line="accum"]', mode === 'line');
     checkedLine('[data-line="hwm"]', mode === 'line');
     checkedLine('[data-line="dd"]', mode === 'line');
-    checkedLine('[data-line="mdd"]', true);
+    checkedLine('[data-line="mdd"]', mode === 'line');
   }
 }
 
@@ -450,7 +454,7 @@ async function calculate() {
     pendingResult = result;
     showWarning(result);
   } else {
-    showResult(result);
+    showResult(result, { resetDisplayTimeframe: true });
   }
   syncStrategyPeriodToCalculation();
 }
@@ -460,7 +464,7 @@ function showWarning(result) {
   box.classList.remove('hidden');
   const sample = result.warnings.slice(0, 15).map((w) => `${w.portfolio ? `${w.portfolio}: ` : ''}${w.display}`).join('\n');
   box.innerHTML = `Шаг определен как ${stepLabel(result.step)}, но найдены пропуски: ${result.warnings.length}.\n\n<button id="continueCalc">Продолжить расчет</button> <button id="showGaps" class="secondary">Показать пропуски</button> <button id="cancelCalc" class="danger">Отменить</button><pre class="hidden" id="gapLog">${sample}${result.warnings.length > 15 ? '\n...' : ''}</pre>`;
-  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult); updateStrategyCalculateAvailability(); };
+  $('#continueCalc').onclick = () => { box.classList.add('hidden'); showResult(pendingResult, { resetDisplayTimeframe: true }); updateStrategyCalculateAvailability(); };
   $('#showGaps').onclick = () => $('#gapLog').classList.toggle('hidden');
   $('#cancelCalc').onclick = () => { pendingResult = null; box.classList.add('hidden'); };
 }
@@ -542,11 +546,16 @@ function resultForDisplay(result, timeframe, prefix = '') {
   return { ...result, rows, summary: { ...summarizeRows(rows, prefix), buyCount: result.summary?.buyCount, sellCount: result.summary?.sellCount }, displayTimeframe: timeframe };
 }
 
-function showResult(result) {
+function showResult(result, options = {}) {
   lastResult = result;
   lastResultKey = result.calculationKey ?? calculationKey();
-  syncTimeframeOptions($('#displayTimeframe'), result.step ?? result.timeframe ?? '1h');
-  syncTimeframeOptions($('#strategyTimeframe'), result.step ?? result.timeframe ?? '1h');
+  const calculationTimeframe = result.step ?? result.timeframe ?? '1h';
+  syncTimeframeOptions($('#displayTimeframe'), calculationTimeframe);
+  syncTimeframeOptions($('#strategyTimeframe'), calculationTimeframe);
+  if (options.resetDisplayTimeframe) {
+    resetSelectValue($('#displayTimeframe'), calculationTimeframe);
+    resetSelectValue($('#strategyTimeframe'), calculationTimeframe);
+  }
   const display = resultForDisplay(result, $('#displayTimeframe').value);
   $('#resultCard').classList.remove('hidden');
   $('#summary').innerHTML = `<table><tbody>
@@ -675,19 +684,19 @@ async function calculateTradingStrategy() {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...base, timeframe: strategy.timeframe, strategy })
   });
-  lastResult = result.baseResult;
   lastStrategyResult = result.strategyResult;
-  showResult(result.baseResult);
-  showStrategyResult(result.strategyResult, result.strategy.name);
+  showStrategyResult(result.strategyResult, result.strategy.name, { resetDisplayTimeframe: true });
   showStrategyWarnings(result.strategyResult.warnings);
   updateStrategyCalculateAvailability();
 }
 
-function showStrategyResult(result, name) {
+function showStrategyResult(result, name, options = {}) {
   $('#strategyResultCard').classList.remove('hidden');
   $('#strategyOverlayToggle').classList.remove('hidden');
   $('#strategyOverlayName').textContent = name || 'RSI';
-  syncTimeframeOptions($('#strategyDisplayTimeframe'), result.step ?? result.timeframe ?? '1h');
+  const calculationTimeframe = result.step ?? result.timeframe ?? '1h';
+  syncTimeframeOptions($('#strategyDisplayTimeframe'), calculationTimeframe);
+  if (options.resetDisplayTimeframe) resetSelectValue($('#strategyDisplayTimeframe'), calculationTimeframe);
   const display = resultForDisplay(result, $('#strategyDisplayTimeframe').value, 'strategy_');
   $('#strategySummary').innerHTML = `<table><tbody>
     <tr><th>ТФ для расчета</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
@@ -800,6 +809,17 @@ function syncStrategyPeriodIfEnabled() {
   if (!$('#strategyPanel').classList.contains('hidden')) syncStrategyPeriodToCalculation();
 }
 
+function rerenderWithStatus(statusSelector, render) {
+  const status = $(statusSelector);
+  status?.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      render();
+      status?.classList.add('hidden');
+    }, 80);
+  });
+}
+
 $('#uploadForm').addEventListener('submit', (event) => uploadPortfolio(event).catch((err) => alert(err.message)));
 $('#portfolios').addEventListener('click', (event) => {
   const file = event.target.dataset.deletePortfolio;
@@ -820,10 +840,14 @@ $('#targetName').addEventListener('change', () => { applyTargetRange(); syncTime
 $('#timeframe').addEventListener('change', () => {
   updateStrategyCalculateAvailability(true);
 });
-$('#displayTimeframe').addEventListener('change', () => { if (lastResult) showResult(lastResult); });
+$('#displayTimeframe').addEventListener('change', () => {
+  if (lastResult) rerenderWithStatus('#displayRecalcStatus', () => showResult(lastResult));
+});
 $('#chartMode').addEventListener('change', () => { applyChartModeSideEffects($('#chartMode').value); renderChart(); });
 $('#strategyTimeframe').addEventListener('change', () => updateStrategyCalculateAvailability(true));
-$('#strategyDisplayTimeframe').addEventListener('change', () => { if (lastStrategyResult) showStrategyResult(lastStrategyResult, lastStrategyConfig?.name); });
+$('#strategyDisplayTimeframe').addEventListener('change', () => {
+  if (lastStrategyResult) rerenderWithStatus('#strategyDisplayRecalcStatus', () => showStrategyResult(lastStrategyResult, lastStrategyConfig?.name));
+});
 $('#strategyChartMode').addEventListener('change', () => { applyChartModeSideEffects($('#strategyChartMode').value, 'strategy'); renderStrategyChart(); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;
