@@ -1,6 +1,9 @@
 # Timeframe conversion
 
-MetaEngine supports a calculation timeframe selector for all calculation blocks.
+MetaEngine separates **calculation timeframe** from **display timeframe**.
+
+- **ТФ для расчета** defines the timeframe where the base result or trading strategy is actually calculated.
+- **ТФ для отображения** defines how an already calculated result is aggregated for summary, chart, and table output.
 
 ## Supported target timeframes
 
@@ -10,7 +13,7 @@ The standard target timeframes are:
 1m, 5m, 15m, 1h, 1d, 1M, 1Y
 ```
 
-The default UI timeframe is `1h`, because the current sample/test datasets are mostly hourly.
+The default calculation timeframe is `1h`, because the current sample/test datasets are mostly hourly.
 
 ## Safe conversion rule
 
@@ -23,7 +26,33 @@ Examples:
 - `1h → 1M` is allowed;
 - `1h → 15m` is rejected.
 
-MetaEngine does not silently create synthetic smaller-timeframe data. If the user selects a target timeframe that is smaller than the source data, the calculation fails with a clear warning.
+MetaEngine does not silently create synthetic smaller-timeframe data. If the user selects a calculation or display timeframe that is smaller than the source data, the action fails or the smaller option is disabled with a clear warning.
+
+For display:
+
+- block **3. Расчет** has `ТФ для расчета`;
+- block **4. Исходный результат** has `ТФ для отображения`;
+- block **5. Стратегии** has `ТФ для расчета`;
+- block **6. Итог торговли по стратегии** has `ТФ для отображения`.
+
+Example:
+
+```text
+Block 3 calculation timeframe = 1h
+Block 4 display timeframe     = 1d
+```
+
+The base result is calculated on hourly rows, while the visible summary/chart/table in block 4 are aggregated to daily checkpoints.
+
+After a new calculation, the display timeframe resets to the freshly calculated timeframe. This prevents an old larger display timeframe from making the user think that a new smaller-timeframe calculation did not change the result.
+
+When the user changes a display timeframe, the UI briefly shows:
+
+```text
+Пересчитывается...
+```
+
+This is a visual hint that the summary/chart/table are being re-aggregated locally.
 
 ## Aggregation model
 
@@ -93,18 +122,18 @@ then those exact timestamps are included.
 
 ## Chart mode
 
-The calculation block has a `Вид Diff` selector:
+Blocks **4. Исходный результат** and **6. Итог торговли по стратегии** have a `Вид Diff` selector:
 
 - `Линия`;
 - `Гистограмма`.
 
-The chart mode is selected in block **“3. Расчет”** next to the timeframe selector. The UI does not switch monthly/yearly results to histogram automatically; the user chooses the chart mode explicitly.
+The chart mode is a display setting, not a calculation setting. Block **3. Расчет** does not have `Вид Diff`.
 
 In histogram mode:
 
 - `diff` is automatically enabled and displayed as bars;
-- `accum`, `hwm`, and `dd` are turned off;
-- `mdd` remains available as a line over the bars;
+- `accum`, `hwm`, `dd`, and `mdd` are turned off;
 - positive `diff` bars are green, negative bars are red, and zero bars keep the neutral gray color.
+- switching back to `Линия` restores the standard visible set: `diff` off, `accum`/`hwm`/`dd`/`mdd` on.
 
 This keeps monthly/yearly period returns readable without changing the meaning of cumulative and drawdown metrics.

@@ -38,7 +38,7 @@ Keep documentation updated after functional changes. Update the thematic docs wh
 
 ## 2. User communication rules
 
-The user is not a coder. Communicate simply.
+The user is not a coder. Communicate simply. Do not explain implementation details with variable names, object fields, or code-like assignments unless the user explicitly asks for code-level detail. Explain behavior in product/UI terms instead.
 
 Do not say only “pull latest” or “update branch”. Give exact commands.
 
@@ -728,7 +728,7 @@ Current first trading strategy:
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.
 
-Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the strategy calculation button is disabled until block “3. Расчет” has a current base result, the disabled button explains why via tooltip, and the button shows animated “Рассчитывается...” text while the strategy is running.
+Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the strategy calculation button is disabled until block “3. Расчет” has a current base result, the disabled button explains why via tooltip, and the button shows animated “Рассчитывается...” text while the strategy is running. Timeframe handling is split: blocks 3 and 5 choose **ТФ для расчета**, while blocks 4 and 6 choose **ТФ для отображения** for summary/chart/table aggregation. Display and strategy calculation timeframes can only stay on the same timeframe or move to a larger one; MetaEngine never silently creates smaller timeframe data.
 
 Graph layout:
 

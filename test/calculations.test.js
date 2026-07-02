@@ -191,24 +191,74 @@ test('rejects conversion from hourly rows to a smaller timeframe', () => {
   assert.throws(() => convertRowsToTimeframe(hourly.rows, from, from + HOUR_MS, HOUR_MS, '15m'), /Нельзя честно построить 15m из 1h/);
 });
 
-test('timeframe and Diff mode controls live in the calculation block', () => {
+test('calculation and display timeframe controls live in separate result blocks', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
   const calculationBlock = html.slice(html.indexOf('<h2>3. Расчет</h2>'), html.indexOf('<section class="card hidden" id="resultCard">'));
+  const resultBlock = html.slice(html.indexOf('<section class="card hidden" id="resultCard">'), html.indexOf('<h2>5. Стратегии</h2>'));
+  const strategyBlock = html.slice(html.indexOf('<h2>5. Стратегии</h2>'), html.indexOf('<section class="card hidden" id="strategyResultCard">'));
+  const strategyResultBlock = html.slice(html.indexOf('<section class="card hidden" id="strategyResultCard">'), html.indexOf('<section class="card" id="exportCard">'));
   assert.ok(calculationBlock.includes('id="timeframe"'));
-  assert.ok(calculationBlock.includes('Вид Diff'));
-  assert.ok(calculationBlock.includes('id="chartMode"'));
-  assert.ok(calculationBlock.indexOf('id="timeframe"') < calculationBlock.indexOf('id="chartMode"'));
-  assert.ok(!html.slice(html.indexOf('<section class="card hidden" id="resultCard">'), html.indexOf('<svg id="chart"')).includes('id="chartMode"'));
+  assert.ok(calculationBlock.includes('ТФ для расчета'));
+  assert.ok(!calculationBlock.includes('Вид Diff'));
+  assert.ok(!calculationBlock.includes('id="chartMode"'));
+  assert.ok(resultBlock.includes('id="displayTimeframe"'));
+  assert.ok(resultBlock.includes('ТФ для отображения'));
+  assert.ok(resultBlock.includes('id="chartMode"'));
+  assert.ok(resultBlock.includes('Вид Diff'));
+  assert.ok(strategyBlock.includes('id="strategyTimeframe"'));
+  assert.ok(strategyBlock.includes('ТФ для расчета'));
+  assert.ok(strategyResultBlock.includes('id="strategyDisplayTimeframe"'));
+  assert.ok(strategyResultBlock.includes('ТФ для отображения'));
+  assert.ok(strategyResultBlock.includes('id="strategyChartMode"'));
+  assert.ok(strategyResultBlock.includes('Вид Diff'));
 });
 
-test('chart histogram mode enables diff and colors bars by sign', () => {
+test('chart histogram and line modes toggle standard metric sets', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
-  assert.ok(app.includes('checkedLine(\'[data-line="diff"]\')'));
-  assert.ok(app.includes('checkedLine(\'[data-line="accum"]\', false)'));
-  assert.ok(app.includes('checkedLine(\'[data-line="hwm"]\', false)'));
-  assert.ok(app.includes('checkedLine(\'[data-line="dd"]\', false)'));
+  assert.ok(app.includes('checkedLine(\'[data-line="diff"]\', mode === \'bar\')'));
+  assert.ok(app.includes('checkedLine(\'[data-line="accum"]\', mode === \'line\')'));
+  assert.ok(app.includes('checkedLine(\'[data-line="hwm"]\', mode === \'line\')'));
+  assert.ok(app.includes('checkedLine(\'[data-line="dd"]\', mode === \'line\')'));
+  assert.ok(app.includes('checkedLine(\'[data-line="mdd"]\', mode === \'line\')'));
+  assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_diff"]\', mode === \'bar\')'));
+  assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_accum"]\', mode === \'line\')'));
+  assert.ok(app.includes('checkedLine(\'[data-strategy-line="strategy_mdd"]\', mode === \'line\')'));
   assert.ok(app.includes("value > 0 ? '#16a56f' : value < 0 ? '#cf3341'"));
   assert.ok(!app.includes('MONTH_YEAR_TIMEFRAMES.has(event.target.value) ? \'bar\' : \'line\''));
+});
+
+test('new calculations reset display and strategy timeframes to the fresh calculation timeframe', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+  assert.ok(app.includes('showResult(result, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('showResult(pendingResult, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('resetSelectValue($(\'#displayTimeframe\'), calculationTimeframe)'));
+  assert.ok(app.includes('resetSelectValue($(\'#strategyTimeframe\'), calculationTimeframe)'));
+  assert.ok(app.includes('showStrategyResult(result.strategyResult, result.strategy.name, { resetDisplayTimeframe: true })'));
+  assert.ok(app.includes('resetSelectValue($(\'#strategyDisplayTimeframe\'), calculationTimeframe)'));
+  assert.ok(!app.includes('lastResult = result.baseResult'));
+  assert.ok(!app.includes('showResult(result.baseResult)'));
+  assert.ok(html.includes('id="displayRecalcStatus"'));
+  assert.ok(html.includes('id="strategyDisplayRecalcStatus"'));
+  assert.ok(app.includes('function rerenderWithStatus'));
+});
+
+test('strategy calculation rejects timeframe lower than base calculation', () => {
+  const app = fs.readFileSync(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+  assert.ok(app.includes('Вы выбрали ТФ ниже чем имеется в расчетах'));
+  assert.ok(app.includes('compareTimeframes(lastResult.step ?? lastResult.timeframe ?? body.timeframe, $(\'#strategyTimeframe\').value) < 0'));
+  assert.ok(app.includes('body: JSON.stringify({ ...base, timeframe: strategy.timeframe, strategy })'));
+});
+
+test('documentation explains calculation and display timeframe split', () => {
+  const readme = fs.readFileSync(path.join(__dirname, '..', 'README.md'), 'utf8');
+  const timeframes = fs.readFileSync(path.join(__dirname, '..', 'docs', 'TIMEFRAMES.md'), 'utf8');
+  const strategies = fs.readFileSync(path.join(__dirname, '..', 'docs', 'STRATEGIES.md'), 'utf8');
+  assert.ok(readme.includes('ТФ для расчета'));
+  assert.ok(readme.includes('ТФ для отображения'));
+  assert.ok(timeframes.includes('calculation timeframe'));
+  assert.ok(timeframes.includes('display timeframe'));
+  assert.ok(strategies.includes('Вы выбрали ТФ ниже чем имеется в расчетах'));
 });
 
 test('target selection syncs calculation timeframe from portfolio or preset metadata', () => {
