@@ -67,8 +67,28 @@
           <div class="date-pair"><input id="periodTo" class="date-input" type="text" placeholder="YYYY-MM-DD HH:00" /><button class="date-open" type="button">📅</button></div>
         </label>
         <label class="check"><input id="periodUntilEnd" type="checkbox" /> До конца</label>
-        <label>Таймфрейм
+        <label>ТФ для расчета
           <select id="timeframe">
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+            <option value="15m">15m</option>
+            <option value="1h" selected>1h</option>
+            <option value="1d">1d</option>
+            <option value="1M">1M</option>
+            <option value="1Y">1Y</option>
+          </select>
+        </label>
+        <button id="calculate" type="button">Рассчитать</button>
+      </div>
+      <div id="warningBox" class="warning hidden"></div>
+    </section>
+
+    <section class="card hidden" id="resultCard">
+      <h2>4. Исходный результат</h2>
+      <div id="summary"></div>
+      <div class="chart-controls">
+        <label>ТФ для отображения
+          <select id="displayTimeframe">
             <option value="1m">1m</option>
             <option value="5m">5m</option>
             <option value="15m">15m</option>
@@ -84,14 +104,7 @@
             <option value="bar">Гистограмма</option>
           </select>
         </label>
-        <button id="calculate" type="button">Рассчитать</button>
       </div>
-      <div id="warningBox" class="warning hidden"></div>
-    </section>
-
-    <section class="card hidden" id="resultCard">
-      <h2>4. Исходный результат</h2>
-      <div id="summary"></div>
       <div class="toggles" id="baseToggles">
         <label style="--line-color: #7c8a9b"><input type="checkbox" data-line="diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-line="accum" checked /> <span class="line-dot"></span> Accum</label>
@@ -149,6 +162,17 @@
           <label>RSI период
             <input id="rsiPeriod" type="number" value="14" min="1" step="1" />
           </label>
+          <label>ТФ для расчета
+            <select id="strategyTimeframe">
+              <option value="1m">1m</option>
+              <option value="5m">5m</option>
+              <option value="15m">15m</option>
+              <option value="1h" selected>1h</option>
+              <option value="1d">1d</option>
+              <option value="1M">1M</option>
+              <option value="1Y">1Y</option>
+            </select>
+          </label>
 
           <button id="saveTradingStrategy" type="button">Сохранить стратегию</button>
           <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
@@ -164,6 +188,17 @@
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
       <div class="chart-controls">
+        <label>ТФ для отображения
+          <select id="strategyDisplayTimeframe">
+            <option value="1m">1m</option>
+            <option value="5m">5m</option>
+            <option value="15m">15m</option>
+            <option value="1h" selected>1h</option>
+            <option value="1d">1d</option>
+            <option value="1M">1M</option>
+            <option value="1Y">1Y</option>
+          </select>
+        </label>
         <label>Вид Diff
           <select id="strategyChartMode">
             <option value="line">Линия</option>

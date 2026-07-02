@@ -12,7 +12,24 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
 const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
-const MONTH_YEAR_TIMEFRAMES = new Set(['1M', '1Y']);
+const TIMEFRAME_ORDER = ['1m', '5m', '15m', '1h', '1d', '1M', '1Y'];
+const FIXED_TIMEFRAME_MS = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '1d': 86400000 };
+
+function compareTimeframes(source, target) {
+  return TIMEFRAME_ORDER.indexOf(target) - TIMEFRAME_ORDER.indexOf(source);
+}
+
+function allowedDisplayTimeframes(sourceTimeframe) {
+  const index = Math.max(TIMEFRAME_ORDER.indexOf(sourceTimeframe), 0);
+  return TIMEFRAME_ORDER.slice(index);
+}
+
+function syncTimeframeOptions(select, sourceTimeframe) {
+  if (!select) return;
+  const allowed = new Set(allowedDisplayTimeframes(sourceTimeframe));
+  [...select.options].forEach((option) => { option.disabled = !allowed.has(option.value); });
+  if (!allowed.has(select.value)) select.value = sourceTimeframe;
+}
 
 function exportFileName(prefix, columns) {
   return `${prefix}_${columns.join('_')}.csv`;
@@ -202,17 +219,18 @@ function checkedLine(selector, checked = true) {
 }
 
 function applyChartModeSideEffects(mode, scope = 'base') {
-  if (mode !== 'bar') return;
   if (scope === 'strategy') {
-    checkedLine('[data-strategy-line="strategy_diff"]');
-    checkedLine('[data-strategy-line="strategy_accum"]', false);
-    checkedLine('[data-strategy-line="strategy_hwm"]', false);
-    checkedLine('[data-strategy-line="strategy_dd"]', false);
+    checkedLine('[data-strategy-line="strategy_diff"]', mode === 'bar');
+    checkedLine('[data-strategy-line="strategy_accum"]', mode === 'line');
+    checkedLine('[data-strategy-line="strategy_hwm"]', mode === 'line');
+    checkedLine('[data-strategy-line="strategy_dd"]', mode === 'line');
+    checkedLine('[data-strategy-line="strategy_mdd"]', true);
   } else {
-    checkedLine('[data-line="diff"]');
-    checkedLine('[data-line="accum"]', false);
-    checkedLine('[data-line="hwm"]', false);
-    checkedLine('[data-line="dd"]', false);
+    checkedLine('[data-line="diff"]', mode === 'bar');
+    checkedLine('[data-line="accum"]', mode === 'line');
+    checkedLine('[data-line="hwm"]', mode === 'line');
+    checkedLine('[data-line="dd"]', mode === 'line');
+    checkedLine('[data-line="mdd"]', true);
   }
 }
 
@@ -360,6 +378,7 @@ function strategyReadinessMessage() {
   if (!body.targetName) return 'Сначала выберите портфолио или пресет в блоке “3. Расчет”.';
   if (!lastResult?.rows?.length) return 'Сначала выполните расчет в блоке “3. Расчет”. Стратегия применяется к уже рассчитанному портфолио или пресету.';
   if (lastResultKey !== calculationKey(body)) return 'Расчет в блоке “3. Расчет” изменился. Пересчитайте его перед запуском стратегии.';
+  if (compareTimeframes(lastResult.step ?? lastResult.timeframe ?? body.timeframe, $('#strategyTimeframe').value) < 0) return 'Вы выбрали ТФ ниже чем имеется в расчетах';
   return '';
 }
 
@@ -467,22 +486,82 @@ function stepLabel(step) {
   return `${Math.round(Number(step) / 60000)} минут`;
 }
 
+function calculateRowsFromDiffs(rows, diffKey = 'diff', prefix = '') {
+  let accum = 0;
+  let hwm = 0;
+  let mdd = 0;
+  return rows.map((row, index) => {
+    const diff = row[diffKey] ?? 0;
+    accum = index === 0 ? 0 : (1 + diff) * (1 + accum) - 1;
+    hwm = Math.max(hwm, accum);
+    const dd = (1 + accum) / (1 + hwm) - 1;
+    mdd = Math.min(mdd, dd);
+    return { ...row, [`${prefix}diff`]: diff, [`${prefix}accum`]: accum, [`${prefix}hwm`]: hwm, [`${prefix}dd`]: dd, [`${prefix}mdd`]: mdd };
+  });
+}
+
+function summarizeRows(rows, prefix = '') {
+  return {
+    start: rows[0]?.time ?? null,
+    end: rows.at(-1)?.time ?? null,
+    points: rows.length,
+    finalAccum: rows.at(-1)?.[`${prefix}accum`] ?? 0,
+    hwm: rows.at(-1)?.[`${prefix}hwm`] ?? 0,
+    maxDrawdown: rows.at(-1)?.[`${prefix}mdd`] ?? 0
+  };
+}
+
+function sameUtcMinute(timestamp, minuteMs) {
+  return Math.floor(timestamp / minuteMs) * minuteMs === timestamp;
+}
+
+function isBoundary(timestamp, timeframe) {
+  const d = new Date(timestamp);
+  if (FIXED_TIMEFRAME_MS[timeframe]) return sameUtcMinute(timestamp, FIXED_TIMEFRAME_MS[timeframe]);
+  if (timeframe === '1M') return d.getUTCDate() === 1 && d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+  if (timeframe === '1Y') return d.getUTCMonth() === 0 && d.getUTCDate() === 1 && d.getUTCHours() === 0 && d.getUTCMinutes() === 0 && d.getUTCSeconds() === 0 && d.getUTCMilliseconds() === 0;
+  return false;
+}
+
+function displayRowsForResult(result, timeframe, prefix = '') {
+  if (!result?.rows?.length) return [];
+  const calculationTimeframe = result.step ?? result.timeframe ?? '1h';
+  if (compareTimeframes(calculationTimeframe, timeframe) < 0) return result.rows;
+  const accumKey = `${prefix}accum`;
+  const diffKey = `${prefix}diff`;
+  const checkpoints = result.rows.filter((row) => isBoundary(row.timestamp, timeframe));
+  const diffs = checkpoints.map((row, index) => {
+    if (index === 0) return 0;
+    return (1 + (row[accumKey] ?? 0)) / (1 + (checkpoints[index - 1][accumKey] ?? 0)) - 1;
+  });
+  return calculateRowsFromDiffs(checkpoints.map((row, index) => ({ ...row, [diffKey]: diffs[index] })), diffKey, prefix);
+}
+
+function resultForDisplay(result, timeframe, prefix = '') {
+  const rows = displayRowsForResult(result, timeframe, prefix);
+  return { ...result, rows, summary: { ...summarizeRows(rows, prefix), buyCount: result.summary?.buyCount, sellCount: result.summary?.sellCount }, displayTimeframe: timeframe };
+}
+
 function showResult(result) {
   lastResult = result;
   lastResultKey = result.calculationKey ?? calculationKey();
+  syncTimeframeOptions($('#displayTimeframe'), result.step ?? result.timeframe ?? '1h');
+  syncTimeframeOptions($('#strategyTimeframe'), result.step ?? result.timeframe ?? '1h');
+  const display = resultForDisplay(result, $('#displayTimeframe').value);
   $('#resultCard').classList.remove('hidden');
   $('#summary').innerHTML = `<table><tbody>
-    <tr><th>Начало</th><td>${result.summary.start}</td></tr>
-    <tr><th>Конец</th><td>${result.summary.end}</td></tr>
-    <tr><th>Таймфрейм</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
-    <tr><th>Точек</th><td>${result.summary.points}</td></tr>
-    <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
-    <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
-    <tr><th>MDD</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
+    <tr><th>ТФ для расчета</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
+    <tr><th>ТФ для отображения</th><td>${stepLabel(display.displayTimeframe)}</td></tr>
+    <tr><th>Начало</th><td>${display.summary.start}</td></tr>
+    <tr><th>Конец</th><td>${display.summary.end}</td></tr>
+    <tr><th>Точек</th><td>${display.summary.points}</td></tr>
+    <tr><th>Accum</th><td>${fmtPct(display.summary.finalAccum)}</td></tr>
+    <tr><th>HWM</th><td>${fmtPct(display.summary.hwm)}</td></tr>
+    <tr><th>MDD</th><td>${fmtPct(display.summary.maxDrawdown)}</td></tr>
   </tbody></table>`;
   renderChart();
   renderRsiChart();
-  renderResultTable(result.rows);
+  renderResultTable(display.rows);
   updateStrategyCalculateAvailability();
 }
 
@@ -522,10 +601,12 @@ function renderChart() {
   const svg = $('#chart');
   if (!lastResult?.rows?.length) return;
   applyChartModeSideEffects($('#chartMode').value);
+  const display = resultForDisplay(lastResult, $('#displayTimeframe').value);
   const active = new Set($$('.toggles input:checked').map((input) => input.dataset.line).filter(Boolean));
   const keys = ['diff', 'accum', 'hwm', 'dd', 'mdd'].filter((key) => active.has(key));
   const colors = { diff: '#7c8a9b', accum: '#315efb', hwm: '#16a56f', dd: '#e28a00', mdd: '#cf3341' };
-  renderLineChart(svg, lastResult.rows, keys, colors, (key) => key, $('#chartMode').value);
+  renderLineChart(svg, display.rows, keys, colors, (key) => key, $('#chartMode').value);
+  renderResultTable(display.rows);
 }
 
 function renderRsiChart() {
@@ -557,7 +638,8 @@ function collectStrategyBody() {
     buyLevel: $('#buyLevel').value,
     sellLevel: $('#sellLevel').value,
     periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
-    periodTo: normalizeDateInput($('#strategyPeriodTo').value)
+    periodTo: normalizeDateInput($('#strategyPeriodTo').value),
+    timeframe: $('#strategyTimeframe').value
   };
 }
 
@@ -591,7 +673,7 @@ async function calculateTradingStrategy() {
   const result = await api('/api/strategies/calculate', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ ...base, strategy })
+    body: JSON.stringify({ ...base, timeframe: strategy.timeframe, strategy })
   });
   lastResult = result.baseResult;
   lastStrategyResult = result.strategyResult;
@@ -605,30 +687,35 @@ function showStrategyResult(result, name) {
   $('#strategyResultCard').classList.remove('hidden');
   $('#strategyOverlayToggle').classList.remove('hidden');
   $('#strategyOverlayName').textContent = name || 'RSI';
+  syncTimeframeOptions($('#strategyDisplayTimeframe'), result.step ?? result.timeframe ?? '1h');
+  const display = resultForDisplay(result, $('#strategyDisplayTimeframe').value, 'strategy_');
   $('#strategySummary').innerHTML = `<table><tbody>
-    <tr><th>Начало</th><td>${result.summary.start}</td></tr>
-    <tr><th>Конец</th><td>${result.summary.end}</td></tr>
-    <tr><th>Таймфрейм</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
-    <tr><th>Точек</th><td>${result.summary.points}</td></tr>
-    <tr><th>Accum</th><td>${fmtPct(result.summary.finalAccum)}</td></tr>
-    <tr><th>HWM</th><td>${fmtPct(result.summary.hwm)}</td></tr>
-    <tr><th>MDD</th><td>${fmtPct(result.summary.maxDrawdown)}</td></tr>
+    <tr><th>ТФ для расчета</th><td>${stepLabel(result.step ?? result.timeframe)}</td></tr>
+    <tr><th>ТФ для отображения</th><td>${stepLabel(display.displayTimeframe)}</td></tr>
+    <tr><th>Начало</th><td>${display.summary.start}</td></tr>
+    <tr><th>Конец</th><td>${display.summary.end}</td></tr>
+    <tr><th>Точек</th><td>${display.summary.points}</td></tr>
+    <tr><th>Accum</th><td>${fmtPct(display.summary.finalAccum)}</td></tr>
+    <tr><th>HWM</th><td>${fmtPct(display.summary.hwm)}</td></tr>
+    <tr><th>MDD</th><td>${fmtPct(display.summary.maxDrawdown)}</td></tr>
     <tr><th>Покупок</th><td>${result.summary.buyCount}</td></tr>
     <tr><th>Продаж</th><td>${result.summary.sellCount}</td></tr>
   </tbody></table>`;
   renderRsiChart();
   renderStrategyChart();
-  renderStrategyTable(result.rows);
+  renderStrategyTable(display.rows);
 }
 
 function renderStrategyChart() {
   const svg = $('#strategyChart');
   if (!lastStrategyResult?.rows?.length) return;
   applyChartModeSideEffects($('#strategyChartMode').value, 'strategy');
+  const display = resultForDisplay(lastStrategyResult, $('#strategyDisplayTimeframe').value, 'strategy_');
   const active = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
   const keys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => active.has(key));
   const colors = { strategy_diff: '#7c8a9b', strategy_accum: '#315efb', strategy_hwm: '#16a56f', strategy_dd: '#e28a00', strategy_mdd: '#cf3341' };
-  renderLineChart(svg, lastStrategyResult.rows, keys, colors, (key) => key.replace('strategy_', ''), $('#strategyChartMode').value);
+  renderLineChart(svg, display.rows, keys, colors, (key) => key.replace('strategy_', ''), $('#strategyChartMode').value);
+  renderStrategyTable(display.rows);
 }
 
 function renderStrategyTable(rows) {
@@ -732,10 +819,11 @@ $('#targetType').addEventListener('change', () => { renderTargetOptions(); syncT
 $('#targetName').addEventListener('change', () => { applyTargetRange(); syncTimeframeToTarget(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
 $('#timeframe').addEventListener('change', () => {
   updateStrategyCalculateAvailability(true);
-  renderChart();
-  renderStrategyChart();
 });
+$('#displayTimeframe').addEventListener('change', () => { if (lastResult) showResult(lastResult); });
 $('#chartMode').addEventListener('change', () => { applyChartModeSideEffects($('#chartMode').value); renderChart(); });
+$('#strategyTimeframe').addEventListener('change', () => updateStrategyCalculateAvailability(true));
+$('#strategyDisplayTimeframe').addEventListener('change', () => { if (lastStrategyResult) showStrategyResult(lastStrategyResult, lastStrategyConfig?.name); });
 $('#strategyChartMode').addEventListener('change', () => { applyChartModeSideEffects($('#strategyChartMode').value, 'strategy'); renderStrategyChart(); });
 $('#periodUntilEnd').addEventListener('change', (event) => {
   $('#periodTo').disabled = event.target.checked;

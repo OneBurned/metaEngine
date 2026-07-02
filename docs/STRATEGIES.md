@@ -74,6 +74,14 @@ Rules:
 - while the strategy is calculating, the button is disabled and its text changes to `Рассчитывается.`, `Рассчитывается..`, `Рассчитывается...`;
 - when the calculation finishes or fails, the original button text is restored.
 
-Trading strategies are calculated on the same target timeframe as block **“3. Расчет”**. The base result is converted first, then the strategy module receives that converted row set.
+Trading strategies have their own **ТФ для расчета** in block **“5. Стратегии”**. The strategy calculation timeframe may be the same as the base calculation timeframe from block **“3. Расчет”** or larger, but it may not be smaller. For example, a base `1h` calculation can feed a strategy calculated on `1h`, `1d`, `1M`, or `1Y`, but not `15m`, `5m`, or `1m`.
+
+If the user selects a lower strategy timeframe than the available base calculation timeframe, the UI warns:
+
+```text
+Вы выбрали ТФ ниже чем имеется в расчетах
+```
+
+Block **“6. Итог торговли по стратегии”** has a separate **ТФ для отображения** and `Вид Diff`, so a strategy can be calculated on one timeframe and displayed on the same or a larger timeframe.
 
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.
