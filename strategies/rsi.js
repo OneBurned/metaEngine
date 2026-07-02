@@ -1,9 +1,7 @@
 const {
-  HOUR_MS,
   parseTimestamp,
   formatTimestamp,
-  calculateFromDiffs,
-  buildGrid
+  calculateFromDiffs
 } = require('../lib/calculations');
 
 function calculateRsiFromEquity(rows, period = 14) {
@@ -41,36 +39,24 @@ function rsiValue(avgGain, avgLoss) {
   return 100 - (100 / (1 + rs));
 }
 
-function buildRowsFromBase(baseRows, from, to, step) {
-  const map = new Map(baseRows.map((row) => [row.timestamp, row]));
-  const grid = buildGrid(from, to, step);
-  const rows = [];
+function buildRowsFromBase(baseRows, from, to) {
   const warnings = [];
-  let previousAccum = 0;
+  const rows = baseRows
+    .filter((row) => row.timestamp >= from && row.timestamp <= to)
+    .map((row) => ({ ...row }));
 
-  for (const ts of grid) {
-    const source = map.get(ts);
-    if (source) {
-      previousAccum = source.accum;
-      rows.push({ ...source });
-    } else {
-      warnings.push({ timestamp: ts, display: formatTimestamp(ts), reason: 'strategy_period_missing_source_filled' });
-      rows.push({
-        timestamp: ts,
-        time: formatTimestamp(ts),
-        diff: 0,
-        accum: previousAccum,
-        hwm: 0,
-        dd: 0,
-        mdd: 0
-      });
-    }
+  if (baseRows[0] && from < baseRows[0].timestamp) {
+    warnings.push({ timestamp: from, display: formatTimestamp(from), reason: 'strategy_period_starts_before_source' });
   }
+  if (baseRows.at(-1) && to > baseRows.at(-1).timestamp) {
+    warnings.push({ timestamp: to, display: formatTimestamp(to), reason: 'strategy_period_ends_after_source' });
+  }
+
   return { rows, warnings };
 }
 
 function calculate(baseResult, config) {
-  const step = baseResult.step ?? HOUR_MS;
+  const step = baseResult.step ?? baseResult.timeframe ?? '1h';
   const sourceFrom = baseResult.rows[0]?.timestamp;
   const sourceTo = baseResult.rows.at(-1)?.timestamp;
   const from = config.periodFrom ? parseTimestamp(config.periodFrom) : sourceFrom;
@@ -81,7 +67,7 @@ function calculate(baseResult, config) {
   const rsiPeriod = Number(config.rsiPeriod ?? 14);
   const fullRsiSeries = calculateRsiFromEquity(baseResult.rows, rsiPeriod);
   const fullRsiByTimestamp = new Map(fullRsiSeries.map((row) => [row.timestamp, row]));
-  const source = buildRowsFromBase(baseResult.rows, from, to, step);
+  const source = buildRowsFromBase(baseResult.rows, from, to);
   const rowsForStrategy = source.rows;
   const rsiSeries = rowsForStrategy.map((row) => fullRsiByTimestamp.get(row.timestamp) ?? { timestamp: row.timestamp, time: row.time, rsi: null });
   const buyLevel = Number(config.buyLevel ?? config.lowerLevel ?? 30);

@@ -205,8 +205,14 @@ function applyChartModeSideEffects(mode, scope = 'base') {
   if (mode !== 'bar') return;
   if (scope === 'strategy') {
     checkedLine('[data-strategy-line="strategy_diff"]');
+    checkedLine('[data-strategy-line="strategy_accum"]', false);
+    checkedLine('[data-strategy-line="strategy_hwm"]', false);
+    checkedLine('[data-strategy-line="strategy_dd"]', false);
   } else {
     checkedLine('[data-line="diff"]');
+    checkedLine('[data-line="accum"]', false);
+    checkedLine('[data-line="hwm"]', false);
+    checkedLine('[data-line="dd"]', false);
   }
 }
 

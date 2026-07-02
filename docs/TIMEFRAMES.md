@@ -93,7 +93,7 @@ then those exact timestamps are included.
 
 ## Chart mode
 
-The result chart has a display mode selector:
+The calculation block has a `Вид Diff` selector:
 
 - `Линия`;
 - `Гистограмма`.
@@ -103,7 +103,8 @@ The chart mode is selected in block **“3. Расчет”** next to the timefr
 In histogram mode:
 
 - `diff` is automatically enabled and displayed as bars;
-- `accum`, `hwm`, `dd`, and `mdd` remain line series over the bars;
+- `accum`, `hwm`, and `dd` are turned off;
+- `mdd` remains available as a line over the bars;
 - positive `diff` bars are green, negative bars are red, and zero bars keep the neutral gray color.
 
 This keeps monthly/yearly period returns readable without changing the meaning of cumulative and drawdown metrics.
