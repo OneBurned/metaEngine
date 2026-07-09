@@ -101,8 +101,10 @@ test('MDD Mean Reversion strategy UI has type option, grid controls and indicato
   assert.match(html, /id="mddChart"/);
   assert.match(app, /function renderMddChart\(\)/);
   assert.match(app, /collectMddLevels/);
-  assert.match(app, /Кумуль базы/);
-  assert.match(app, /Diff базы/);
+  assert.match(app, /IN Diff/);
+  assert.match(app, /IN Accum/);
+  assert.match(app, /IN DD/);
+  assert.match(app, /OUT Diff/);
   assert.match(app, /Local Accum/);
   assert.match(app, /formatMddSignal/);
   assert.match(app, /Вес \${fmtPct/);

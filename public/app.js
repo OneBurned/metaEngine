@@ -585,7 +585,7 @@ function showResult(result, options = {}) {
 }
 
 function renderResultTable(rows) {
-  $('#resultTable').innerHTML = `<thead><tr><th>Дата</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
+  $('#resultTable').innerHTML = `<thead><tr><th>Дата</th><th>OUT Diff</th><th>OUT Accum</th><th>OUT HWM</th><th>OUT DD</th><th>OUT MDD</th></tr></thead><tbody>${rows.map((r) => `
     <tr><td>${r.time}</td><td>${fmtPct(r.diff)}</td><td>${fmtPct(r.accum)}</td><td>${fmtPct(r.hwm)}</td><td>${fmtPct(r.dd)}</td><td>${fmtPct(r.mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
@@ -824,11 +824,11 @@ function formatMddTpState(value) {
 
 function renderStrategyTable(rows) {
   const isMdd = lastStrategyResult?.type === 'mdd_mean_reversion';
-  const indicatorHeaders = isMdd ? '<th>Diff базы</th><th>Accum базы</th><th>Кумуль базы</th><th>DD базы</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
+  const indicatorHeaders = isMdd ? '<th>IN Diff</th><th>IN Accum</th><th>IN DD</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
   const sourceHeader = isMdd ? '' : '<th>Source Diff</th>';
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th>${sourceHeader}<th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th>${sourceHeader}<th>OUT Diff</th><th>OUT Accum</th><th>OUT HWM</th><th>OUT DD</th><th>OUT MDD</th></tr></thead><tbody>${rows.map((r) => {
     const indicatorCells = isMdd
-      ? `<td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.source_accum)}</td><td>${fmtEquity(r.base_equity)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
+      ? `<td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.source_accum)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
       : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
     const signal = isMdd ? formatMddSignal(r.signal) : (r.signal || '-');
     const execution = isMdd ? formatMddExecution(r.execution) : (r.execution || '-');
