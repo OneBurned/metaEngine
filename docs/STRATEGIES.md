@@ -74,4 +74,6 @@ Rules:
 - while the strategy is calculating, the button is disabled and its text changes to `Рассчитывается.`, `Рассчитывается..`, `Рассчитывается...`;
 - when the calculation finishes or fails, the original button text is restored.
 
+Trading strategies are calculated on the same target timeframe as block **“3. Расчет”**. The base result is converted first, then the strategy module receives that converted row set.
+
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.

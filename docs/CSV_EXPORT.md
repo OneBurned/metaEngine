@@ -56,6 +56,19 @@ The server recalculates the full portfolio period from saved `timestamp,diff`, d
 
 For the current base calculation result and current strategy result, CSV is assembled in the browser from already calculated rows.
 
+## Excel compatibility
+
+CSV export keeps the visual data format stable:
+
+- comma `,` remains the column delimiter;
+- dot `.` remains the decimal separator;
+- numeric values are not wrapped in quotes.
+
+To make Excel detect the file encoding more reliably, exported CSV files start
+with a UTF-8 BOM. Text statuses/signals are exported as ASCII values: empty
+status-like cells and typographic dashes such as `—` are written as `none`.
+This avoids mojibake like `вЂ”` when Excel opens the file with a legacy codepage.
+
 ## File names
 
 Downloaded file names should include the source and selected columns, for example:

@@ -33,6 +33,25 @@ test('client CSV export builds selected columns without fixed export formats', (
   assert.doesNotMatch(html, /exportFormat/);
 });
 
+test('CSV export keeps comma and decimal dot while adding UTF-8 BOM', () => {
+  assert.match(app, /const CSV_UTF8_BOM = '\\uFEFF'/);
+  assert.match(app, /`\$\{CSV_UTF8_BOM\}\$\{header\}\\n/);
+  assert.match(app, /columns\.join\(','\)/);
+  assert.doesNotMatch(app, /join\(';'\)/);
+  assert.doesNotMatch(app, /replace\('\\\.', ','\)/);
+  assert.match(server, /const CSV_UTF8_BOM = '\\uFEFF'/);
+  assert.match(server, /`\$\{CSV_UTF8_BOM\}\$\{columns\.join\(','\)\}\\n/);
+});
+
+test('CSV export normalizes typographic dashes and empty statuses to ASCII none', () => {
+  assert.match(app, /function normalizeCsvText/);
+  assert.match(app, /text === '—' \|\| text === '–'/);
+  assert.match(app, /return 'none'/);
+  assert.match(app, /\(signal\|execution\|status\)/);
+  assert.match(server, /function normalizeCsvText/);
+  assert.match(server, /text === '—' \|\| text === '–'/);
+});
+
 test('server CSV export uses columns query and not fixed format presets', () => {
   assert.match(server, /parseCsvExportColumns/);
   assert.match(server, /url\.searchParams\.get\('columns'\)/);

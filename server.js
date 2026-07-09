@@ -12,7 +12,8 @@ const {
   calculatePortfolio,
   calculatePreset,
   validatePresetItems,
-  formatNumber
+  formatNumber,
+  timeframeFromStep
 } = require('./lib/calculations');
 const tradingStrategies = require('./strategies');
 
@@ -28,6 +29,7 @@ const PORT = Number(process.env.PORT || 5173);
 for (const dir of [PORTFOLIOS_DIR, TRADING_STRATEGIES_DIR, PRESETS_DIR, RUNS_DIR]) fs.mkdirSync(dir, { recursive: true });
 
 const CSV_EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+const CSV_UTF8_BOM = '\uFEFF';
 
 function parseCsvExportColumns(value) {
   const requested = String(value || 'timestamp,diff,accum,hwm,dd,mdd')
@@ -40,17 +42,24 @@ function parseCsvExportColumns(value) {
   return columns;
 }
 
-function csvCell(value) {
+function normalizeCsvText(value, column = '') {
+  if ((value === null || value === undefined || value === '') && /(?:^|_)(signal|execution|status)$/.test(column)) return 'none';
   const text = value === null || value === undefined ? '' : String(value);
+  if (text === '—' || text === '–') return 'none';
+  return text;
+}
+
+function csvCell(value, column = '') {
+  const text = normalizeCsvText(value, column);
   return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
 }
 
 function portfolioRowsToCsv(rows, columns) {
   const lines = rows.map((row) => columns.map((column) => {
-    if (column === 'timestamp') return csvCell(row.timestamp);
-    return csvCell(formatNumber(row[column]));
+    if (column === 'timestamp') return csvCell(row.timestamp, column);
+    return csvCell(formatNumber(row[column]), column);
   }).join(','));
-  return `${columns.join(',')}\n${lines.join('\n')}\n`;
+  return `${CSV_UTF8_BOM}${columns.join(',')}\n${lines.join('\n')}\n`;
 }
 
 function exportPortfolioCsv(file, columns) {
@@ -131,7 +140,9 @@ function parseMultipart(buffer, contentType) {
 }
 
 function formatStep(step) {
+  if (step === 60 * 1000) return '1 минута';
   if (step === 5 * 60 * 1000) return '5 минут';
+  if (step === 15 * 60 * 1000) return '15 минут';
   if (step === HOUR_MS) return '1 час';
   if (step === 24 * HOUR_MS) return '1 день';
   return `${Math.round(step / 60000)} минут`;
@@ -152,16 +163,31 @@ function listPortfolios() {
         end: points.at(-1) ? formatTimestamp(points.at(-1).timestamp) : null,
         step,
         stepLabel: formatStep(step),
+        timeframe: timeframeFromStep(step) ?? '1h',
         gaps: gaps.length
       };
     });
+}
+
+function presetSourceStep(preset) {
+  const steps = (preset.items ?? [])
+    .map((item) => item.portfolio ?? item.strategy)
+    .filter(Boolean)
+    .map((portfolio) => path.join(PORTFOLIOS_DIR, portfolio))
+    .filter((fullPath) => fs.existsSync(fullPath))
+    .map((fullPath) => readPortfolioFile(fullPath).step);
+  return steps.length ? Math.min(...steps) : HOUR_MS;
 }
 
 function listPresets() {
   return fs.readdirSync(PRESETS_DIR)
     .filter((file) => file.endsWith('.json'))
     .sort()
-    .map((file) => JSON.parse(fs.readFileSync(path.join(PRESETS_DIR, file), 'utf8')));
+    .map((file) => {
+      const preset = JSON.parse(fs.readFileSync(path.join(PRESETS_DIR, file), 'utf8'));
+      const step = presetSourceStep(preset);
+      return { ...preset, step, stepLabel: formatStep(step), timeframe: timeframeFromStep(step) ?? '1h' };
+    });
 }
 
 function listTradingStrategies() {
@@ -220,7 +246,7 @@ async function calculateTarget(body) {
     if (to === null) to = portfolioLastTimestamp(file);
     if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания портфолио');
     if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
-    return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to);
+    return calculatePortfolio(path.join(PORTFOLIOS_DIR, file), from, to, { timeframe: body.timeframe });
   }
   if (body.targetType === 'preset') {
     const file = safeName(body.targetName, '.json');
@@ -228,7 +254,7 @@ async function calculateTarget(body) {
     if (to === null) to = presetLastTimestamp(preset);
     if (to === null || to === undefined) throw new Error('Не удалось определить дату окончания пресета');
     if (to < from) throw new Error('Дата окончания расчета должна быть позже даты начала');
-    return calculatePreset(preset, PORTFOLIOS_DIR, from, to);
+    return calculatePreset(preset, PORTFOLIOS_DIR, from, to, { timeframe: body.timeframe });
   }
   throw new Error('Выберите портфолио или пресет');
 }
@@ -357,7 +383,7 @@ async function handleApi(req, res) {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const result = await calculateTarget(body);
       const runId = crypto.randomUUID();
-      const payload = { runId, targetType: body.targetType, targetName: body.targetName, periodFrom: body.periodFrom, periodTo: body.periodTo, ...result };
+      const payload = { runId, targetType: body.targetType, targetName: body.targetName, periodFrom: body.periodFrom, periodTo: body.periodTo, timeframe: body.timeframe, ...result };
       fs.writeFileSync(path.join(RUNS_DIR, `${runId}.json`), JSON.stringify(payload, null, 2), 'utf8');
       return json(res, 200, payload);
     }
