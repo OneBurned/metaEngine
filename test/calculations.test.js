@@ -300,6 +300,8 @@ test('MDD Mean Reversion applies weights next point and closes after TP next poi
   assert.equal(result.rows[2].signal, 'target_weight:0.2');
   assert.equal(result.rows[3].execution, 'weight:0.2');
   assert.equal(result.rows[4].tp_state, 'waiting');
+  assert.equal(result.rows[4].local_accum, 0);
+  assert.ok(result.rows[6].local_accum >= 0.01);
   assert.equal(result.rows[6].signal, 'take_profit_close');
   assert.equal(result.rows[6].position, 0.2);
   assert.equal(result.rows[7].execution, 'weight:0');
@@ -316,6 +318,7 @@ test('MDD Mean Reversion validates levels and supports zero TP close next point'
   const result = calculateTradingStrategy(base, { type: 'mdd_mean_reversion', takeProfit: 0, levels: [{ drawdown: -0.1, weight: 0.1 }] });
   assert.equal(result.rows[1].signal, 'target_weight:0.1');
   assert.equal(result.rows[3].signal, 'take_profit_close');
+  assert.equal(result.rows[3].local_accum, 0);
   assert.equal(result.rows[3].position, 0.1);
   assert.equal(result.rows[4].position, 0);
 });

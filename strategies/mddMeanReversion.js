@@ -107,14 +107,18 @@ function calculate(baseResult, config) {
 
     let signal = '';
     let tpState = waitingTakeProfit ? 'waiting' : '';
+    let localAccum = null;
+    let rowTakeProfitStartEquity = waitingTakeProfit ? takeProfitStartEquity : null;
 
     if (waitingTakeProfit && mddRow.dd < 0) {
       waitingTakeProfit = false;
       takeProfitStartEquity = null;
+      rowTakeProfitStartEquity = null;
       tpState = 'cancelled';
     }
 
     if (waitingTakeProfit) {
+      localAccum = equity / takeProfitStartEquity - 1;
       const targetEquity = takeProfitStartEquity * (1 + takeProfit);
       if (equity >= targetEquity && position > 0) {
         signal = 'take_profit_close';
@@ -126,6 +130,8 @@ function calculate(baseResult, config) {
     } else if (mddRow.dd >= 0 && position > 0) {
       waitingTakeProfit = true;
       takeProfitStartEquity = equity;
+      rowTakeProfitStartEquity = equity;
+      localAccum = 0;
       tpState = 'waiting';
       if (takeProfit === 0) {
         signal = 'take_profit_close';
@@ -148,10 +154,12 @@ function calculate(baseResult, config) {
       position,
       sourceDiff: sourceRow.diff,
       sourceAccum: sourceRow.accum,
+      baseEquity: equity,
       dd: mddRow.dd,
       localMdd: mddRow.localMdd,
+      localAccum,
       tpState,
-      takeProfitStartEquity,
+      takeProfitStartEquity: rowTakeProfitStartEquity,
       nextPosition: pendingPosition
     });
   }
@@ -169,8 +177,10 @@ function calculate(baseResult, config) {
     position: signals[index].position,
     source_diff: signals[index].sourceDiff,
     source_accum: signals[index].sourceAccum,
+    base_equity: signals[index].baseEquity,
     base_dd: signals[index].dd,
     local_mdd: signals[index].localMdd,
+    local_accum: signals[index].localAccum,
     tp_state: signals[index].tpState,
     tp_start_equity: signals[index].takeProfitStartEquity,
     next_position: signals[index].nextPosition

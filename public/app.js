@@ -795,12 +795,43 @@ function renderStrategyChart() {
   renderStrategyTable(display.rows);
 }
 
+
+function fmtMaybePct(value) {
+  return value === null || value === undefined || Number.isNaN(Number(value)) ? '—' : fmtPct(value);
+}
+
+function fmtEquity(value) {
+  return value === null || value === undefined || Number.isNaN(Number(value)) ? '—' : Number(value).toFixed(4);
+}
+
+function formatMddSignal(value) {
+  if (!value) return '—';
+  if (value === 'take_profit_close') return 'TP';
+  const weight = String(value).match(/^target_weight:(.+)$/);
+  return weight ? `Вес ${fmtPct(Number(weight[1]))}` : value;
+}
+
+function formatMddExecution(value) {
+  if (!value) return '—';
+  const weight = String(value).match(/^weight:(.+)$/);
+  return weight ? `Вес ${fmtPct(Number(weight[1]))}` : value;
+}
+
+function formatMddTpState(value) {
+  const labels = { waiting: 'Ждем TP', hit: 'TP', cancelled: 'TP отменен' };
+  return labels[value] ?? '—';
+}
+
 function renderStrategyTable(rows) {
   const isMdd = lastStrategyResult?.type === 'mdd_mean_reversion';
-  const indicatorHeaders = isMdd ? '<th>DD</th><th>Local MDD</th><th>TP</th>' : '<th>RSI</th>';
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
-    const indicatorCells = isMdd ? `<td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${r.tp_state || '-'}</td>` : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
-    return `<tr><td>${r.time}</td>${indicatorCells}<td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${fmtPct(r.position)}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
+  const indicatorHeaders = isMdd ? '<th>База equity</th><th>DD базы</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
+    const indicatorCells = isMdd
+      ? `<td>${fmtEquity(r.base_equity)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
+      : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
+    const signal = isMdd ? formatMddSignal(r.signal) : (r.signal || '-');
+    const execution = isMdd ? formatMddExecution(r.execution) : (r.execution || '-');
+    return `<tr><td>${r.time}</td>${indicatorCells}<td>${signal}</td><td>${execution}</td><td>${fmtPct(r.position)}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
   }).join('')}</tbody>`;
 }
 

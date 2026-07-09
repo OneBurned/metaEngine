@@ -72,8 +72,10 @@ The second trading strategy is MDD Mean Reversion:
 
 MDD strategy rows should distinguish:
 
+- `base_equity` — current source equity;
 - `base_dd` — current source DD;
 - `local_mdd` — local MDD of the current drawdown cycle;
+- `local_accum` — source equity growth from the TP-start point after DD has recovered to `0`; this is the visible value that reaches TP, for example `Local Accum >= 1%` triggers `TP` when TP is `1%`;
 - `signal` — target-weight or TP-close signal on the current point;
 - `execution` — weight change executed on the current point;
 - `position` — current target weight after execution;
@@ -81,7 +83,7 @@ MDD strategy rows should distinguish:
 - `source_diff` / `source_accum` — source calculation values;
 - `strategy_diff`, `strategy_accum`, `strategy_hwm`, `strategy_dd`, `strategy_mdd` — strategy result series.
 
-For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels.
+For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table the user-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
 
 ## Adding future strategies
 

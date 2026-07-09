@@ -740,6 +740,7 @@ MDD Mean Reversion:
 - grid weights are target total weights, can exceed `100%`, and cannot be negative;
 - all weight changes execute on the next point;
 - after DD recovers to `0`, TP waits for base-asset movement after recovery; `TP 1%` with `10%` weight adds about `0.1%` during the TP leg;
+- the MDD result table includes `Local Accum`, which starts at `0%` on DD recovery and makes the TP trigger visible when it reaches the configured TP;
 - `TP 0%` closes after recovery from the next point;
 - if DD returns below `0` before TP, TP waiting is cancelled and grid logic resumes.
 
