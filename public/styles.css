@@ -73,3 +73,8 @@ th { background: #f7f9fc; position: sticky; top: 0; }
 #mddChart { width: 100%; height: 220px; background: #fbfcff; border: 1px solid #e1e6ef; border-radius: 12px; }
 @media (max-width: 900px) { .mdd-params, .mdd-level-row { grid-template-columns: 1fr; } }
 .strategy-params.hidden { display: none; }
+#mddLevels { counter-reset: mdd-level; display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
+.mdd-level-row { counter-increment: mdd-level; grid-template-columns: 1fr; padding: 10px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fbfcff; }
+.mdd-level-row::before { content: "Точка " counter(mdd-level); font-weight: 700; color: #3d4658; }
+@media (max-width: 1100px) { #mddLevels { grid-template-columns: repeat(3, minmax(140px, 1fr)); } }
+@media (max-width: 700px) { #mddLevels { grid-template-columns: 1fr; } }

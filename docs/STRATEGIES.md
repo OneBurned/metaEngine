@@ -83,7 +83,7 @@ MDD strategy rows should distinguish:
 - `source_diff` / `source_accum` — source calculation values;
 - `strategy_diff`, `strategy_accum`, `strategy_hwm`, `strategy_dd`, `strategy_mdd` — strategy result series.
 
-For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table the user-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
+For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table source columns are shown first (`Diff базы`, `Accum базы`, `Кумуль базы`), then local MDD/TP fields and strategy output. User-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
 
 ## Adding future strategies
 

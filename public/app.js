@@ -824,14 +824,16 @@ function formatMddTpState(value) {
 
 function renderStrategyTable(rows) {
   const isMdd = lastStrategyResult?.type === 'mdd_mean_reversion';
-  const indicatorHeaders = isMdd ? '<th>База equity</th><th>DD базы</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
+  const indicatorHeaders = isMdd ? '<th>Diff базы</th><th>Accum базы</th><th>Кумуль базы</th><th>DD базы</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
+  const sourceHeader = isMdd ? '' : '<th>Source Diff</th>';
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th>${sourceHeader}<th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
     const indicatorCells = isMdd
-      ? `<td>${fmtEquity(r.base_equity)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
+      ? `<td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.source_accum)}</td><td>${fmtEquity(r.base_equity)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
       : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
     const signal = isMdd ? formatMddSignal(r.signal) : (r.signal || '-');
     const execution = isMdd ? formatMddExecution(r.execution) : (r.execution || '-');
-    return `<tr><td>${r.time}</td>${indicatorCells}<td>${signal}</td><td>${execution}</td><td>${fmtPct(r.position)}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
+    const sourceCells = isMdd ? '' : `<td>${fmtPct(r.source_diff)}</td>`;
+    return `<tr><td>${r.time}</td>${indicatorCells}<td>${signal}</td><td>${execution}</td><td>${fmtPct(r.position)}</td>${sourceCells}<td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
   }).join('')}</tbody>`;
 }
 
