@@ -744,6 +744,8 @@ MDD Mean Reversion:
 - `TP 0%` closes after recovery from the next point;
 - if DD returns below `0` before TP, TP waiting is cancelled and grid logic resumes.
 
+Strategy tables and current-strategy CSV export follow the IN/OUT table convention: `IN ...` columns are input values from the base calculation, while `OUT ...` columns are the strategy result. Saved strategy configs can be applied back into block 5 with **Применить**; CSV exports the current calculated strategy result table, not saved JSON configs.
+
 Graph layout:
 
 1. base portfolio/preset graph and table;

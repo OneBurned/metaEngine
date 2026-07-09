@@ -194,7 +194,7 @@
             </select>
           </label>
 
-          <button id="saveTradingStrategy" type="button">Сохранить стратегию</button>
+          <button id="saveTradingStrategy" type="button">Сохранить настройки</button>
           <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
         </div>
         <p class="hint">RSI считается по equity-кривой. MDD Mean Reversion набирает вес по локальной просадке. Все сигналы применяются со следующей точки: без подглядывания в будущее.</p>
@@ -295,14 +295,7 @@
       <label id="csvPortfolioLabel">Портфолио
         <select id="csvPortfolioName"></select>
       </label>
-      <div class="export-columns" aria-label="Колонки CSV">
-        <label class="switch-line"><input type="checkbox" data-export-column="timestamp" checked disabled /> Дата</label>
-        <label class="switch-line"><input type="checkbox" data-export-column="diff" checked /> diff</label>
-        <label class="switch-line"><input type="checkbox" data-export-column="accum" checked /> accum</label>
-        <label class="switch-line"><input type="checkbox" data-export-column="hwm" checked /> HWM</label>
-        <label class="switch-line"><input type="checkbox" data-export-column="dd" checked /> DD</label>
-        <label class="switch-line"><input type="checkbox" data-export-column="mdd" checked /> MDD</label>
-      </div>
+      <div class="export-columns" id="csvExportColumns" aria-label="Колонки CSV"></div>
       <p id="csvExportHint" class="hint"></p>
       <div class="actions">
         <button id="csvExportApply" type="button">Скачать CSV</button>

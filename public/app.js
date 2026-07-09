@@ -10,7 +10,14 @@ let lastStrategyConfig = null;
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 
-const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
+const BASE_EXPORT_COLUMNS = [
+  { id: 'timestamp', label: 'Дата', key: 'timestamp', required: true },
+  { id: 'diff', label: 'diff', key: 'diff' },
+  { id: 'accum', label: 'accum', key: 'accum' },
+  { id: 'hwm', label: 'HWM', key: 'hwm' },
+  { id: 'dd', label: 'DD', key: 'dd' },
+  { id: 'mdd', label: 'MDD', key: 'mdd' }
+];
 const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
 const TIMEFRAME_ORDER = ['1m', '5m', '15m', '1h', '1d', '1M', '1Y'];
 const FIXED_TIMEFRAME_MS = { '1m': 60000, '5m': 300000, '15m': 900000, '1h': 3600000, '1d': 86400000 };
@@ -52,6 +59,15 @@ function rowValueForColumn(row, column, prefix = '') {
 function rowsToCsv(rows, columns, prefix = '') {
   const header = columns.join(',');
   const lines = rows.map((row) => columns.map((column) => csvCell(rowValueForColumn(row, column, prefix))).join(','));
+  return `${header}\n${lines.join('\n')}\n`;
+}
+
+function rowsToCsvByDefs(rows, defs) {
+  const header = defs.map((def) => def.id).join(',');
+  const lines = rows.map((row) => defs.map((def) => {
+    const value = typeof def.value === 'function' ? def.value(row) : rowValueForColumn(row, def.key ?? def.id);
+    return csvCell(value);
+  }).join(','));
   return `${header}\n${lines.join('\n')}\n`;
 }
 
@@ -170,7 +186,7 @@ function renderTradingStrategies() {
       <td><strong>${s.name}</strong></td>
       <td>${s.type}</td>
       <td>${strategyParamsText(s)}</td>
-      <td><button class="danger" data-delete-trading-strategy="${s.name}">Удалить</button></td>
+      <td><button type="button" data-apply-trading-strategy="${s.name}">Применить</button> <button class="danger" data-delete-trading-strategy="${s.name}">Удалить</button></td>
     </tr>`).join('')}</tbody></table>`;
 }
 
@@ -721,12 +737,50 @@ function collectStrategyBody() {
 
 
 
+
+function tradingStrategyByName(name) {
+  return tradingStrategies.find((strategy) => strategy.name === name);
+}
+
+function resetMddLevels(levels = []) {
+  $('#mddLevels').innerHTML = '';
+  const source = levels.length ? levels : [
+    { drawdown: -0.10, weight: 0.10 },
+    { drawdown: -0.20, weight: 0.20 },
+    { drawdown: -0.30, weight: 0.30 },
+    { drawdown: -0.40, weight: 0.40 },
+    { drawdown: -0.50, weight: 0.50 }
+  ];
+  source.forEach((level) => addMddLevel(Number(level.drawdown) * 100, Number(level.weight) * 100));
+}
+
+function applyTradingStrategyConfig(strategy) {
+  if (!strategy) return;
+  $('#tradingStrategyType').value = strategy.type || 'rsi';
+  syncStrategyTypeUi();
+  $('#tradingStrategyName').value = strategy.name || defaultStrategyName();
+  if (strategy.type === 'mdd_mean_reversion') {
+    $('#mddTakeProfit').value = (Number(strategy.takeProfit ?? 0.01) * 100).toString();
+    resetMddLevels(strategy.levels ?? []);
+  } else {
+    $('#rsiPeriod').value = strategy.rsiPeriod ?? 14;
+    $('#rsiUpper').value = strategy.upperLevel ?? 70;
+    $('#rsiBaseline').value = strategy.baseline ?? 50;
+    $('#rsiLower').value = strategy.lowerLevel ?? 30;
+    $('#buyLevel').value = strategy.buyLevel ?? 30;
+    $('#sellLevel').value = strategy.sellLevel ?? 70;
+  }
+  syncStrategyPeriodToCalculation();
+  updateStrategyCalculateAvailability(true);
+  showStrategyMessage('Настройки стратегии применены. Теперь можно рассчитать стратегию.', 'strategy-applied');
+}
+
 async function saveTradingStrategy(overwrite = false) {
   const body = { ...collectStrategyBody(), overwrite };
   if (!body.name) return alert('Введите название стратегии');
   try {
     await api('/api/strategies', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
-    alert('Стратегия сохранена');
+    alert('Настройки сохранены');
     await refreshAll();
   } catch (err) {
     if (String(err.message).includes('существует') && confirm('Такая стратегия уже существует. Перезаписать?')) {
@@ -825,14 +879,14 @@ function formatMddTpState(value) {
 function renderStrategyTable(rows) {
   const isMdd = lastStrategyResult?.type === 'mdd_mean_reversion';
   const indicatorHeaders = isMdd ? '<th>IN Diff</th><th>IN Accum</th><th>IN DD</th><th>Local MDD</th><th>Local Accum</th><th>TP статус</th>' : '<th>RSI</th>';
-  const sourceHeader = isMdd ? '' : '<th>Source Diff</th>';
+  const sourceHeader = isMdd ? '' : '<th>IN Diff</th><th>IN Accum</th>';
   $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Вес</th>${sourceHeader}<th>OUT Diff</th><th>OUT Accum</th><th>OUT HWM</th><th>OUT DD</th><th>OUT MDD</th></tr></thead><tbody>${rows.map((r) => {
     const indicatorCells = isMdd
       ? `<td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.source_accum)}</td><td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${fmtMaybePct(r.local_accum)}</td><td>${formatMddTpState(r.tp_state)}</td>`
       : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
     const signal = isMdd ? formatMddSignal(r.signal) : (r.signal || '-');
     const execution = isMdd ? formatMddExecution(r.execution) : (r.execution || '-');
-    const sourceCells = isMdd ? '' : `<td>${fmtPct(r.source_diff)}</td>`;
+    const sourceCells = isMdd ? '' : `<td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.source_accum)}</td>`;
     return `<tr><td>${r.time}</td>${indicatorCells}<td>${signal}</td><td>${execution}</td><td>${fmtPct(r.position)}</td>${sourceCells}<td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
   }).join('')}</tbody>`;
 }
@@ -843,11 +897,62 @@ function renderCsvPortfolioOptions() {
   select.innerHTML = portfolios.map((p) => `<option value="${p.file}">${p.file}</option>`).join('');
 }
 
+function strategyExportColumnDefs() {
+  if (lastStrategyResult?.type === 'mdd_mean_reversion') {
+    return [
+      { id: 'timestamp', label: 'Дата', key: 'timestamp', required: true },
+      { id: 'in_diff', label: 'IN Diff', value: (row) => row.source_diff },
+      { id: 'in_accum', label: 'IN Accum', value: (row) => row.source_accum },
+      { id: 'in_dd', label: 'IN DD', value: (row) => row.base_dd },
+      { id: 'local_mdd', label: 'Local MDD', key: 'local_mdd' },
+      { id: 'local_accum', label: 'Local Accum', key: 'local_accum' },
+      { id: 'tp_status', label: 'TP статус', value: (row) => formatMddTpState(row.tp_state) },
+      { id: 'signal', label: 'Сигнал', value: (row) => formatMddSignal(row.signal) },
+      { id: 'execution', label: 'Исполнение', value: (row) => formatMddExecution(row.execution) },
+      { id: 'weight', label: 'Вес', key: 'position' },
+      { id: 'out_diff', label: 'OUT Diff', key: 'strategy_diff' },
+      { id: 'out_accum', label: 'OUT Accum', key: 'strategy_accum' },
+      { id: 'out_hwm', label: 'OUT HWM', key: 'strategy_hwm' },
+      { id: 'out_dd', label: 'OUT DD', key: 'strategy_dd' },
+      { id: 'out_mdd', label: 'OUT MDD', key: 'strategy_mdd' }
+    ];
+  }
+  return [
+    { id: 'timestamp', label: 'Дата', key: 'timestamp', required: true },
+    { id: 'rsi', label: 'RSI', key: 'rsi' },
+    { id: 'signal', label: 'Сигнал', key: 'signal' },
+    { id: 'execution', label: 'Исполнение', key: 'execution' },
+    { id: 'weight', label: 'Вес', key: 'position' },
+    { id: 'in_diff', label: 'IN Diff', value: (row) => row.source_diff },
+    { id: 'in_accum', label: 'IN Accum', value: (row) => row.source_accum },
+    { id: 'out_diff', label: 'OUT Diff', key: 'strategy_diff' },
+    { id: 'out_accum', label: 'OUT Accum', key: 'strategy_accum' },
+    { id: 'out_hwm', label: 'OUT HWM', key: 'strategy_hwm' },
+    { id: 'out_dd', label: 'OUT DD', key: 'strategy_dd' },
+    { id: 'out_mdd', label: 'OUT MDD', key: 'strategy_mdd' }
+  ];
+}
+
+function currentExportColumnDefs() {
+  return $('#csvExportSource')?.value === 'strategy_result' ? strategyExportColumnDefs() : BASE_EXPORT_COLUMNS;
+}
+
+function renderCsvExportColumns() {
+  const el = $('#csvExportColumns');
+  if (!el) return;
+  el.innerHTML = currentExportColumnDefs().map((def) => `<label class="switch-line"><input type="checkbox" data-export-column="${def.id}" ${def.required ? 'checked disabled' : 'checked'} /> ${def.label}</label>`).join('');
+}
+
+function selectedExportColumnDefs() {
+  return currentExportColumnDefs().filter((def) => def.required || $(`[data-export-column="${def.id}"]`)?.checked);
+}
+
 function selectedExportColumns() {
-  return EXPORT_COLUMNS.filter((column) => column === 'timestamp' || $(`[data-export-column="${column}"]`)?.checked);
+  return selectedExportColumnDefs().map((def) => def.id);
 }
 
 function updateCsvExportPopupState() {
+  renderCsvExportColumns();
   const source = $('#csvExportSource').value;
   const portfolioMode = source === 'portfolio';
   $('#csvPortfolioLabel').classList.toggle('hidden', !portfolioMode);
@@ -874,7 +979,8 @@ function closeCsvExportPopup() {
 
 async function exportCsv() {
   const source = $('#csvExportSource').value;
-  const columns = selectedExportColumns();
+  const columnDefs = selectedExportColumnDefs();
+  const columns = columnDefs.map((def) => def.id);
   if (!columns.includes('timestamp')) columns.unshift('timestamp');
 
   if (source === 'portfolio') {
@@ -900,7 +1006,8 @@ async function exportCsv() {
 
   if (source === 'strategy_result') {
     if (!lastStrategyResult?.rows?.length) return alert('Сначала рассчитайте торговую стратегию');
-    downloadCsv(exportFileName('strategy_result', columns), rowsToCsv(lastStrategyResult.rows, columns, 'strategy_'));
+    const display = resultForDisplay(lastStrategyResult, $('#strategyDisplayTimeframe').value, 'strategy_');
+    downloadCsv(exportFileName('strategy_result', columns), rowsToCsvByDefs(display.rows, columnDefs));
     closeCsvExportPopup();
   }
 }
@@ -936,6 +1043,8 @@ $('#presets').addEventListener('click', (event) => {
 });
 $('#tradingStrategies').addEventListener('click', (event) => {
   const name = event.target.dataset.deleteTradingStrategy;
+  const applyName = event.target.dataset.applyTradingStrategy;
+  if (applyName) applyTradingStrategyConfig(tradingStrategyByName(applyName));
   if (name) deleteTradingStrategy(name).catch((err) => alert(err.message));
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
@@ -1050,7 +1159,7 @@ const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
 if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
 $('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
-[-10, -20, -30, -40, -50].forEach((dd, index) => addMddLevel(dd, (index + 1) * 10));
+resetMddLevels();
 syncStrategyTypeUi();
 $('#tradingStrategyName').value = defaultStrategyName();
 refreshAll().then(() => updateStrategyCalculateAvailability()).catch((err) => alert(err.message));

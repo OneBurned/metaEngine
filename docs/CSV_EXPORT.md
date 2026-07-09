@@ -76,3 +76,22 @@ Export tests should verify:
 - timestamp/date is always included;
 - the client builds selected columns;
 - the backend uses `columns` instead of fixed `format` / `exportFormat` presets.
+
+
+## Current strategy result export
+
+The current trading strategy result uses dynamic columns matching the currently calculated strategy table.
+
+For RSI, the export columns are:
+
+```text
+timestamp,rsi,signal,execution,weight,in_diff,in_accum,out_diff,out_accum,out_hwm,out_dd,out_mdd
+```
+
+For MDD Mean Reversion, the export columns are:
+
+```text
+timestamp,in_diff,in_accum,in_dd,local_mdd,local_accum,tp_status,signal,execution,weight,out_diff,out_accum,out_hwm,out_dd,out_mdd
+```
+
+Saved strategy configs are not CSV result series. To export strategy rows, first calculate the strategy and then choose **Текущий результат стратегии** in the CSV export popup.

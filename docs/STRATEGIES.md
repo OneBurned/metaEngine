@@ -25,6 +25,26 @@ strategies/mddMeanReversion.js   MDD Mean Reversion implementation
 
 The server should call the strategy registry instead of importing one concrete strategy directly. This keeps the backend ready for future strategy types.
 
+## Detailed strategy docs
+
+Detailed per-strategy docs live in:
+
+```text
+docs/strategies/RSI.md
+docs/strategies/MDD_MEAN_REVERSION.md
+```
+
+This overview keeps shared rules, module locations, and cross-strategy UX conventions.
+
+## Shared strategy table and export convention
+
+Strategy tables and current-strategy CSV export use the same IN/OUT naming rule:
+
+- `IN ...` columns are input values from the base portfolio/preset calculation;
+- `OUT ...` columns are output values produced by the trading strategy.
+
+Saved strategies are configuration presets, not calculated result series. The saved-strategy list has a **Применить** action that loads the saved config back into block **5. Стратегии**. CSV export for strategies exports the **current calculated strategy result table**, not saved JSON configs.
+
 ## RSI strategy rules
 
 The first trading strategy is RSI:

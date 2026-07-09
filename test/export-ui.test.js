@@ -6,28 +6,28 @@ const html = fs.readFileSync('public/index.html', 'utf8');
 const app = fs.readFileSync('public/app.js', 'utf8');
 const server = fs.readFileSync('server.js', 'utf8');
 
-test('CSV export popup exists with source selector and column toggles', () => {
+test('CSV export popup exists with source selector and dynamic column container', () => {
   assert.match(html, /id="openCsvExport"[^>]*>Экспорт CSV/);
   assert.match(html, /id="csvExportPopup"/);
   assert.match(html, /id="csvExportSource"/);
   assert.match(html, /value="portfolio"/);
   assert.match(html, /value="base_result"/);
   assert.match(html, /value="strategy_result"/);
-
-  for (const column of ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd']) {
-    assert.match(html, new RegExp(`data-export-column="${column}"`));
-  }
+  assert.match(html, /id="csvExportColumns"/);
+  assert.match(app, /function renderCsvExportColumns\(\)/);
 });
 
 test('CSV export date column is always enabled in selected columns', () => {
-  assert.match(html, /data-export-column="timestamp" checked disabled/);
-  assert.match(app, /function selectedExportColumns\(\)/);
-  assert.match(app, /column === 'timestamp'/);
+  assert.match(app, /required: true/);
+  assert.match(app, /data-export-column="\$\{def.id\}"/);
+  assert.match(app, /def.required \? 'checked disabled'/);
 });
 
 test('client CSV export builds selected columns without fixed export formats', () => {
-  assert.match(app, /const EXPORT_COLUMNS = \['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'\]/);
-  assert.match(app, /selectedExportColumns\(\)/);
+  assert.match(app, /const BASE_EXPORT_COLUMNS = \[/);
+  assert.match(app, /selectedExportColumnDefs\(\)/);
+  assert.match(app, /function rowsToCsvByDefs\(rows, defs\)/);
+  assert.match(app, /rowsToCsvByDefs\(display\.rows, columnDefs\)/);
   assert.match(app, /columns\.join\(','\)/);
   assert.doesNotMatch(app, /exportFormat/);
   assert.doesNotMatch(html, /exportFormat/);
@@ -111,4 +111,20 @@ test('MDD Mean Reversion strategy UI has type option, grid controls and indicato
   assert.match(app, /Ждем TP/);
   assert.match(fs.readFileSync('public/styles.css', 'utf8'), /grid-template-columns: repeat\(5/);
   assert.match(fs.readFileSync('public/styles.css', 'utf8'), /Точка /);
+});
+
+
+test('saved strategy settings can be applied back into the strategy form', () => {
+  assert.match(html, /Сохранить настройки/);
+  assert.match(app, /data-apply-trading-strategy/);
+  assert.match(app, /function applyTradingStrategyConfig\(strategy\)/);
+  assert.match(app, /resetMddLevels\(strategy\.levels/);
+});
+
+test('strategy CSV export exposes current strategy table columns', () => {
+  assert.match(app, /function strategyExportColumnDefs\(\)/);
+  assert.match(app, /id: 'in_diff', label: 'IN Diff'/);
+  assert.match(app, /id: 'in_accum', label: 'IN Accum'/);
+  assert.match(app, /id: 'out_mdd', label: 'OUT MDD'/);
+  assert.match(app, /tp_status/);
 });

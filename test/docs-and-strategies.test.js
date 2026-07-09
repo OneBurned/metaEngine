@@ -49,3 +49,18 @@ test('AGENTS requires concrete terminal and browser check instructions after cha
   assert.match(agents, /команды для терминала/);
   assert.match(agents, /ручных сценариев/);
 });
+
+test('strategy docs include per-strategy files and IN OUT table convention', () => {
+  assert.equal(fs.existsSync('docs/strategies/RSI.md'), true);
+  assert.equal(fs.existsSync('docs/strategies/MDD_MEAN_REVERSION.md'), true);
+  const overview = fs.readFileSync('docs/STRATEGIES.md', 'utf8');
+  const rsi = fs.readFileSync('docs/strategies/RSI.md', 'utf8');
+  const mdd = fs.readFileSync('docs/strategies/MDD_MEAN_REVERSION.md', 'utf8');
+  assert.match(overview, /IN \.\.\./);
+  assert.match(overview, /OUT \.\.\./);
+  assert.match(overview, /Применить/);
+  assert.match(rsi, /IN Diff/);
+  assert.match(rsi, /OUT MDD/);
+  assert.match(mdd, /Local Accum/);
+  assert.match(mdd, /tp_status/);
+});
