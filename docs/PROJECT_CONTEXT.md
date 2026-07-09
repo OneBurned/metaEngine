@@ -715,7 +715,9 @@ The UI must use “Портфолио” for uploaded CSV return series.
 
 The word “Стратегии” is reserved for trading rules applied on top of the already selected and calculated portfolio/preset from the calculation block.
 
-Current first trading strategy:
+Current trading strategies include RSI and MDD Mean Reversion.
+
+RSI:
 
 - type: RSI;
 - RSI source: equity curve `1 + accum`;
@@ -730,10 +732,24 @@ The strategy block is hidden by default and appears only after the user enables 
 
 Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the strategy calculation button is disabled until block “3. Расчет” has a current base result, the disabled button explains why via tooltip, and the button shows animated “Рассчитывается...” text while the strategy is running. Timeframe handling is split: blocks 3 and 5 choose **ТФ для расчета**, while blocks 4 and 6 choose **ТФ для отображения** for summary/chart/table aggregation. Display and strategy calculation timeframes can only stay on the same timeframe or move to a larger one; MetaEngine never silently creates smaller timeframe data.
 
+MDD Mean Reversion:
+
+- type: `mdd_mean_reversion`;
+- calculates local MDD for the current drawdown cycle and resets it when base DD returns to `0`;
+- default grid: `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`;
+- grid weights are target total weights, can exceed `100%`, and cannot be negative;
+- all weight changes execute on the next point;
+- after DD recovers to `0`, TP waits for base-asset movement after recovery; `TP 1%` with `10%` weight adds about `0.1%` during the TP leg;
+- the MDD result table includes `Local Accum`, which starts at `0%` on DD recovery and makes the TP trigger visible when it reaches the configured TP;
+- `TP 0%` closes after recovery from the next point;
+- if DD returns below `0` before TP, TP waiting is cancelled and grid logic resumes.
+
+Strategy tables and current-strategy CSV export follow the IN/OUT table convention: `IN ...` columns are input values from the base calculation, while `OUT ...` columns are the strategy result. Saved strategy configs can be applied back into block 5 with **Применить**; CSV exports the current calculated strategy result table, not saved JSON configs.
+
 Graph layout:
 
 1. base portfolio/preset graph and table;
-2. RSI subgraph with level lines when RSI strategy overlay is enabled;
+2. strategy indicator subgraph: RSI levels for RSI or DD/local MDD/grid levels for MDD Mean Reversion;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
 ## Экспорт CSV
 

@@ -19,10 +19,31 @@ samples/strategies/  User-saved JSON configs for trading strategies
 
 ```text
 strategies/index.js  Strategy registry and dispatcher
-strategies/rsi.js    RSI strategy implementation
+strategies/rsi.js                RSI strategy implementation
+strategies/mddMeanReversion.js   MDD Mean Reversion implementation
 ```
 
 The server should call the strategy registry instead of importing one concrete strategy directly. This keeps the backend ready for future strategy types.
+
+## Detailed strategy docs
+
+Detailed per-strategy docs live in:
+
+```text
+docs/strategies/RSI.md
+docs/strategies/MDD_MEAN_REVERSION.md
+```
+
+This overview keeps shared rules, module locations, and cross-strategy UX conventions.
+
+## Shared strategy table and export convention
+
+Strategy tables and current-strategy CSV export use the same IN/OUT naming rule:
+
+- `IN ...` columns are input values from the base portfolio/preset calculation;
+- `OUT ...` columns are output values produced by the trading strategy.
+
+Saved strategies are configuration presets, not calculated result series. The saved-strategy list has a **Применить** action that loads the saved config back into block **5. Стратегии**. CSV export for strategies exports the **current calculated strategy result table**, not saved JSON configs.
 
 ## RSI strategy rules
 
@@ -50,6 +71,39 @@ RSI strategy rows should distinguish:
 - `position` — current long-only position after execution;
 - `source_diff` / `source_accum` — source calculation values;
 - `strategy_diff`, `strategy_accum`, `strategy_hwm`, `strategy_dd`, `strategy_mdd` — strategy result series.
+
+## MDD Mean Reversion strategy rules
+
+The second trading strategy is MDD Mean Reversion:
+
+- type: `mdd_mean_reversion`;
+- source: already calculated base portfolio/preset rows;
+- it uses standard base equity metrics (`equity = 1 + accum`, HWM, DD) and adds a **local MDD** for the current drawdown cycle;
+- local MDD resets to `0` every time base DD returns to `0`;
+- default grid has five levels: `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`;
+- grid weights are target total position weights, not incremental buys;
+- weights may be greater than `100%` for leverage, but cannot be negative;
+- if one point gaps through multiple levels, the deepest crossed level wins immediately;
+- every weight change is executed on the next point, not the signal point;
+- after DD returns to `0` while a position is open, the strategy waits for TP;
+- TP is defined as base asset movement after recovery, so `TP 1%` with `10%` weight adds roughly `0.1%` to strategy equity during the TP leg;
+- `TP 0%` closes after recovery, still from the next point;
+- if the base series returns to DD `< 0` before TP, TP waiting is cancelled and the MDD grid becomes active again.
+
+MDD strategy rows should distinguish:
+
+- `base_equity` — current source equity;
+- `base_dd` — current source DD;
+- `local_mdd` — local MDD of the current drawdown cycle;
+- `local_accum` — source equity growth from the TP-start point after DD has recovered to `0`; this is the visible value that reaches TP, for example `Local Accum >= 1%` triggers `TP` when TP is `1%`;
+- `signal` — target-weight or TP-close signal on the current point;
+- `execution` — weight change executed on the current point;
+- `position` — current target weight after execution;
+- `tp_state` — waiting / hit / cancelled state for the TP automaton;
+- `source_diff` / `source_accum` — source calculation values;
+- `strategy_diff`, `strategy_accum`, `strategy_hwm`, `strategy_dd`, `strategy_mdd` — strategy result series.
+
+For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table input columns are shown first (`IN Diff`, `IN Accum`, `IN DD`), then local MDD/TP fields and output strategy columns (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). User-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
 
 ## Adding future strategies
 

@@ -64,3 +64,17 @@ th { background: #f7f9fc; position: sticky; top: 0; }
 @media (max-width: 1100px) { .preset-row { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
 @media (max-width: 900px) { .strategy-form { grid-template-columns: repeat(2, minmax(220px, 1fr)); } .strategy-form label:nth-child(n) { grid-column: span 1; } }
 @media (max-width: 640px) { main { padding: 12px; } .preset-row, .grid-form, .strategy-form { grid-template-columns: 1fr; } .date-pair { grid-template-columns: 1fr; } .date-pair .date-open { width: 100%; } }
+.strategy-params { display: contents; }
+.mdd-params { grid-column: 1 / -1; display: grid; grid-template-columns: minmax(160px, 1fr) 4fr; gap: 14px; align-items: start; }
+.mdd-params.hidden { display: none; }
+.mdd-levels-wrap { grid-column: span 1; }
+.mdd-levels-title { font-weight: 700; margin-bottom: 8px; }
+.mdd-level-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px; align-items: end; margin-bottom: 8px; }
+#mddChart { width: 100%; height: 220px; background: #fbfcff; border: 1px solid #e1e6ef; border-radius: 12px; }
+@media (max-width: 900px) { .mdd-params, .mdd-level-row { grid-template-columns: 1fr; } }
+.strategy-params.hidden { display: none; }
+#mddLevels { counter-reset: mdd-level; display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
+.mdd-level-row { counter-increment: mdd-level; grid-template-columns: 1fr; padding: 10px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fbfcff; }
+.mdd-level-row::before { content: "Точка " counter(mdd-level); font-weight: 700; color: #3d4658; }
+@media (max-width: 1100px) { #mddLevels { grid-template-columns: repeat(3, minmax(140px, 1fr)); } }
+@media (max-width: 700px) { #mddLevels { grid-template-columns: 1fr; } }

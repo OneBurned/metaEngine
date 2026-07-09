@@ -269,3 +269,56 @@ test('target selection syncs calculation timeframe from portfolio or preset meta
   assert.ok(server.includes('timeframe: timeframeFromStep(step)'));
   assert.ok(server.includes('function presetSourceStep'));
 });
+
+test('strategy registry exposes the MDD Mean Reversion module', () => {
+  const mdd = getStrategy('mdd_mean_reversion');
+  assert.ok(mdd);
+  assert.equal(mdd.type, 'mdd_mean_reversion');
+  assert.equal(typeof mdd.calculate, 'function');
+});
+
+test('MDD Mean Reversion applies weights next point and closes after TP next point', () => {
+  const grid = Array.from({ length: 8 }, (_, index) => Date.UTC(2024, 0, 1, index, 0));
+  const diffs = [0, -0.12, -0.10, 0.10, 1 / 0.8712 - 1, 0.005, 1.01 / 1.005 - 1, 0.01];
+  const base = { ...calculateFromDiffs(grid, diffs), step: '1h', timeframe: '1h' };
+  const result = calculateTradingStrategy(base, {
+    type: 'mdd_mean_reversion',
+    takeProfit: 0.01,
+    levels: [
+      { drawdown: -0.1, weight: 0.1 },
+      { drawdown: -0.2, weight: 0.2 }
+    ]
+  });
+
+  assert.equal(result.type, 'mdd_mean_reversion');
+  assert.equal(result.rows[1].signal, 'target_weight:0.1');
+  assert.equal(result.rows[1].position, 0);
+  assert.equal(result.rows[1].strategy_diff, 0);
+  assert.equal(result.rows[2].execution, 'weight:0.1');
+  assert.equal(result.rows[2].position, 0.1);
+  assert.equal(Math.round(result.rows[2].strategy_diff * 10000) / 10000, -0.01);
+  assert.equal(result.rows[2].signal, 'target_weight:0.2');
+  assert.equal(result.rows[3].execution, 'weight:0.2');
+  assert.equal(result.rows[4].tp_state, 'waiting');
+  assert.equal(result.rows[4].local_accum, 0);
+  assert.ok(result.rows[6].local_accum >= 0.01);
+  assert.equal(result.rows[6].signal, 'take_profit_close');
+  assert.equal(result.rows[6].position, 0.2);
+  assert.equal(result.rows[7].execution, 'weight:0');
+  assert.equal(result.rows[7].position, 0);
+  assert.equal(result.summary.buyCount, 2);
+  assert.equal(result.summary.sellCount, 1);
+});
+
+test('MDD Mean Reversion validates levels and supports zero TP close next point', () => {
+  const grid = Array.from({ length: 5 }, (_, index) => Date.UTC(2024, 0, 1, index, 0));
+  const base = { ...calculateFromDiffs(grid, [0, -0.12, 0.1, 1 / 0.968 - 1, 0.01]), step: '1h', timeframe: '1h' };
+  assert.throws(() => calculateTradingStrategy(base, { type: 'mdd_mean_reversion', levels: [{ drawdown: 0.1, weight: 0.1 }] }), /отрицательным/);
+  assert.throws(() => calculateTradingStrategy(base, { type: 'mdd_mean_reversion', levels: [{ drawdown: -0.1, weight: -0.1 }] }), /не может быть отрицательным/);
+  const result = calculateTradingStrategy(base, { type: 'mdd_mean_reversion', takeProfit: 0, levels: [{ drawdown: -0.1, weight: 0.1 }] });
+  assert.equal(result.rows[1].signal, 'target_weight:0.1');
+  assert.equal(result.rows[3].signal, 'take_profit_close');
+  assert.equal(result.rows[3].local_accum, 0);
+  assert.equal(result.rows[3].position, 0.1);
+  assert.equal(result.rows[4].position, 0);
+});
