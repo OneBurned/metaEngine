@@ -105,7 +105,7 @@ function forceZeroMinutes(input) {
 function defaultStrategyName() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  return `rsi_${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}_${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+  return `${$('#tradingStrategyType')?.value === 'mdd_mean_reversion' ? 'mdd' : 'rsi'}_${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}_${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
 }
 
 async function api(url, options = {}) {
@@ -169,9 +169,17 @@ function renderTradingStrategies() {
     <tr>
       <td><strong>${s.name}</strong></td>
       <td>${s.type}</td>
-      <td>RSI ${s.rsiPeriod}, buy ${s.buyLevel}, sell ${s.sellLevel}</td>
+      <td>${strategyParamsText(s)}</td>
       <td><button class="danger" data-delete-trading-strategy="${s.name}">Удалить</button></td>
     </tr>`).join('')}</tbody></table>`;
+}
+
+function strategyParamsText(strategy) {
+  if (strategy.type === 'mdd_mean_reversion') {
+    const levels = (strategy.levels ?? []).map((level) => `${fmtPct(level.drawdown)} → ${fmtPct(level.weight)}`).join(', ');
+    return `TP ${fmtPct(strategy.takeProfit ?? 0)}; ${levels}`;
+  }
+  return `RSI ${strategy.rsiPeriod}, buy ${strategy.buyLevel}, sell ${strategy.sellLevel}`;
 }
 
 function portfolioOptions(selected = '') {
@@ -450,6 +458,7 @@ async function calculate() {
   $('#strategyResultCard').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
   $('#rsiPanel').classList.add('hidden');
+  $('#mddPanel').classList.add('hidden');
   if (result.warnings?.length) {
     pendingResult = result;
     showWarning(result);
@@ -570,6 +579,7 @@ function showResult(result, options = {}) {
   </tbody></table>`;
   renderChart();
   renderRsiChart();
+  renderMddChart();
   renderResultTable(display.rows);
   updateStrategyCalculateAvailability();
 }
@@ -636,19 +646,76 @@ function renderRsiChart() {
   svg.innerHTML = `${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${levelLine(cfg.baseline, '#687386', cfg.baseline)}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
 }
 
+
+
+function renderMddChart() {
+  const overlayEnabled = $('[data-strategy-overlay]')?.checked;
+  if (lastStrategyResult?.type !== 'mdd_mean_reversion' || !lastStrategyResult?.mdd?.length || !overlayEnabled) {
+    $('#mddPanel')?.classList.add('hidden');
+    return;
+  }
+  $('#mddPanel').classList.remove('hidden');
+  const svg = $('#mddChart');
+  const width = 900, height = 220, pad = 36;
+  const rows = lastStrategyResult.mdd;
+  const levels = lastStrategyResult.config?.levels ?? [];
+  const values = rows.flatMap((row) => [row.dd, row.localMdd]).concat(levels.map((level) => level.drawdown), [0]);
+  const min = Math.min(...values);
+  const max = Math.max(...values, 0);
+  const span = max - min || 1;
+  const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
+  const y = (v) => height - pad - ((v - min) / span) * (height - pad * 2);
+  const line = (key, color, label) => `<polyline fill="none" stroke="${color}" stroke-width="2" points="${rows.map((row, i) => `${x(i).toFixed(2)},${y(row[key] ?? 0).toFixed(2)}`).join(' ')}"/><text x="${width - pad + 4}" y="${y(rows.at(-1)[key] ?? 0).toFixed(2)}" fill="${color}" font-size="12">${label}</text>`;
+  const levelLines = levels.map((level) => `<line x1="${pad}" x2="${width - pad}" y1="${y(level.drawdown)}" y2="${y(level.drawdown)}" stroke="#9aa4b2" stroke-dasharray="6 5"/><text x="8" y="${y(level.drawdown) + 4}" font-size="12" fill="#687386">${fmtPct(level.drawdown)}</text>`).join('');
+  svg.innerHTML = `<line x1="${pad}" x2="${width - pad}" y1="${y(0)}" y2="${y(0)}" stroke="#cfd6e3"/>${levelLines}${line('dd', '#e28a00', 'DD')}${line('localMdd', '#cf3341', 'local MDD')}`;
+}
+
+function addMddLevel(drawdownPercent = -10, weightPercent = 10) {
+  const template = $('#mddLevelTemplate').content.cloneNode(true);
+  const row = template.querySelector('.mdd-level-row');
+  row.querySelector('.mdd-level-drawdown').value = drawdownPercent;
+  row.querySelector('.mdd-level-weight').value = weightPercent;
+  row.querySelector('.remove-mdd-level').addEventListener('click', () => row.remove());
+  $('#mddLevels').appendChild(template);
+}
+
+function collectMddLevels() {
+  return $$('#mddLevels .mdd-level-row').map((row) => ({
+    drawdown: Number(row.querySelector('.mdd-level-drawdown').value) / 100,
+    weight: Number(row.querySelector('.mdd-level-weight').value) / 100
+  }));
+}
+
+function syncStrategyTypeUi() {
+  const type = $('#tradingStrategyType').value;
+  $$('.rsi-params').forEach((el) => el.classList.toggle('hidden', type !== 'rsi'));
+  $$('.mdd-params').forEach((el) => el.classList.toggle('hidden', type !== 'mdd_mean_reversion'));
+  if (!$('#tradingStrategyName').value || /^rsi_|^mdd_/.test($('#tradingStrategyName').value)) $('#tradingStrategyName').value = defaultStrategyName();
+}
+
 function collectStrategyBody() {
-  return {
+  const common = {
     name: $('#tradingStrategyName').value || defaultStrategyName(),
     type: $('#tradingStrategyType').value,
+    periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
+    periodTo: normalizeDateInput($('#strategyPeriodTo').value),
+    timeframe: $('#strategyTimeframe').value
+  };
+  if (common.type === 'mdd_mean_reversion') {
+    return {
+      ...common,
+      takeProfit: Number($('#mddTakeProfit').value) / 100,
+      levels: collectMddLevels()
+    };
+  }
+  return {
+    ...common,
     rsiPeriod: $('#rsiPeriod').value,
     upperLevel: $('#rsiUpper').value,
     lowerLevel: $('#rsiLower').value,
     baseline: $('#rsiBaseline').value,
     buyLevel: $('#buyLevel').value,
-    sellLevel: $('#sellLevel').value,
-    periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
-    periodTo: normalizeDateInput($('#strategyPeriodTo').value),
-    timeframe: $('#strategyTimeframe').value
+    sellLevel: $('#sellLevel').value
   };
 }
 
@@ -693,7 +760,7 @@ async function calculateTradingStrategy() {
 function showStrategyResult(result, name, options = {}) {
   $('#strategyResultCard').classList.remove('hidden');
   $('#strategyOverlayToggle').classList.remove('hidden');
-  $('#strategyOverlayName').textContent = name || 'RSI';
+  $('#strategyOverlayName').textContent = result.type === 'mdd_mean_reversion' ? 'MDD' : (name || 'RSI');
   const calculationTimeframe = result.step ?? result.timeframe ?? '1h';
   syncTimeframeOptions($('#strategyDisplayTimeframe'), calculationTimeframe);
   if (options.resetDisplayTimeframe) resetSelectValue($('#strategyDisplayTimeframe'), calculationTimeframe);
@@ -711,6 +778,7 @@ function showStrategyResult(result, name, options = {}) {
     <tr><th>Продаж</th><td>${result.summary.sellCount}</td></tr>
   </tbody></table>`;
   renderRsiChart();
+  renderMddChart();
   renderStrategyChart();
   renderStrategyTable(display.rows);
 }
@@ -728,8 +796,12 @@ function renderStrategyChart() {
 }
 
 function renderStrategyTable(rows) {
-  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Исполнение</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
-    <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
+  const isMdd = lastStrategyResult?.type === 'mdd_mean_reversion';
+  const indicatorHeaders = isMdd ? '<th>DD</th><th>Local MDD</th><th>TP</th>' : '<th>RSI</th>';
+  $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th>${indicatorHeaders}<th>Сигнал</th><th>Исполнение</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => {
+    const indicatorCells = isMdd ? `<td>${fmtPct(r.base_dd)}</td><td>${fmtPct(r.local_mdd)}</td><td>${r.tp_state || '-'}</td>` : `<td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td>`;
+    return `<tr><td>${r.time}</td>${indicatorCells}<td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${fmtPct(r.position)}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`;
+  }).join('')}</tbody>`;
 }
 
 function renderCsvPortfolioOptions() {
@@ -845,6 +917,8 @@ $('#displayTimeframe').addEventListener('change', () => {
 });
 $('#chartMode').addEventListener('change', () => { applyChartModeSideEffects($('#chartMode').value); renderChart(); });
 $('#strategyTimeframe').addEventListener('change', () => updateStrategyCalculateAvailability(true));
+$('#tradingStrategyType').addEventListener('change', syncStrategyTypeUi);
+$('#addMddLevel').addEventListener('click', () => addMddLevel(-10, 10));
 $('#strategyDisplayTimeframe').addEventListener('change', () => {
   if (lastStrategyResult) rerenderWithStatus('#strategyDisplayRecalcStatus', () => showStrategyResult(lastStrategyResult, lastStrategyConfig?.name));
 });
@@ -871,7 +945,7 @@ $('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
 $('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));
 $('#csvExportCancel').addEventListener('click', closeCsvExportPopup);
 $('#csvExportPopup').addEventListener('click', (event) => { if (event.target.id === 'csvExportPopup') closeCsvExportPopup(); });
-$$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderStrategyChart(); }));
+$$('.toggles input').forEach((input) => input.addEventListener('change', () => { renderChart(); renderRsiChart(); renderMddChart(); renderStrategyChart(); }));
 let activeDateInput = null;
 
 function fillDatePickerOptions() {
@@ -936,12 +1010,14 @@ document.addEventListener('change', (event) => {
     }
   }
 });
-$('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
+$('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); renderMddChart(); });
 $('#strategyToggles').addEventListener('change', renderStrategyChart);
 
 const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
 if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
 $('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
+[-10, -20, -30, -40, -50].forEach((dd, index) => addMddLevel(dd, (index + 1) * 10));
+syncStrategyTypeUi();
 $('#tradingStrategyName').value = defaultStrategyName();
 refreshAll().then(() => updateStrategyCalculateAvailability()).catch((err) => alert(err.message));

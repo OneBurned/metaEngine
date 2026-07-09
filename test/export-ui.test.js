@@ -93,3 +93,12 @@ test('strategy loading does not clear its own disabled state before request star
   assert.match(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*const readiness = strategyReadinessMessage\\(\\)"));
   assert.doesNotMatch(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*if \\(!updateStrategyCalculateAvailability\\(true\\)\\) return;"));
 });
+
+test('MDD Mean Reversion strategy UI has type option, grid controls and indicator chart', () => {
+  assert.match(html, /value="mdd_mean_reversion"/);
+  assert.match(html, /id="mddTakeProfit"/);
+  assert.match(html, /id="mddLevels"/);
+  assert.match(html, /id="mddChart"/);
+  assert.match(app, /function renderMddChart\(\)/);
+  assert.match(app, /collectMddLevels/);
+});

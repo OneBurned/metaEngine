@@ -1,7 +1,9 @@
 const rsi = require('./rsi');
+const mddMeanReversion = require('./mddMeanReversion');
 
 const registry = {
-  rsi
+  rsi,
+  mdd_mean_reversion: mddMeanReversion
 };
 
 function getStrategy(type) {

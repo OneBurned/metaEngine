@@ -251,22 +251,48 @@ async function calculateTarget(body) {
   throw new Error('Выберите портфолио или пресет');
 }
 
+function normalizeMddLevels(levels) {
+  const source = Array.isArray(levels) && levels.length ? levels : [
+    { drawdown: -0.10, weight: 0.10 },
+    { drawdown: -0.20, weight: 0.20 },
+    { drawdown: -0.30, weight: 0.30 },
+    { drawdown: -0.40, weight: 0.40 },
+    { drawdown: -0.50, weight: 0.50 }
+  ];
+  return source.map((level) => ({
+    drawdown: Number(level.drawdown),
+    weight: Number(level.weight)
+  }));
+}
+
 function normalizeTradingStrategy(body) {
   const name = safeName(body.name || defaultStrategyName(), '.json').replace(/\.json$/i, '');
+  const type = body.type === 'mdd_mean_reversion' ? 'mdd_mean_reversion' : 'rsi';
   const strategy = {
     name,
-    type: 'rsi',
+    type,
     created_at: body.created_at || new Date().toISOString(),
+    periodFrom: body.periodFrom,
+    periodTo: body.periodTo
+  };
+
+  if (type === 'mdd_mean_reversion') {
+    return {
+      ...strategy,
+      takeProfit: Number(body.takeProfit ?? 0.01),
+      levels: normalizeMddLevels(body.levels)
+    };
+  }
+
+  return {
+    ...strategy,
     rsiPeriod: Number(body.rsiPeriod ?? 14),
     upperLevel: Number(body.upperLevel ?? 70),
     lowerLevel: Number(body.lowerLevel ?? 30),
     baseline: Number(body.baseline ?? 50),
     buyLevel: Number(body.buyLevel ?? 30),
-    sellLevel: Number(body.sellLevel ?? 70),
-    periodFrom: body.periodFrom,
-    periodTo: body.periodTo
+    sellLevel: Number(body.sellLevel ?? 70)
   };
-  return strategy;
 }
 
 async function handleApi(req, res) {
