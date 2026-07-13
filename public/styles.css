@@ -40,6 +40,7 @@ button:hover { filter: brightness(.96); }
 .optimizer-panel { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e7ebf2; }
 .optimizer-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 12px; align-items: end; }
 .optimizer-grid button { grid-column: span 2; align-self: end; }
+.optimizer-progress { margin-top: 12px; padding: 12px; border: 1px solid #d7deea; border-radius: 12px; background: #fbfcff; color: #34405a; line-height: 1.55; }
 .date-pair { display: grid; grid-template-columns: minmax(180px, 1fr) 42px; gap: 8px; align-items: center; }
 .date-pair .date-open { width: 42px; min-width: 42px; padding: 0; background: #eef2ff; color: #315efb; font-size: 18px; line-height: 1; }
 .date-popup { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(23, 32, 51, .35); }

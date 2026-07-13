@@ -14,7 +14,12 @@ const {
   validatePresetItems,
   formatNumber
 } = require('./lib/calculations');
-const { optimizeRsiStrategy } = require('./lib/optimizer');
+const {
+  createRsiParameterGrid,
+  optimizeRsiStrategy,
+  runRsiOptimizationCase,
+  sortOptimizationRuns
+} = require('./lib/optimizer');
 const tradingStrategies = require('./strategies');
 
 const ROOT = __dirname;
@@ -25,8 +30,10 @@ const TRADING_STRATEGIES_DIR = path.join(SAMPLES_DIR, 'strategies');
 const PRESETS_DIR = path.join(SAMPLES_DIR, 'presets');
 const RUNS_DIR = path.join(SAMPLES_DIR, 'runs');
 const PORT = Number(process.env.PORT || 5173);
+const OPTIMIZER_CHUNK_SIZE = 25;
 
 for (const dir of [PORTFOLIOS_DIR, TRADING_STRATEGIES_DIR, PRESETS_DIR, RUNS_DIR]) fs.mkdirSync(dir, { recursive: true });
+const optimizerJobs = new Map();
 
 const CSV_EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
 
@@ -252,6 +259,82 @@ function normalizeTradingStrategy(body) {
   return strategy;
 }
 
+function publicOptimizerJob(job) {
+  return {
+    jobId: job.jobId,
+    status: job.status,
+    error: job.error,
+    totalRuns: job.totalRuns,
+    completedRuns: job.completedRuns,
+    currentParameters: job.currentParameters,
+    bestRun: job.bestRun,
+    optimization: job.optimization,
+    runId: job.runId
+  };
+}
+
+function trimOptimizerJobs() {
+  const jobs = [...optimizerJobs.values()].sort((a, b) => b.updatedAt - a.updatedAt);
+  for (const job of jobs.slice(20)) optimizerJobs.delete(job.jobId);
+}
+
+function continueOptimizerJob(job) {
+  if (job.status !== 'running') return;
+
+  try {
+    const end = Math.min(job.completedRuns + OPTIMIZER_CHUNK_SIZE, job.grid.length);
+    for (let i = job.completedRuns; i < end; i += 1) {
+      const parameters = job.grid[i];
+      job.currentParameters = parameters;
+      const run = runRsiOptimizationCase(job.baseResult, job.strategy, parameters, tradingStrategies.calculateTradingStrategy);
+      job.runs.push(run);
+      if (!job.bestRun || run.score > job.bestRun.score) job.bestRun = run;
+      job.completedRuns = i + 1;
+    }
+
+    job.updatedAt = Date.now();
+
+    if (job.stopRequested) {
+      finishOptimizerJob(job, 'stopped');
+      return;
+    }
+
+    if (job.completedRuns < job.grid.length) {
+      setImmediate(() => continueOptimizerJob(job));
+      return;
+    }
+
+    finishOptimizerJob(job, 'done');
+  } catch (err) {
+    job.status = 'error';
+    job.error = err.message;
+    job.updatedAt = Date.now();
+  }
+}
+
+function finishOptimizerJob(job, status) {
+  sortOptimizationRuns(job.runs);
+  const maxResults = Number(job.maxResults ?? 100);
+  job.optimization = {
+    type: 'rsi',
+    metric: 'recovery',
+    totalRuns: job.grid.length,
+    completedRuns: job.completedRuns,
+    returnedRuns: Math.min(job.runs.length, maxResults),
+    stopped: status === 'stopped',
+    runs: job.runs.slice(0, maxResults)
+  };
+  job.status = status;
+  job.runId = crypto.randomUUID();
+  fs.writeFileSync(path.join(RUNS_DIR, `${job.runId}.optimizer.json`), JSON.stringify({
+    runId: job.runId,
+    baseResult: job.baseResult,
+    strategy: job.strategy,
+    optimization: job.optimization
+  }, null, 2), 'utf8');
+  job.updatedAt = Date.now();
+}
+
 async function handleApi(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   try {
@@ -351,6 +434,51 @@ async function handleApi(req, res) {
       const payload = { runId, baseResult, strategy, optimization };
       fs.writeFileSync(path.join(RUNS_DIR, `${runId}.optimizer.json`), JSON.stringify(payload, null, 2), 'utf8');
       return json(res, 200, payload);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/strategies/optimize/start') {
+      const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      const baseResult = await calculateTarget(body);
+      const strategy = normalizeTradingStrategy(body.strategy ?? body);
+      const grid = createRsiParameterGrid(body.ranges, { maxRuns: body.maxRuns });
+      const jobId = crypto.randomUUID();
+      const job = {
+        jobId,
+        status: 'running',
+        error: null,
+        totalRuns: grid.length,
+        completedRuns: 0,
+        currentParameters: null,
+        bestRun: null,
+        optimization: null,
+        baseResult,
+        strategy,
+        grid,
+        runs: [],
+        maxResults: body.maxResults,
+        stopRequested: false,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      };
+      optimizerJobs.set(jobId, job);
+      trimOptimizerJobs();
+      setImmediate(() => continueOptimizerJob(job));
+      return json(res, 202, publicOptimizerJob(job));
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/strategies/optimize/status') {
+      const jobId = url.searchParams.get('jobId');
+      const job = optimizerJobs.get(jobId);
+      if (!job) return error(res, 404, 'Задача оптимизации не найдена');
+      return json(res, 200, publicOptimizerJob(job));
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/strategies/optimize/stop') {
+      const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      const job = optimizerJobs.get(body.jobId);
+      if (!job) return error(res, 404, 'Задача оптимизации не найдена');
+      if (job.status === 'running') job.stopRequested = true;
+      return json(res, 200, publicOptimizerJob(job));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/strategies') {

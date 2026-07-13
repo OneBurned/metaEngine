@@ -7,6 +7,8 @@ let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
 let lastOptimizationResult = null;
+let activeOptimizationJobId = null;
+let optimizationPollTimer = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -353,7 +355,7 @@ function updateStrategyCalculateAvailability(showMessage = false) {
   button.disabled = !ready;
   button.title = message;
   if (optimizeButton) {
-    optimizeButton.disabled = !ready;
+    optimizeButton.disabled = !ready || !!activeOptimizationJobId;
     optimizeButton.title = message;
   }
   if (ready) {
@@ -362,6 +364,12 @@ function updateStrategyCalculateAvailability(showMessage = false) {
     showStrategyMessage(message, 'strategy-readiness');
   }
   return ready;
+}
+
+function setOptimizationRunning(isRunning) {
+  $('#optimizeTradingStrategy').disabled = isRunning || !updateStrategyCalculateAvailability();
+  $('#stopOptimization').classList.toggle('hidden', !isRunning);
+  $('#stopOptimization').disabled = false;
 }
 
 async function withLoadingButton(button, loadingText, action) {
@@ -396,8 +404,12 @@ async function calculate() {
   result.calculationKey = currentKey;
   lastStrategyResult = null;
   lastOptimizationResult = null;
+  activeOptimizationJobId = null;
+  clearOptimizationPoll();
   $('#strategyResultCard').classList.add('hidden');
   $('#optimizationResultCard').classList.add('hidden');
+  $('#optimizationProgress').classList.add('hidden');
+  $('#stopOptimization').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
   $('#rsiPanel').classList.add('hidden');
   if (result.warnings?.length) {
@@ -541,6 +553,50 @@ function collectOptimizationBody() {
   };
 }
 
+function formatRunLine(run) {
+  if (!run) return '-';
+  return `score ${Number(run.score).toFixed(6)}, accum ${fmtPct(run.summary.finalAccum)}, MDD ${fmtPct(run.summary.maxDrawdown)}`;
+}
+
+function showOptimizationProgress(job) {
+  const box = $('#optimizationProgress');
+  box.classList.remove('hidden');
+  const current = job.currentParameters
+    ? `RSI ${job.currentParameters.rsiPeriod}, buy ${job.currentParameters.buyLevel}, sell ${job.currentParameters.sellLevel}`
+    : '-';
+  const statusLabel = job.status === 'stopped' ? 'Остановлено' : job.status === 'done' ? 'Готово' : job.status === 'error' ? 'Ошибка' : 'Оптимизация';
+  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Текущий набор: ${current}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
+}
+
+function clearOptimizationPoll() {
+  if (optimizationPollTimer) clearTimeout(optimizationPollTimer);
+  optimizationPollTimer = null;
+}
+
+async function pollOptimizationStatus(jobId) {
+  const job = await api(`/api/strategies/optimize/status?jobId=${encodeURIComponent(jobId)}`);
+  showOptimizationProgress(job);
+
+  if (job.status === 'running') {
+    optimizationPollTimer = setTimeout(() => pollOptimizationStatus(jobId).catch((err) => showStrategyMessage(err.message, 'optimizer-error')), 350);
+    return;
+  }
+
+  clearOptimizationPoll();
+  activeOptimizationJobId = null;
+  setOptimizationRunning(false);
+
+  if (job.status === 'error') {
+    showStrategyMessage(job.error || 'Оптимизация завершилась с ошибкой', 'optimizer-error');
+    return;
+  }
+
+  if (job.optimization) {
+    lastOptimizationResult = job.optimization;
+    showOptimizationResult(job.optimization);
+  }
+}
+
 
 
 async function saveTradingStrategy(overwrite = false) {
@@ -591,16 +647,27 @@ async function optimizeTradingStrategy() {
   const base = baseCalculationBody();
   const strategy = collectStrategyBody();
   const optimizationBody = collectOptimizationBody();
-  const result = await api('/api/strategies/optimize', {
+  const job = await api('/api/strategies/optimize/start', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ ...base, strategy, ...optimizationBody })
   });
-  lastResult = result.baseResult;
-  lastOptimizationResult = result.optimization;
-  showResult(result.baseResult);
-  showOptimizationResult(result.optimization);
+  activeOptimizationJobId = job.jobId;
+  $('#optimizationResultCard').classList.add('hidden');
+  showOptimizationProgress(job);
+  setOptimizationRunning(true);
+  pollOptimizationStatus(job.jobId).catch((err) => showStrategyMessage(err.message, 'optimizer-error'));
   updateStrategyCalculateAvailability();
+}
+
+async function stopOptimization() {
+  if (!activeOptimizationJobId) return;
+  $('#stopOptimization').disabled = true;
+  await api('/api/strategies/optimize/stop', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jobId: activeOptimizationJobId })
+  });
 }
 
 function showStrategyResult(result, name) {
@@ -624,9 +691,12 @@ function showStrategyResult(result, name) {
 
 function showOptimizationResult(result) {
   $('#optimizationResultCard').classList.remove('hidden');
+  const statusRow = result.stopped ? '<tr><th>Статус</th><td>Остановлено пользователем</td></tr>' : '';
   $('#optimizationSummary').innerHTML = `<table><tbody>
+    ${statusRow}
     <tr><th>Метрика</th><td>Recovery</td></tr>
     <tr><th>Всего прогонов</th><td>${result.totalRuns}</td></tr>
+    <tr><th>Выполнено</th><td>${result.completedRuns ?? result.totalRuns}</td></tr>
     <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
   </tbody></table>`;
   $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Score</th><th>Accum</th><th>MDD</th><th>Покупок</th><th>Продаж</th></tr></thead><tbody>${result.runs.map((run, index) => `
@@ -768,7 +838,8 @@ $('#enableStrategies').addEventListener('change', (event) => {
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
-$('#optimizeTradingStrategy').addEventListener('click', () => withLoadingButton($('#optimizeTradingStrategy'), 'Оптимизируется', optimizeTradingStrategy).catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
+$('#optimizeTradingStrategy').addEventListener('click', () => optimizeTradingStrategy().catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
+$('#stopOptimization').addEventListener('click', () => stopOptimization().catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
 $('#openCsvExport').addEventListener('click', openCsvExportPopup);
 $('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
 $('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));

@@ -93,3 +93,20 @@ test('strategy loading does not clear its own disabled state before request star
   assert.match(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*const readiness = strategyReadinessMessage\\(\\)"));
   assert.doesNotMatch(app, new RegExp("async function calculateTradingStrategy\\(\\) \\{\\n\\s*if \\(!updateStrategyCalculateAvailability\\(true\\)\\) return;"));
 });
+
+test('RSI optimizer shows progress and can be stopped', () => {
+  assert.match(html, /id="optimizationProgress"/);
+  assert.match(html, /id="stopOptimization"/);
+  assert.match(app, /pollOptimizationStatus/);
+  assert.match(app, /\/api\/strategies\/optimize\/start/);
+  assert.match(app, /\/api\/strategies\/optimize\/status\?jobId=/);
+  assert.match(app, /\/api\/strategies\/optimize\/stop/);
+  assert.match(app, /completedRuns/);
+  assert.match(app, /currentParameters/);
+  assert.match(app, /bestRun/);
+  assert.match(server, /\/api\/strategies\/optimize\/start/);
+  assert.match(server, /\/api\/strategies\/optimize\/status/);
+  assert.match(server, /\/api\/strategies\/optimize\/stop/);
+  assert.match(server, /stopRequested/);
+  assert.match(server, /finishOptimizerJob\(job, 'stopped'\)/);
+});

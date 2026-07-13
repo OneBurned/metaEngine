@@ -96,6 +96,14 @@ The optimizer returns a ranked table of runs with:
 - buy/sell counts;
 - `score`.
 
+During optimization the UI shows progress:
+
+- completed runs / total runs;
+- current parameter set;
+- best score found so far.
+
+The user can stop optimization. Stop is soft: the backend finishes the current run chunk, does not start new parameter combinations, and returns the ranked table for the completed runs.
+
 The first score is Recovery-style:
 
 ```text

@@ -720,7 +720,9 @@ RSI optimizer:
 - `upperLevel`, `lowerLevel`, and `baseline` are not optimized yet;
 - each run stores parameters, final accum, max drawdown, buy/sell counts, and score;
 - current score is Recovery-style: `finalAccum / abs(maxDrawdown)`;
-- zero max drawdown is handled separately to avoid division by zero.
+- zero max drawdown is handled separately to avoid division by zero;
+- optimizer progress is shown while runs are processed: completed / total, current parameter set, and best score so far;
+- optimization can be stopped softly, after which the UI shows the ranked table for completed runs.
 ## Экспорт CSV
 
 В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.
