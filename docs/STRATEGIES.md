@@ -76,13 +76,12 @@ Rules:
 
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.
 
-The strategy result block shows three chart areas:
+The strategy result block shows two chart areas:
 
-- source portfolio/preset result with its own `diff/accum/hwm/dd/mdd` toggles;
 - RSI chart;
-- trading strategy result with its own `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd` toggles.
+- one comparison chart with source portfolio/preset result and trading strategy result together.
 
-The source chart lets the user compare the original return/drawdown profile with the calculated strategy result. A shared chart-height selector resizes the source, RSI, and strategy-result charts together so details can be inspected more comfortably.
+The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. A shared chart-height selector resizes the comparison chart and RSI chart together so details can be inspected more comfortably.
 
 ## RSI optimizer
 

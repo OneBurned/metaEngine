@@ -535,16 +535,6 @@ function renderStrategyRsiChart() {
   renderRsiSvg($('#strategyRsiChart'), rsiRows);
 }
 
-function renderStrategySourceChart() {
-  const svg = $('#strategySourceChart');
-  if (!lastStrategyResult?.rows?.length) return;
-  const rows = enrichSourceRows(lastStrategyResult.rows);
-  const active = new Set($$('#strategySourceToggles input:checked').map((input) => input.dataset.sourceLine));
-  const keys = ['source_diff', 'source_accum', 'source_hwm', 'source_dd', 'source_mdd'].filter((key) => active.has(key));
-  const colors = { source_diff: '#7c8a9b', source_accum: '#315efb', source_hwm: '#16a56f', source_dd: '#e28a00', source_mdd: '#cf3341' };
-  renderLineChart(svg, rows, keys, colors);
-}
-
 function strategyRsiRows() {
   if (lastStrategyResult?.rsi?.length) return lastStrategyResult.rsi;
   if (!lastStrategyResult?.rows?.length) return [];
@@ -736,7 +726,6 @@ function showStrategyResult(result, name) {
   </tbody></table>`;
   renderRsiChart();
   applyStrategyChartSize();
-  renderStrategySourceChart();
   renderStrategyRsiChart();
   renderStrategyChart();
   renderStrategyTable(result.rows);
@@ -775,10 +764,25 @@ function showOptimizationResult(result) {
 function renderStrategyChart() {
   const svg = $('#strategyChart');
   if (!lastStrategyResult?.rows?.length) return;
-  const active = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
-  const keys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => active.has(key));
-  const colors = { strategy_diff: '#7c8a9b', strategy_accum: '#315efb', strategy_hwm: '#16a56f', strategy_dd: '#e28a00', strategy_mdd: '#cf3341' };
-  renderLineChart(svg, lastStrategyResult.rows, keys, colors);
+  const rows = enrichSourceRows(lastStrategyResult.rows);
+  const activeSource = new Set($$('#strategySourceToggles input:checked').map((input) => input.dataset.sourceLine));
+  const activeStrategy = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
+  const sourceKeys = ['source_diff', 'source_accum', 'source_hwm', 'source_dd', 'source_mdd'].filter((key) => activeSource.has(key));
+  const strategyKeys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => activeStrategy.has(key));
+  const keys = [...sourceKeys, ...strategyKeys];
+  const colors = {
+    source_diff: '#94a3b8',
+    source_accum: '#60a5fa',
+    source_hwm: '#34d399',
+    source_dd: '#f59e0b',
+    source_mdd: '#fb7185',
+    strategy_diff: '#475569',
+    strategy_accum: '#315efb',
+    strategy_hwm: '#059669',
+    strategy_dd: '#d97706',
+    strategy_mdd: '#dc2626'
+  };
+  renderLineChart(svg, rows, keys, colors);
 }
 
 function applyStrategyChartSize() {
@@ -979,10 +983,9 @@ document.addEventListener('change', (event) => {
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', () => { renderStrategyRsiChart(); renderStrategyChart(); });
-$('#strategySourceToggles').addEventListener('change', renderStrategySourceChart);
+$('#strategySourceToggles').addEventListener('change', renderStrategyChart);
 $('#strategyChartSize').addEventListener('change', () => {
   applyStrategyChartSize();
-  renderStrategySourceChart();
   renderStrategyRsiChart();
   renderStrategyChart();
 });

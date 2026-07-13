@@ -177,23 +177,17 @@
         </label>
       </div>
       <div class="strategy-chart-group">
-        <h3>Исходный ряд</h3>
+        <h3>Сравнение исходного ряда и результата</h3>
         <div class="toggles" id="strategySourceToggles">
+          <span class="toggle-title">Исходный ряд</span>
           <label style="--line-color: #7c8a9b"><input type="checkbox" data-source-line="source_diff" /> <span class="line-dot"></span> Diff</label>
           <label style="--line-color: #315efb"><input type="checkbox" data-source-line="source_accum" checked /> <span class="line-dot"></span> Accum</label>
           <label style="--line-color: #16a56f"><input type="checkbox" data-source-line="source_hwm" checked /> <span class="line-dot"></span> HWM</label>
           <label style="--line-color: #e28a00"><input type="checkbox" data-source-line="source_dd" checked /> <span class="line-dot"></span> DD</label>
           <label style="--line-color: #cf3341"><input type="checkbox" data-source-line="source_mdd" checked /> <span class="line-dot"></span> MDD</label>
         </div>
-        <svg id="strategySourceChart" class="strategy-detail-chart" viewBox="0 0 900 360" role="img" aria-label="Исходный график стратегии"></svg>
-      </div>
-      <div id="strategyRsiPanel" class="subchart hidden">
-        <h3>RSI стратегии</h3>
-        <svg id="strategyRsiChart" class="strategy-rsi-chart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
-      </div>
-      <div class="strategy-chart-group">
-        <h3>Результат стратегии</h3>
         <div class="toggles" id="strategyToggles">
+          <span class="toggle-title">Результат стратегии</span>
           <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" /> <span class="line-dot"></span> Diff</label>
           <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> Accum</label>
           <label style="--line-color: #16a56f"><input type="checkbox" data-strategy-line="strategy_hwm" checked /> <span class="line-dot"></span> HWM</label>
@@ -201,6 +195,10 @@
           <label style="--line-color: #cf3341"><input type="checkbox" data-strategy-line="strategy_mdd" checked /> <span class="line-dot"></span> MDD</label>
         </div>
         <svg id="strategyChart" class="strategy-detail-chart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
+      </div>
+      <div id="strategyRsiPanel" class="subchart hidden">
+        <h3>RSI стратегии</h3>
+        <svg id="strategyRsiChart" class="strategy-rsi-chart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
       </div>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
     </section>
