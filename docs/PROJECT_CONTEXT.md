@@ -714,8 +714,10 @@ Graph layout:
 
 RSI optimizer:
 
-- the existing RSI strategy calculation is the tester engine for optimizer runs;
-- the optimizer repeatedly calls the RSI calculation with different parameters;
+- the existing RSI strategy rules are the tester engine for optimizer runs;
+- sample rows are prepared before the parameter search;
+- RSI is cached per sample and `rsiPeriod` during an optimizer job;
+- buy/sell combinations use a metrics-only RSI evaluator so chart rows are not rebuilt for every optimizer run;
 - first optimized parameters are `rsiPeriod`, `buyLevel`, and `sellLevel`;
 - `upperLevel`, `lowerLevel`, and `baseline` are not optimized yet;
 - each run stores parameters, final accum, max drawdown, buy/sell counts, and score;

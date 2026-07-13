@@ -17,11 +17,12 @@ const {
 } = require('./lib/calculations');
 const {
   createRsiParameterGrid,
+  recoveryScore,
   optimizeRsiStrategy,
-  runRsiOptimizationCase,
   sortOptimizationRuns
 } = require('./lib/optimizer');
 const tradingStrategies = require('./strategies');
+const rsiStrategy = tradingStrategies.getStrategy('rsi');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -315,6 +316,41 @@ function aggregateSampleRuns(parameters, sampleRuns) {
   };
 }
 
+function getSampleRsi(sample, rsiPeriod) {
+  if (!sample.rsiCache) sample.rsiCache = new Map();
+  const key = String(rsiPeriod);
+  if (!sample.rsiCache.has(key)) {
+    sample.rsiCache.set(key, rsiStrategy.calculateRsiFromEquity(sample.baseResult.rows, rsiPeriod));
+  }
+  return sample.rsiCache.get(key);
+}
+
+function runRsiOptimizationSample(sample, baseConfig, parameters) {
+  const rsiSeries = getSampleRsi(sample, parameters.rsiPeriod);
+  const result = rsiStrategy.calculateMetricsFromRsi(sample.baseResult, {
+    ...baseConfig,
+    type: 'rsi',
+    ...parameters
+  }, rsiSeries);
+  const finalAccum = result.summary.finalAccum;
+  const maxDrawdown = result.summary.maxDrawdown;
+  return {
+    strategy: 'rsi',
+    parameters: { ...parameters },
+    summary: {
+      finalAccum,
+      maxDrawdown,
+      buyCount: result.summary.buyCount,
+      sellCount: result.summary.sellCount,
+      points: result.summary.points
+    },
+    score: recoveryScore(finalAccum, maxDrawdown),
+    name: sample.name,
+    periodFrom: sample.periodFrom,
+    periodTo: sample.periodTo
+  };
+}
+
 function publicOptimizerJob(job) {
   return {
     jobId: job.jobId,
@@ -348,17 +384,11 @@ function continueOptimizerJob(job) {
       job.currentParameters = parameters;
       const sampleRuns = job.samples.map((sample) => {
         job.currentSample = sample.name;
-        const sampleRun = runRsiOptimizationCase(sample.baseResult, {
+        return runRsiOptimizationSample(sample, {
           ...job.strategy,
           periodFrom: sample.periodFrom,
           periodTo: sample.periodTo
-        }, parameters, tradingStrategies.calculateTradingStrategy);
-        return {
-          ...sampleRun,
-          name: sample.name,
-          periodFrom: sample.periodFrom,
-          periodTo: sample.periodTo
-        };
+        }, parameters);
       });
       const run = aggregateSampleRuns(parameters, sampleRuns);
       job.runs.push(run);

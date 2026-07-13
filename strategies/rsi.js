@@ -161,8 +161,64 @@ function calculate(baseResult, config) {
   };
 }
 
+function calculateMetricsFromRsi(baseResult, config, rsiSeries = null) {
+  const rows = baseResult.rows ?? [];
+  const rsiPeriod = Number(config.rsiPeriod ?? 14);
+  const series = rsiSeries ?? calculateRsiFromEquity(rows, rsiPeriod);
+  const buyLevel = Number(config.buyLevel ?? config.lowerLevel ?? 30);
+  const sellLevel = Number(config.sellLevel ?? config.upperLevel ?? 70);
+  let position = 0;
+  let pendingExecution = '';
+  let accum = 0;
+  let hwm = 0;
+  let maxDrawdown = 0;
+  let buyCount = 0;
+  let sellCount = 0;
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    const currentRsi = series[i]?.rsi ?? null;
+    const previousRsi = i > 0 ? series[i - 1]?.rsi ?? null : null;
+    const execution = pendingExecution;
+    pendingExecution = '';
+
+    if (execution === 'buy') position = 1;
+    if (execution === 'sell') position = 0;
+
+    const strategyDiff = position ? row.diff : 0;
+    accum = i === 0 ? 0 : ((1 + strategyDiff) * (1 + accum)) - 1;
+    hwm = Math.max(hwm, accum);
+    const drawdown = ((1 + accum) / (1 + hwm)) - 1;
+    maxDrawdown = Math.min(maxDrawdown, drawdown);
+
+    const crossedBuy = previousRsi !== null && currentRsi !== null && previousRsi > buyLevel && currentRsi <= buyLevel;
+    const crossedSell = previousRsi !== null && currentRsi !== null && previousRsi < sellLevel && currentRsi >= sellLevel;
+    if (crossedBuy && position === 0) {
+      pendingExecution = 'buy';
+      buyCount += 1;
+    } else if (crossedSell && position === 1) {
+      pendingExecution = 'sell';
+      sellCount += 1;
+    }
+  }
+
+  return {
+    summary: {
+      start: rows[0]?.time ?? null,
+      end: rows.at(-1)?.time ?? null,
+      points: rows.length,
+      finalAccum: accum,
+      hwm,
+      maxDrawdown,
+      buyCount,
+      sellCount
+    }
+  };
+}
+
 module.exports = {
   type: 'rsi',
   calculate,
-  calculateRsiFromEquity
+  calculateRsiFromEquity,
+  calculateMetricsFromRsi
 };

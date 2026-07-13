@@ -85,7 +85,7 @@ The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and
 
 ## RSI optimizer
 
-The RSI calculation is also used as the first optimizer target. The optimizer does not implement separate trading logic. It repeatedly calls the existing strategy calculation with different parameters, similar to the Tester/Optimizer split in OsEngine.
+The RSI calculation is also used as the first optimizer target. The optimizer keeps the same trading rules as the ordinary RSI strategy, similar to the Tester/Optimizer split in OsEngine.
 
 For the first version only these RSI parameters are optimized:
 
@@ -114,6 +114,8 @@ During optimization the UI shows progress:
 The user can stop optimization. Stop is soft: the backend finishes the current run chunk, does not start new parameter combinations, and returns the ranked table for the completed runs.
 
 The optimizer can split the selected period into samples before optimization. With `sampleCount = 1`, behavior is the old full-track optimization. With `sampleCount > 1`, the already calculated source rows are split into sequential chunks by point count. Each sample is recalculated from its own `diff` series so its `accum` starts from zero.
+
+For performance, sample preparation happens before the parameter search. RSI is calculated once per `(sample, rsiPeriod)` and cached in memory for the running optimizer job. Buy/sell level combinations then use a metrics-only RSI evaluator that produces the same summary values as the full strategy calculation without rebuilding chart rows for every run.
 
 For every RSI parameter combination the optimizer runs all samples and aggregates:
 

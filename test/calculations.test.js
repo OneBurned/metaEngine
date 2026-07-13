@@ -12,7 +12,7 @@ const {
   validatePresetItems
 } = require('../lib/calculations');
 const { expandNumericRange, optimizeRsiStrategy } = require('../lib/optimizer');
-const { calculateRsiFromEquity } = require('../strategies/rsi');
+const { calculateRsiFromEquity, calculateMetricsFromRsi } = require('../strategies/rsi');
 const { calculateTradingStrategy, getStrategy } = require('../strategies');
 
 test('formats timestamps as YYYY-MM-DD HH:MM without shifting the Unix time', () => {
@@ -86,6 +86,7 @@ test('strategy registry exposes the RSI module', () => {
   assert.equal(rsi.type, 'rsi');
   assert.equal(typeof rsi.calculate, 'function');
   assert.equal(typeof rsi.calculateRsiFromEquity, 'function');
+  assert.equal(typeof rsi.calculateMetricsFromRsi, 'function');
 });
 
 test('calculates RSI from equity curve', () => {
@@ -132,6 +133,22 @@ test('RSI trading strategy changes position next point and builds strategy resul
 test('RSI trading strategy allows inverted levels without validation error', () => {
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
   assert.doesNotThrow(() => calculateTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
+});
+
+test('RSI metrics-only calculation matches full strategy summary', () => {
+  const grid = Array.from({ length: 24 }, (_, i) => i);
+  const diffs = [0, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, -0.02, -0.02, 0.03, 0.03, -0.01, -0.01, 0.02, 0.02, -0.03, -0.03, 0.04, 0.04, -0.01, 0.02, -0.02, 0.03, 0.01];
+  const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
+  const config = { rsiPeriod: 3, buyLevel: 40, sellLevel: 60 };
+  const full = calculateTradingStrategy(base, config);
+  const rsi = calculateRsiFromEquity(base.rows, config.rsiPeriod);
+  const metrics = calculateMetricsFromRsi(base, config, rsi);
+
+  assert.equal(metrics.summary.finalAccum, full.summary.finalAccum);
+  assert.equal(metrics.summary.maxDrawdown, full.summary.maxDrawdown);
+  assert.equal(metrics.summary.buyCount, full.summary.buyCount);
+  assert.equal(metrics.summary.sellCount, full.summary.sellCount);
+  assert.equal(metrics.summary.points, full.summary.points);
 });
 
 test('optimizer expands numeric ranges inclusively', () => {
