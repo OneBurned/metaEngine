@@ -116,10 +116,13 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /sampleCount: \$\('#optSampleCount'\)\.value/);
   assert.match(app, /Семплов: \$\{job\.sampleCount/);
   assert.match(app, /Устойчивость: худший score по семплам/);
+  assert.match(app, /Сцепл\. accum/);
+  assert.match(app, /run\.summary\.compoundedAccum/);
   assert.match(app, /sampleHeaders/);
   assert.match(app, /run\.samples/);
   assert.match(server, /buildOptimizerSamples/);
   assert.match(server, /aggregateSampleRuns/);
+  assert.match(server, /compoundedAccum = accums\.reduce/);
   assert.match(server, /stability_worst_sample_score/);
   assert.match(server, /completedRuns: job\.completedRuns/);
 });

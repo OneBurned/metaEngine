@@ -293,6 +293,7 @@ function aggregateSampleRuns(parameters, sampleRuns) {
   const drawdowns = sampleRuns.map((sample) => sample.summary.maxDrawdown);
   const average = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
   const profitableSamples = sampleRuns.filter((sample) => sample.summary.finalAccum > 0).length;
+  const compoundedAccum = accums.reduce((total, accum) => total * (1 + accum), 1) - 1;
   const score = Math.min(...scores);
   return {
     strategy: 'rsi',
@@ -307,6 +308,7 @@ function aggregateSampleRuns(parameters, sampleRuns) {
       averageScore: average(scores),
       worstScore: Math.min(...scores),
       averageAccum: average(accums),
+      compoundedAccum,
       worstAccum: Math.min(...accums),
       averageDrawdown: average(drawdowns),
       worstDrawdown: Math.min(...drawdowns)

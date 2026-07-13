@@ -751,7 +751,7 @@ function showOptimizationResult(result) {
     <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
   </tbody></table>`;
   const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
-  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Устойчивость</th><th>Прибыльных</th><th>Ср. score</th><th>Худш. score</th><th>Ср. accum</th><th>Худш. accum</th><th>Худш. MDD</th>${sampleHeaders}</tr></thead><tbody>${result.runs.map((run, index) => `
+  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Устойчивость</th><th>Прибыльных</th><th>Ср. score</th><th>Худш. score</th><th>Сцепл. accum</th><th>Ср. accum</th><th>Худш. accum</th><th>Худш. MDD</th>${sampleHeaders}</tr></thead><tbody>${result.runs.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
       <td>${run.parameters.rsiPeriod}</td>
@@ -761,6 +761,7 @@ function showOptimizationResult(result) {
       <td>${run.summary.profitableSamples}/${run.summary.sampleCount}</td>
       <td>${Number(run.summary.averageScore).toFixed(6)}</td>
       <td>${Number(run.summary.worstScore).toFixed(6)}</td>
+      <td>${fmtPct(run.summary.compoundedAccum ?? run.summary.finalAccum ?? run.summary.averageAccum)}</td>
       <td>${fmtPct(run.summary.averageAccum)}</td>
       <td>${fmtPct(run.summary.worstAccum)}</td>
       <td>${fmtPct(run.summary.worstDrawdown)}</td>

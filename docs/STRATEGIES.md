@@ -122,6 +122,7 @@ For every RSI parameter combination the optimizer runs all samples and aggregate
 - profitable sample count;
 - average and worst score;
 - average and worst accum;
+- compounded accum: `(1 + sample1Accum) * (1 + sample2Accum) * ... - 1`;
 - average and worst drawdown;
 - per-sample accum/MDD/score details.
 
