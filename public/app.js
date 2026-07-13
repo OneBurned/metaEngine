@@ -10,6 +10,7 @@ let lastOptimizationResult = null;
 let activeOptimizationJobId = null;
 let optimizationPollTimer = null;
 let optimizationSort = { key: 'score', direction: 'desc' };
+let lastOptimizationFilters = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -611,6 +612,33 @@ function collectOptimizationBody() {
   };
 }
 
+function normalizeOptimizationFilters(filters = {}) {
+  const maxDrawdownPercent = filters.maxDrawdownPercent === '' || filters.maxDrawdownPercent === null || filters.maxDrawdownPercent === undefined
+    ? null
+    : Math.abs(Number(filters.maxDrawdownPercent));
+  const minTrades = filters.minTrades === '' || filters.minTrades === null || filters.minTrades === undefined
+    ? 0
+    : Math.max(0, Math.floor(Number(filters.minTrades)));
+  const minProfitableSamples = filters.minProfitableSamples === '' || filters.minProfitableSamples === null || filters.minProfitableSamples === undefined
+    ? 0
+    : Math.max(0, Math.floor(Number(filters.minProfitableSamples)));
+  return {
+    maxDrawdownPercent: Number.isFinite(maxDrawdownPercent) ? maxDrawdownPercent : null,
+    minTrades: Number.isFinite(minTrades) ? minTrades : 0,
+    minProfitableSamples: Number.isFinite(minProfitableSamples) ? minProfitableSamples : 0,
+    enabled: maxDrawdownPercent !== null || minTrades > 0 || minProfitableSamples > 0
+  };
+}
+
+function optimizationRunPassesFilters(run, filters) {
+  if (!filters?.enabled) return true;
+  if (filters.maxDrawdownPercent !== null && run.summary.worstDrawdown < -(filters.maxDrawdownPercent / 100)) return false;
+  const trades = (run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0);
+  if (trades < filters.minTrades) return false;
+  if (run.summary.profitableSamples < filters.minProfitableSamples) return false;
+  return true;
+}
+
 function formatRunLine(run) {
   if (!run) return '-';
   return `score ${Number(run.score).toFixed(6)}, accum ${fmtPct(run.summary.finalAccum)}, MDD ${fmtPct(run.summary.maxDrawdown)}`;
@@ -707,6 +735,7 @@ async function optimizeTradingStrategy() {
   const base = baseCalculationBody();
   const strategy = collectStrategyBody();
   const optimizationBody = collectOptimizationBody();
+  lastOptimizationFilters = normalizeOptimizationFilters(optimizationBody.filters);
   optimizationSort = { key: 'score', direction: 'desc' };
   const job = await api('/api/strategies/optimize/start', {
     method: 'POST',
@@ -802,7 +831,8 @@ function showOptimizationResult(result) {
   $('#optimizationResultCard').classList.remove('hidden');
   const statusRow = result.stopped ? '<tr><th>Статус</th><td>Остановлено пользователем</td></tr>' : '';
   const sampleCount = result.sampleCount ?? result.runs[0]?.summary?.sampleCount ?? 1;
-  const filters = result.filters ?? {};
+  const filters = (result.filters?.enabled ? result.filters : lastOptimizationFilters) ?? {};
+  const displayRuns = (result.runs ?? []).filter((run) => optimizationRunPassesFilters(run, filters));
   const filterRow = filters.enabled
     ? `<tr><th>Отсечение</th><td>MDD ${filters.maxDrawdownPercent ?? '-'}%, трейдов ${filters.minTrades ?? 0}, прибыльных семплов ${filters.minProfitableSamples ?? 0}</td></tr>`
     : '';
@@ -813,8 +843,9 @@ function showOptimizationResult(result) {
     <tr><th>Семплов</th><td>${sampleCount}</td></tr>
     <tr><th>Выполнено</th><td>${result.completedRuns ?? result.totalRuns}</td></tr>
     <tr><th>Отобрано</th><td>${result.acceptedCombinations ?? result.runs.length}</td></tr>
+    <tr><th>Отсечено</th><td>${result.filteredCombinations ?? 0}</td></tr>
     ${filterRow}
-    <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
+    <tr><th>Показано</th><td>${displayRuns.length}</td></tr>
   </tbody></table>`;
   const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
   const headers = [
@@ -833,8 +864,9 @@ function showOptimizationResult(result) {
     sortHeader('worstDrawdown', 'Худш. MDD'),
     sampleHeaders
   ].join('');
-  const rows = sortedOptimizationRuns(result);
-  $('#optimizationResultTable').innerHTML = `<thead><tr>${headers}</tr></thead><tbody>${rows.map((run, index) => `
+  const rows = sortedOptimizationRuns({ ...result, runs: displayRuns });
+  const emptyRow = `<tr><td colspan="${13 + sampleCount}">Нет результатов, прошедших отсечение.</td></tr>`;
+  $('#optimizationResultTable').innerHTML = `<thead><tr>${headers}</tr></thead><tbody>${rows.length ? rows.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
       <td>${run.parameters.rsiPeriod}</td>
@@ -850,7 +882,7 @@ function showOptimizationResult(result) {
       <td>${fmtPct(run.summary.worstAccum)}</td>
       <td>${fmtPct(run.summary.worstDrawdown)}</td>
       ${(run.samples ?? []).map((sample) => `<td>${sample.name}<br>${sample.periodFrom} → ${sample.periodTo}<br>accum ${fmtPct(sample.summary.finalAccum)}<br>MDD ${fmtPct(sample.summary.maxDrawdown)}<br>score ${Number(sample.score).toFixed(4)}</td>`).join('')}
-    </tr>`).join('')}</tbody>`;
+    </tr>`).join('') : emptyRow}</tbody>`;
   bindOptimizationSortHeaders();
 }
 

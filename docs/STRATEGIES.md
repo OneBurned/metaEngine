@@ -128,6 +128,8 @@ Optional cutoff filters are applied before a run is retained in top results:
 - minimum total trades, calculated as total buys plus sells across samples;
 - minimum profitable samples.
 
+The final table renders only runs that pass the active cutoff filters. If all retained runs are filtered out, the table shows an empty-state row instead of stale results.
+
 For every RSI parameter combination the optimizer runs all samples and aggregates:
 
 - profitable sample count;
