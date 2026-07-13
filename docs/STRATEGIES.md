@@ -81,7 +81,7 @@ The strategy result block shows two chart areas:
 - RSI chart;
 - one comparison chart with source portfolio/preset result and trading strategy result together.
 
-The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. A shared chart-height selector resizes the comparison chart and RSI chart together so details can be inspected more comfortably.
+The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. A shared chart-height selector resizes the comparison chart and RSI chart together so details can be inspected more comfortably. Chart plot areas use most of the panel width, with value axes and line labels placed on the right.
 
 ## RSI optimizer
 

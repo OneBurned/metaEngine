@@ -161,6 +161,8 @@ test('strategy result card compares source and strategy on one chart with shared
   assert.match(html, /Результат стратегии/);
   assert.match(app, /function enrichSourceRows\(/);
   assert.match(app, /const keys = \[\.\.\.sourceKeys, \.\.\.strategyKeys\]/);
+  assert.match(app, /const plotLeft = 12/);
+  assert.match(app, /text-anchor="end"/);
   assert.match(app, /function applyStrategyChartSize\(\)/);
   assert.match(app, /strategy-detail-chart/);
   assert.match(app, /strategy-rsi-chart/);

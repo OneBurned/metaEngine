@@ -482,7 +482,12 @@ function renderResultTable(rows) {
 
 function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) {
   if (!rows?.length) return;
-  const width = 900, height = 360, pad = 42;
+  const width = 900, height = 360;
+  const topPad = 28;
+  const bottomPad = 28;
+  const plotLeft = 12;
+  const plotRight = width - 132;
+  const axisX = width - 8;
   let min = 0;
   let max = 0;
   for (const row of rows) {
@@ -494,14 +499,14 @@ function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) 
     }
   }
   const span = max - min || 1;
-  const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
-  const y = (v) => height - pad - ((v - min) / span) * (height - pad * 2);
+  const x = (i) => plotLeft + (i / Math.max(rows.length - 1, 1)) * (plotRight - plotLeft);
+  const y = (v) => height - bottomPad - ((v - min) / span) * (height - topPad - bottomPad);
   const zeroY = y(0);
   const lines = keys.map((key) => {
     const points = rows.map((row, i) => `${x(i).toFixed(2)},${y(row[key] ?? 0).toFixed(2)}`).join(' ');
-    return `<polyline fill="none" stroke="${colors[key]}" stroke-width="2" points="${points}"/><text x="${width - pad + 4}" y="${y(rows.at(-1)[key] ?? 0).toFixed(2)}" fill="${colors[key]}" font-size="12">${labelAccessor(key)}</text>`;
+    return `<polyline fill="none" stroke="${colors[key]}" stroke-width="2" points="${points}"/><text x="${plotRight + 8}" y="${y(rows.at(-1)[key] ?? 0).toFixed(2)}" fill="${colors[key]}" font-size="12">${labelAccessor(key)}</text>`;
   }).join('');
-  svg.innerHTML = `<line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#cfd6e3"/><text x="8" y="${pad}" font-size="12">${fmtPct(max)}</text><text x="8" y="${height - pad}" font-size="12">${fmtPct(min)}</text>${lines}`;
+  svg.innerHTML = `<line x1="${plotLeft}" x2="${plotRight}" y1="${zeroY}" y2="${zeroY}" stroke="#cfd6e3"/><line x1="${plotRight}" x2="${plotRight}" y1="${topPad}" y2="${height - bottomPad}" stroke="#d7deea"/><text x="${axisX}" y="${topPad}" font-size="12" text-anchor="end">${fmtPct(max)}</text><text x="${axisX}" y="${height - bottomPad}" font-size="12" text-anchor="end">${fmtPct(min)}</text>${lines}`;
 }
 
 function enrichSourceRows(rows) {
@@ -559,13 +564,18 @@ function strategyRsiRows() {
 }
 
 function renderRsiSvg(svg, rows = lastStrategyResult.rsi) {
-  const width = 900, height = 220, pad = 36;
+  const width = 900, height = 220;
+  const topPad = 26;
+  const bottomPad = 24;
+  const plotLeft = 12;
+  const plotRight = width - 74;
+  const axisX = width - 8;
   const cfg = lastStrategyResult.config;
-  const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
-  const y = (v) => height - pad - (v / 100) * (height - pad * 2);
+  const x = (i) => plotLeft + (i / Math.max(rows.length - 1, 1)) * (plotRight - plotLeft);
+  const y = (v) => height - bottomPad - (v / 100) * (height - topPad - bottomPad);
   const rsiPoints = rows.map((row, i) => row.rsi === null ? null : `${x(i).toFixed(2)},${y(row.rsi).toFixed(2)}`).filter(Boolean).join(' ');
-  const levelLine = (value, color, label) => `<line x1="${pad}" x2="${width - pad}" y1="${y(value)}" y2="${y(value)}" stroke="${color}" stroke-dasharray="6 5"/><text x="8" y="${y(value) + 4}" font-size="12" fill="${color}">${label}</text>`;
-  svg.innerHTML = `${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${levelLine(cfg.baseline, '#687386', cfg.baseline)}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
+  const levelLine = (value, color, label) => `<line x1="${plotLeft}" x2="${plotRight}" y1="${y(value)}" y2="${y(value)}" stroke="${color}" stroke-dasharray="6 5"/><text x="${axisX}" y="${y(value) + 4}" font-size="12" fill="${color}" text-anchor="end">${label}</text>`;
+  svg.innerHTML = `<line x1="${plotRight}" x2="${plotRight}" y1="${topPad}" y2="${height - bottomPad}" stroke="#d7deea"/>${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${levelLine(cfg.baseline, '#687386', cfg.baseline)}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
 }
 
 function collectStrategyBody() {
