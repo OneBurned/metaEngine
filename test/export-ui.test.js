@@ -114,6 +114,8 @@ test('RSI optimizer shows progress and can be stopped', () => {
 test('strategy result card renders its own RSI chart', () => {
   assert.match(html, /id="strategyRsiPanel"/);
   assert.match(html, /id="strategyRsiChart"/);
+  assert.match(html, /RSI стратегии/);
   assert.match(app, /function renderStrategyRsiChart\(\)/);
+  assert.match(app, /function strategyRsiRows\(\)/);
   assert.match(app, /renderStrategyRsiChart\(\);\n\s*renderStrategyChart\(\)/);
 });

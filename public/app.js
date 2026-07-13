@@ -509,17 +509,25 @@ function renderRsiChart() {
 }
 
 function renderStrategyRsiChart() {
-  if (!lastStrategyResult?.rsi?.length) {
+  const rsiRows = strategyRsiRows();
+  if (!rsiRows.length) {
     $('#strategyRsiPanel').classList.add('hidden');
     return;
   }
   $('#strategyRsiPanel').classList.remove('hidden');
-  renderRsiSvg($('#strategyRsiChart'));
+  renderRsiSvg($('#strategyRsiChart'), rsiRows);
 }
 
-function renderRsiSvg(svg) {
+function strategyRsiRows() {
+  if (lastStrategyResult?.rsi?.length) return lastStrategyResult.rsi;
+  if (!lastStrategyResult?.rows?.length) return [];
+  return lastStrategyResult.rows
+    .filter((row) => row.rsi !== undefined)
+    .map((row) => ({ timestamp: row.timestamp, time: row.time, rsi: row.rsi }));
+}
+
+function renderRsiSvg(svg, rows = lastStrategyResult.rsi) {
   const width = 900, height = 220, pad = 36;
-  const rows = lastStrategyResult.rsi;
   const cfg = lastStrategyResult.config;
   const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
   const y = (v) => height - pad - (v / 100) * (height - pad * 2);

@@ -165,16 +165,16 @@
     <section class="card hidden" id="strategyResultCard">
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
-      <div id="strategyRsiPanel" class="subchart hidden">
-        <h3>RSI</h3>
-        <svg id="strategyRsiChart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
-      </div>
       <div class="toggles" id="strategyToggles">
         <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> Accum</label>
         <label style="--line-color: #16a56f"><input type="checkbox" data-strategy-line="strategy_hwm" checked /> <span class="line-dot"></span> HWM</label>
         <label style="--line-color: #e28a00"><input type="checkbox" data-strategy-line="strategy_dd" checked /> <span class="line-dot"></span> DD</label>
         <label style="--line-color: #cf3341"><input type="checkbox" data-strategy-line="strategy_mdd" checked /> <span class="line-dot"></span> MDD</label>
+      </div>
+      <div id="strategyRsiPanel" class="subchart hidden">
+        <h3>RSI стратегии</h3>
+        <svg id="strategyRsiChart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
       </div>
       <svg id="strategyChart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
