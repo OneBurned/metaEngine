@@ -9,6 +9,7 @@ let lastStrategyConfig = null;
 let lastOptimizationResult = null;
 let activeOptimizationJobId = null;
 let optimizationPollTimer = null;
+let optimizationSort = { key: 'score', direction: 'desc' };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -601,7 +602,12 @@ function collectOptimizationBody() {
         step: $('#optSellStep').value
       }
     },
-    maxResults: $('#optMaxResults').value
+    maxResults: $('#optMaxResults').value,
+    filters: {
+      maxDrawdownPercent: $('#optMaxDrawdownPercent').value,
+      minTrades: $('#optMinTrades').value,
+      minProfitableSamples: $('#optMinProfitableSamples').value
+    }
   };
 }
 
@@ -618,7 +624,8 @@ function showOptimizationProgress(job) {
     : '-';
   const statusLabel = job.status === 'stopped' ? 'Остановлено' : job.status === 'done' ? 'Готово' : job.status === 'error' ? 'Ошибка' : 'Оптимизация';
   const sample = job.currentSample ? `<br>Текущий семпл: ${job.currentSample}` : '';
-  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Комбинаций: ${job.completedCombinations ?? 0} / ${job.totalCombinations ?? job.totalRuns}<br>Семплов: ${job.sampleCount ?? 1}<br>Текущий набор: ${current}${sample}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
+  const selected = job.acceptedCombinations === undefined ? '' : `<br>Отобрано: ${job.acceptedCombinations}, отсечено: ${job.filteredCombinations ?? 0}`;
+  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Комбинаций: ${job.completedCombinations ?? 0} / ${job.totalCombinations ?? job.totalRuns}${selected}<br>Семплов: ${job.sampleCount ?? 1}<br>Текущий набор: ${current}${sample}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
 }
 
 function clearOptimizationPoll() {
@@ -700,6 +707,7 @@ async function optimizeTradingStrategy() {
   const base = baseCalculationBody();
   const strategy = collectStrategyBody();
   const optimizationBody = collectOptimizationBody();
+  optimizationSort = { key: 'score', direction: 'desc' };
   const job = await api('/api/strategies/optimize/start', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -744,20 +752,89 @@ function showStrategyResult(result, name) {
   renderStrategyTable(result.rows);
 }
 
+function optimizationColumnValue(run, key) {
+  const trades = (run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0);
+  const values = {
+    rsiPeriod: run.parameters.rsiPeriod,
+    buyLevel: run.parameters.buyLevel,
+    sellLevel: run.parameters.sellLevel,
+    score: run.score,
+    profitableSamples: run.summary.profitableSamples,
+    averageScore: run.summary.averageScore,
+    worstScore: run.summary.worstScore,
+    compoundedAccum: run.summary.compoundedAccum ?? run.summary.finalAccum ?? run.summary.averageAccum,
+    averageAccum: run.summary.averageAccum,
+    worstAccum: run.summary.worstAccum,
+    worstDrawdown: run.summary.worstDrawdown,
+    trades
+  };
+  return Number(values[key] ?? 0);
+}
+
+function sortedOptimizationRuns(result) {
+  const direction = optimizationSort.direction === 'asc' ? 1 : -1;
+  return [...(result.runs ?? [])].sort((a, b) => {
+    const left = optimizationColumnValue(a, optimizationSort.key);
+    const right = optimizationColumnValue(b, optimizationSort.key);
+    return ((left > right ? 1 : left < right ? -1 : 0) * direction) || (b.score - a.score);
+  });
+}
+
+function sortHeader(key, label) {
+  const marker = optimizationSort.key === key ? (optimizationSort.direction === 'asc' ? ' ↑' : ' ↓') : '';
+  return `<th><button type="button" class="sort-header" data-optimizer-sort="${key}">${label}${marker}</button></th>`;
+}
+
+function bindOptimizationSortHeaders() {
+  $$('[data-optimizer-sort]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.optimizerSort;
+      optimizationSort = {
+        key,
+        direction: optimizationSort.key === key && optimizationSort.direction === 'desc' ? 'asc' : 'desc'
+      };
+      showOptimizationResult(lastOptimizationResult);
+    });
+  });
+}
+
 function showOptimizationResult(result) {
   $('#optimizationResultCard').classList.remove('hidden');
   const statusRow = result.stopped ? '<tr><th>Статус</th><td>Остановлено пользователем</td></tr>' : '';
   const sampleCount = result.sampleCount ?? result.runs[0]?.summary?.sampleCount ?? 1;
+  const filters = result.filters ?? {};
+  const filterRow = filters.enabled
+    ? `<tr><th>Отсечение</th><td>MDD ${filters.maxDrawdownPercent ?? '-'}%, трейдов ${filters.minTrades ?? 0}, прибыльных семплов ${filters.minProfitableSamples ?? 0}</td></tr>`
+    : '';
   $('#optimizationSummary').innerHTML = `<table><tbody>
     ${statusRow}
     <tr><th>Метрика</th><td>Устойчивость: худший score по семплам</td></tr>
     <tr><th>Всего прогонов</th><td>${result.totalRuns}</td></tr>
     <tr><th>Семплов</th><td>${sampleCount}</td></tr>
     <tr><th>Выполнено</th><td>${result.completedRuns ?? result.totalRuns}</td></tr>
+    <tr><th>Отобрано</th><td>${result.acceptedCombinations ?? result.runs.length}</td></tr>
+    ${filterRow}
     <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
   </tbody></table>`;
   const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
-  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Устойчивость</th><th>Прибыльных</th><th>Ср. score</th><th>Худш. score</th><th>Сцепл. accum</th><th>Ср. accum</th><th>Худш. accum</th><th>Худш. MDD</th>${sampleHeaders}</tr></thead><tbody>${result.runs.map((run, index) => `
+  const headers = [
+    '<th>#</th>',
+    sortHeader('rsiPeriod', 'RSI период'),
+    sortHeader('buyLevel', 'Купить'),
+    sortHeader('sellLevel', 'Продать'),
+    sortHeader('score', 'Устойчивость'),
+    sortHeader('profitableSamples', 'Прибыльных'),
+    sortHeader('trades', 'Трейдов'),
+    sortHeader('averageScore', 'Ср. score'),
+    sortHeader('worstScore', 'Худш. score'),
+    sortHeader('compoundedAccum', 'Сцепл. accum'),
+    sortHeader('averageAccum', 'Ср. accum'),
+    sortHeader('worstAccum', 'Худш. accum'),
+    sortHeader('worstDrawdown', 'Худш. MDD'),
+    sampleHeaders
+  ].join('');
+  const rows = sortedOptimizationRuns(result);
+  $('#optimizationResultTable').innerHTML = `<thead><tr>${headers}</tr></thead><tbody>${rows.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
       <td>${run.parameters.rsiPeriod}</td>
@@ -765,6 +842,7 @@ function showOptimizationResult(result) {
       <td>${run.parameters.sellLevel}</td>
       <td>${Number(run.score).toFixed(6)}</td>
       <td>${run.summary.profitableSamples}/${run.summary.sampleCount}</td>
+      <td>${(run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0)}</td>
       <td>${Number(run.summary.averageScore).toFixed(6)}</td>
       <td>${Number(run.summary.worstScore).toFixed(6)}</td>
       <td>${fmtPct(run.summary.compoundedAccum ?? run.summary.finalAccum ?? run.summary.averageAccum)}</td>
@@ -773,6 +851,7 @@ function showOptimizationResult(result) {
       <td>${fmtPct(run.summary.worstDrawdown)}</td>
       ${(run.samples ?? []).map((sample) => `<td>${sample.name}<br>${sample.periodFrom} → ${sample.periodTo}<br>accum ${fmtPct(sample.summary.finalAccum)}<br>MDD ${fmtPct(sample.summary.maxDrawdown)}<br>score ${Number(sample.score).toFixed(4)}</td>`).join('')}
     </tr>`).join('')}</tbody>`;
+  bindOptimizationSortHeaders();
 }
 
 function renderStrategyChart() {

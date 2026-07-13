@@ -113,18 +113,29 @@ test('RSI optimizer shows progress and can be stopped', () => {
 
 test('RSI optimizer supports sample-based stability results', () => {
   assert.match(html, /id="optSampleCount"/);
+  assert.match(html, /id="optMaxDrawdownPercent"/);
+  assert.match(html, /id="optMinTrades"/);
+  assert.match(html, /id="optMinProfitableSamples"/);
   assert.match(app, /sampleCount: \$\('#optSampleCount'\)\.value/);
+  assert.match(app, /maxDrawdownPercent: \$\('#optMaxDrawdownPercent'\)\.value/);
+  assert.match(app, /data-optimizer-sort/);
+  assert.match(app, /function sortedOptimizationRuns/);
   assert.match(app, /Семплов: \$\{job\.sampleCount/);
+  assert.match(app, /Отобрано: \$\{job\.acceptedCombinations/);
   assert.match(app, /Устойчивость: худший score по семплам/);
   assert.match(app, /Сцепл\. accum/);
+  assert.match(app, /Трейдов/);
   assert.match(app, /run\.summary\.compoundedAccum/);
   assert.match(app, /sampleHeaders/);
   assert.match(app, /run\.samples/);
   assert.match(server, /buildOptimizerSamples/);
   assert.match(server, /aggregateSampleRuns/);
+  assert.match(server, /normalizeOptimizerFilters/);
+  assert.match(server, /optimizerRunPassesFilters/);
   assert.match(server, /trimOptimizerRuns/);
   assert.match(server, /compoundedAccum = accums\.reduce/);
   assert.match(server, /stability_worst_sample_score/);
+  assert.match(server, /acceptedCombinations/);
   assert.match(server, /completedRuns: job\.completedRuns/);
 });
 

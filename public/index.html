@@ -151,6 +151,9 @@
             <label>Шаг <input id="optSellStep" type="number" value="5" min="0.1" step="0.1" /></label>
             <label>Семплов <input id="optSampleCount" type="number" value="1" min="1" step="1" /></label>
             <label>Показать лучших <input id="optMaxResults" type="number" value="100" min="1" max="500" step="1" /></label>
+            <label>Макс. просадка, % <input id="optMaxDrawdownPercent" type="number" value="" min="0" step="0.1" placeholder="20" /></label>
+            <label>Мин. трейдов <input id="optMinTrades" type="number" value="" min="0" step="1" placeholder="2" /></label>
+            <label>Мин. прибыльных семплов <input id="optMinProfitableSamples" type="number" value="" min="0" step="1" placeholder="1" /></label>
             <button id="optimizeTradingStrategy" type="button">Оптимизировать RSI</button>
             <button id="stopOptimization" class="secondary hidden" type="button">Остановить оптимизацию</button>
           </div>

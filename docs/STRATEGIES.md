@@ -107,17 +107,26 @@ During optimization the UI shows progress:
 
 - completed runs / total runs;
 - completed parameter combinations / total combinations;
+- accepted and filtered-out parameter combinations;
 - sample count;
 - current parameter set;
 - best score found so far.
 
 The user can stop optimization. Stop is soft: the backend finishes the current run chunk, does not start new parameter combinations, and returns the ranked table for the completed runs.
 
+The result table supports client-side sorting by clicking numeric column headers. The first click sorts descending, the next click on the same header sorts ascending.
+
 The optimizer can split the selected period into samples before optimization. With `sampleCount = 1`, behavior is the old full-track optimization. With `sampleCount > 1`, the already calculated source rows are split into sequential chunks by point count. Each sample is recalculated from its own `diff` series so its `accum` starts from zero.
 
 For performance, sample preparation happens before the parameter search. RSI is calculated once per `(sample, rsiPeriod)` and cached in memory for the running optimizer job. Buy/sell level combinations then use a metrics-only RSI evaluator that produces the same summary values as the full strategy calculation without rebuilding chart rows for every run.
 
 During long searches the backend keeps only the current top `maxResults` runs in memory. Progress counters still reflect the full grid, but completed low-ranked runs are not retained in the optimizer job object.
+
+Optional cutoff filters are applied before a run is retained in top results:
+
+- max drawdown percent, entered as a positive value such as `20` for `MDD >= -20%`;
+- minimum total trades, calculated as total buys plus sells across samples;
+- minimum profitable samples.
 
 For every RSI parameter combination the optimizer runs all samples and aggregates:
 

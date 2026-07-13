@@ -55,6 +55,8 @@ button:hover { filter: brightness(.96); }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { border-bottom: 1px solid #e7ebf2; padding: 8px 10px; text-align: left; }
 th { background: #f7f9fc; position: sticky; top: 0; }
+.sort-header { height: auto; width: auto; min-width: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; text-align: left; }
+.sort-header:hover { filter: none; color: #315efb; }
 .table-wrap { max-height: 420px; overflow: auto; border: 1px solid #e7ebf2; border-radius: 12px; }
 .warning { background: #fff4dc; border: 1px solid #ffd48a; color: #674400; border-radius: 12px; padding: 12px; margin-top: 14px; white-space: pre-wrap; }
 .hidden { display: none !important; }

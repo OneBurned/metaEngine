@@ -318,6 +318,36 @@ function aggregateSampleRuns(parameters, sampleRuns) {
   };
 }
 
+function optionalNumber(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizeOptimizerFilters(filters = {}) {
+  const maxDrawdownPercent = optionalNumber(filters.maxDrawdownPercent);
+  const minTrades = optionalNumber(filters.minTrades);
+  const minProfitableSamples = optionalNumber(filters.minProfitableSamples);
+  return {
+    maxDrawdownPercent: maxDrawdownPercent === null ? null : Math.abs(maxDrawdownPercent),
+    minTrades: minTrades === null ? 0 : Math.max(0, Math.floor(minTrades)),
+    minProfitableSamples: minProfitableSamples === null ? 0 : Math.max(0, Math.floor(minProfitableSamples))
+  };
+}
+
+function optimizerFiltersEnabled(filters) {
+  return filters.maxDrawdownPercent !== null || filters.minTrades > 0 || filters.minProfitableSamples > 0;
+}
+
+function optimizerRunPassesFilters(run, filters) {
+  if (!optimizerFiltersEnabled(filters)) return true;
+  if (filters.maxDrawdownPercent !== null && run.summary.worstDrawdown < -(filters.maxDrawdownPercent / 100)) return false;
+  const trades = (run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0);
+  if (trades < filters.minTrades) return false;
+  if (run.summary.profitableSamples < filters.minProfitableSamples) return false;
+  return true;
+}
+
 function trimOptimizerRuns(job) {
   const maxResults = Math.max(1, Number(job.maxResults ?? 100));
   if (job.runs.length <= maxResults) return;
@@ -367,12 +397,15 @@ function publicOptimizerJob(job) {
     error: job.error,
     totalRuns: job.totalRuns,
     completedRuns: job.completedRuns,
+    acceptedCombinations: job.acceptedCombinations,
+    filteredCombinations: job.filteredCombinations,
     completedCombinations: job.completedCombinations,
     totalCombinations: job.grid.length,
     sampleCount: job.samples?.length ?? 1,
     currentParameters: job.currentParameters,
     currentSample: job.currentSample,
     bestRun: job.bestRun,
+    filters: { ...job.filters, enabled: optimizerFiltersEnabled(job.filters) },
     optimization: job.optimization,
     runId: job.runId
   };
@@ -400,8 +433,13 @@ function continueOptimizerJob(job) {
         }, parameters);
       });
       const run = aggregateSampleRuns(parameters, sampleRuns);
-      job.runs.push(run);
-      if (!job.bestRun || run.score > job.bestRun.score) job.bestRun = run;
+      if (optimizerRunPassesFilters(run, job.filters)) {
+        job.runs.push(run);
+        job.acceptedCombinations += 1;
+        if (!job.bestRun || run.score > job.bestRun.score) job.bestRun = run;
+      } else {
+        job.filteredCombinations += 1;
+      }
       job.completedCombinations = i + 1;
       job.completedRuns = job.completedCombinations * job.samples.length;
     }
@@ -435,11 +473,14 @@ function finishOptimizerJob(job, status) {
     metric: 'stability_worst_sample_score',
     totalRuns: job.grid.length * job.samples.length,
     completedRuns: job.completedRuns,
+    acceptedCombinations: job.acceptedCombinations,
+    filteredCombinations: job.filteredCombinations,
     sampleCount: job.samples.length,
     totalCombinations: job.grid.length,
     completedCombinations: job.completedCombinations,
     returnedRuns: Math.min(job.runs.length, maxResults),
     stopped: status === 'stopped',
+    filters: { ...job.filters, enabled: optimizerFiltersEnabled(job.filters) },
     runs: job.runs.slice(0, maxResults)
   };
   job.status = status;
@@ -559,6 +600,7 @@ async function handleApi(req, res) {
       const samples = await buildOptimizerSamples(body);
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
       const grid = createRsiParameterGrid(body.ranges);
+      const filters = normalizeOptimizerFilters(body.filters);
       const jobId = crypto.randomUUID();
       const job = {
         jobId,
@@ -566,6 +608,8 @@ async function handleApi(req, res) {
         error: null,
         totalRuns: grid.length * samples.length,
         completedRuns: 0,
+        acceptedCombinations: 0,
+        filteredCombinations: 0,
         completedCombinations: 0,
         currentParameters: null,
         currentSample: null,
@@ -575,6 +619,7 @@ async function handleApi(req, res) {
         samples,
         strategy,
         grid,
+        filters,
         runs: [],
         maxResults: body.maxResults,
         stopRequested: false,
