@@ -11,6 +11,7 @@ const {
   findGaps,
   calculatePortfolio,
   calculatePreset,
+  calculateFromDiffs,
   validatePresetItems,
   formatNumber
 } = require('./lib/calculations');
@@ -259,6 +260,61 @@ function normalizeTradingStrategy(body) {
   return strategy;
 }
 
+async function buildOptimizerSamples(body) {
+  const sampleCount = Math.max(1, Math.floor(Number(body.sampleCount ?? 1)));
+  const fullResult = await calculateTarget(body);
+  const rows = fullResult.rows ?? [];
+  if (!rows.length) throw new Error('Нет точек для оптимизации');
+  if (sampleCount > rows.length) throw new Error('Семплов больше, чем точек в выбранном периоде');
+
+  const samples = [];
+  for (let i = 0; i < sampleCount; i += 1) {
+    const startIndex = Math.floor((rows.length * i) / sampleCount);
+    const endIndex = i === sampleCount - 1 ? rows.length : Math.floor((rows.length * (i + 1)) / sampleCount);
+    const sampleRows = rows.slice(startIndex, endIndex);
+    const grid = sampleRows.map((row) => row.timestamp);
+    const diffs = sampleRows.map((row) => row.diff);
+    const recalculated = calculateFromDiffs(grid, diffs);
+    const baseResult = { ...recalculated, step: fullResult.step, warnings: [] };
+    samples.push({
+      name: `sample ${i + 1}`,
+      periodFrom: sampleRows[0].time,
+      periodTo: sampleRows.at(-1).time,
+      baseResult
+    });
+  }
+  return samples;
+}
+
+function aggregateSampleRuns(parameters, sampleRuns) {
+  const scores = sampleRuns.map((sample) => sample.score);
+  const accums = sampleRuns.map((sample) => sample.summary.finalAccum);
+  const drawdowns = sampleRuns.map((sample) => sample.summary.maxDrawdown);
+  const average = (values) => values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+  const profitableSamples = sampleRuns.filter((sample) => sample.summary.finalAccum > 0).length;
+  const score = Math.min(...scores);
+  return {
+    strategy: 'rsi',
+    parameters: { ...parameters },
+    summary: {
+      finalAccum: average(accums),
+      maxDrawdown: Math.min(...drawdowns),
+      buyCount: sampleRuns.reduce((sum, sample) => sum + sample.summary.buyCount, 0),
+      sellCount: sampleRuns.reduce((sum, sample) => sum + sample.summary.sellCount, 0),
+      sampleCount: sampleRuns.length,
+      profitableSamples,
+      averageScore: average(scores),
+      worstScore: Math.min(...scores),
+      averageAccum: average(accums),
+      worstAccum: Math.min(...accums),
+      averageDrawdown: average(drawdowns),
+      worstDrawdown: Math.min(...drawdowns)
+    },
+    samples: sampleRuns,
+    score
+  };
+}
+
 function publicOptimizerJob(job) {
   return {
     jobId: job.jobId,
@@ -266,7 +322,11 @@ function publicOptimizerJob(job) {
     error: job.error,
     totalRuns: job.totalRuns,
     completedRuns: job.completedRuns,
+    completedCombinations: job.completedCombinations,
+    totalCombinations: job.grid.length,
+    sampleCount: job.samples?.length ?? 1,
     currentParameters: job.currentParameters,
+    currentSample: job.currentSample,
     bestRun: job.bestRun,
     optimization: job.optimization,
     runId: job.runId
@@ -282,14 +342,29 @@ function continueOptimizerJob(job) {
   if (job.status !== 'running') return;
 
   try {
-    const end = Math.min(job.completedRuns + OPTIMIZER_CHUNK_SIZE, job.grid.length);
-    for (let i = job.completedRuns; i < end; i += 1) {
+    const end = Math.min(job.completedCombinations + OPTIMIZER_CHUNK_SIZE, job.grid.length);
+    for (let i = job.completedCombinations; i < end; i += 1) {
       const parameters = job.grid[i];
       job.currentParameters = parameters;
-      const run = runRsiOptimizationCase(job.baseResult, job.strategy, parameters, tradingStrategies.calculateTradingStrategy);
+      const sampleRuns = job.samples.map((sample) => {
+        job.currentSample = sample.name;
+        const sampleRun = runRsiOptimizationCase(sample.baseResult, {
+          ...job.strategy,
+          periodFrom: sample.periodFrom,
+          periodTo: sample.periodTo
+        }, parameters, tradingStrategies.calculateTradingStrategy);
+        return {
+          ...sampleRun,
+          name: sample.name,
+          periodFrom: sample.periodFrom,
+          periodTo: sample.periodTo
+        };
+      });
+      const run = aggregateSampleRuns(parameters, sampleRuns);
       job.runs.push(run);
       if (!job.bestRun || run.score > job.bestRun.score) job.bestRun = run;
-      job.completedRuns = i + 1;
+      job.completedCombinations = i + 1;
+      job.completedRuns = job.completedCombinations * job.samples.length;
     }
 
     job.updatedAt = Date.now();
@@ -299,7 +374,7 @@ function continueOptimizerJob(job) {
       return;
     }
 
-    if (job.completedRuns < job.grid.length) {
+    if (job.completedCombinations < job.grid.length) {
       setImmediate(() => continueOptimizerJob(job));
       return;
     }
@@ -317,9 +392,12 @@ function finishOptimizerJob(job, status) {
   const maxResults = Number(job.maxResults ?? 100);
   job.optimization = {
     type: 'rsi',
-    metric: 'recovery',
-    totalRuns: job.grid.length,
+    metric: 'stability_worst_sample_score',
+    totalRuns: job.grid.length * job.samples.length,
     completedRuns: job.completedRuns,
+    sampleCount: job.samples.length,
+    totalCombinations: job.grid.length,
+    completedCombinations: job.completedCombinations,
     returnedRuns: Math.min(job.runs.length, maxResults),
     stopped: status === 'stopped',
     runs: job.runs.slice(0, maxResults)
@@ -428,7 +506,7 @@ async function handleApi(req, res) {
         strategy,
         body.ranges,
         tradingStrategies.calculateTradingStrategy,
-        { maxRuns: body.maxRuns, maxResults: body.maxResults }
+        { maxResults: body.maxResults }
       );
       const runId = crypto.randomUUID();
       const payload = { runId, baseResult, strategy, optimization };
@@ -438,20 +516,23 @@ async function handleApi(req, res) {
 
     if (req.method === 'POST' && url.pathname === '/api/strategies/optimize/start') {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
-      const baseResult = await calculateTarget(body);
+      const samples = await buildOptimizerSamples(body);
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
-      const grid = createRsiParameterGrid(body.ranges, { maxRuns: body.maxRuns });
+      const grid = createRsiParameterGrid(body.ranges);
       const jobId = crypto.randomUUID();
       const job = {
         jobId,
         status: 'running',
         error: null,
-        totalRuns: grid.length,
+        totalRuns: grid.length * samples.length,
         completedRuns: 0,
+        completedCombinations: 0,
         currentParameters: null,
+        currentSample: null,
         bestRun: null,
         optimization: null,
-        baseResult,
+        baseResult: samples[0].baseResult,
+        samples,
         strategy,
         grid,
         runs: [],

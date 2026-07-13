@@ -580,6 +580,7 @@ function collectStrategyBody() {
 
 function collectOptimizationBody() {
   return {
+    sampleCount: $('#optSampleCount').value,
     ranges: {
       rsiPeriod: {
         from: $('#optRsiPeriodFrom').value,
@@ -613,7 +614,8 @@ function showOptimizationProgress(job) {
     ? `RSI ${job.currentParameters.rsiPeriod}, buy ${job.currentParameters.buyLevel}, sell ${job.currentParameters.sellLevel}`
     : '-';
   const statusLabel = job.status === 'stopped' ? 'Остановлено' : job.status === 'done' ? 'Готово' : job.status === 'error' ? 'Ошибка' : 'Оптимизация';
-  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Текущий набор: ${current}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
+  const sample = job.currentSample ? `<br>Текущий семпл: ${job.currentSample}` : '';
+  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Комбинаций: ${job.completedCombinations ?? 0} / ${job.totalCombinations ?? job.totalRuns}<br>Семплов: ${job.sampleCount ?? 1}<br>Текущий набор: ${current}${sample}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
 }
 
 function clearOptimizationPoll() {
@@ -743,24 +745,30 @@ function showStrategyResult(result, name) {
 function showOptimizationResult(result) {
   $('#optimizationResultCard').classList.remove('hidden');
   const statusRow = result.stopped ? '<tr><th>Статус</th><td>Остановлено пользователем</td></tr>' : '';
+  const sampleCount = result.sampleCount ?? result.runs[0]?.summary?.sampleCount ?? 1;
   $('#optimizationSummary').innerHTML = `<table><tbody>
     ${statusRow}
-    <tr><th>Метрика</th><td>Recovery</td></tr>
+    <tr><th>Метрика</th><td>Устойчивость: худший score по семплам</td></tr>
     <tr><th>Всего прогонов</th><td>${result.totalRuns}</td></tr>
+    <tr><th>Семплов</th><td>${sampleCount}</td></tr>
     <tr><th>Выполнено</th><td>${result.completedRuns ?? result.totalRuns}</td></tr>
     <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
   </tbody></table>`;
-  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Score</th><th>Accum</th><th>MDD</th><th>Покупок</th><th>Продаж</th></tr></thead><tbody>${result.runs.map((run, index) => `
+  const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
+  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Устойчивость</th><th>Прибыльных</th><th>Ср. score</th><th>Худш. score</th><th>Ср. accum</th><th>Худш. accum</th><th>Худш. MDD</th>${sampleHeaders}</tr></thead><tbody>${result.runs.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
       <td>${run.parameters.rsiPeriod}</td>
       <td>${run.parameters.buyLevel}</td>
       <td>${run.parameters.sellLevel}</td>
       <td>${Number(run.score).toFixed(6)}</td>
-      <td>${fmtPct(run.summary.finalAccum)}</td>
-      <td>${fmtPct(run.summary.maxDrawdown)}</td>
-      <td>${run.summary.buyCount}</td>
-      <td>${run.summary.sellCount}</td>
+      <td>${run.summary.profitableSamples}/${run.summary.sampleCount}</td>
+      <td>${Number(run.summary.averageScore).toFixed(6)}</td>
+      <td>${Number(run.summary.worstScore).toFixed(6)}</td>
+      <td>${fmtPct(run.summary.averageAccum)}</td>
+      <td>${fmtPct(run.summary.worstAccum)}</td>
+      <td>${fmtPct(run.summary.worstDrawdown)}</td>
+      ${(run.samples ?? []).map((sample) => `<td>${sample.name}<br>${sample.periodFrom} → ${sample.periodTo}<br>accum ${fmtPct(sample.summary.finalAccum)}<br>MDD ${fmtPct(sample.summary.maxDrawdown)}<br>score ${Number(sample.score).toFixed(4)}</td>`).join('')}
     </tr>`).join('')}</tbody>`;
 }
 

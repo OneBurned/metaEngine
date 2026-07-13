@@ -111,6 +111,19 @@ test('RSI optimizer shows progress and can be stopped', () => {
   assert.match(server, /finishOptimizerJob\(job, 'stopped'\)/);
 });
 
+test('RSI optimizer supports sample-based stability results', () => {
+  assert.match(html, /id="optSampleCount"/);
+  assert.match(app, /sampleCount: \$\('#optSampleCount'\)\.value/);
+  assert.match(app, /Семплов: \$\{job\.sampleCount/);
+  assert.match(app, /Устойчивость: худший score по семплам/);
+  assert.match(app, /sampleHeaders/);
+  assert.match(app, /run\.samples/);
+  assert.match(server, /buildOptimizerSamples/);
+  assert.match(server, /aggregateSampleRuns/);
+  assert.match(server, /stability_worst_sample_score/);
+  assert.match(server, /completedRuns: job\.completedRuns/);
+});
+
 test('strategy result card renders its own RSI chart', () => {
   assert.match(html, /id="strategyRsiPanel"/);
   assert.match(html, /id="strategyRsiChart"/);

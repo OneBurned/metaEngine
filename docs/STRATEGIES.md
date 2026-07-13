@@ -107,10 +107,30 @@ The optimizer returns a ranked table of runs with:
 During optimization the UI shows progress:
 
 - completed runs / total runs;
+- completed parameter combinations / total combinations;
+- sample count;
 - current parameter set;
 - best score found so far.
 
 The user can stop optimization. Stop is soft: the backend finishes the current run chunk, does not start new parameter combinations, and returns the ranked table for the completed runs.
+
+The optimizer can split the selected period into samples before optimization. With `sampleCount = 1`, behavior is the old full-track optimization. With `sampleCount > 1`, the already calculated source rows are split into sequential chunks by point count. Each sample is recalculated from its own `diff` series so its `accum` starts from zero.
+
+For every RSI parameter combination the optimizer runs all samples and aggregates:
+
+- profitable sample count;
+- average and worst score;
+- average and worst accum;
+- average and worst drawdown;
+- per-sample accum/MDD/score details.
+
+The ranking score for sample optimization is stability-oriented:
+
+```text
+score = min(sampleScores)
+```
+
+This favors parameters whose worst sample still performs acceptably.
 
 The first score is Recovery-style:
 
