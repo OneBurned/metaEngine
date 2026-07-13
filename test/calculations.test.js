@@ -162,17 +162,12 @@ test('RSI optimizer runs parameter grid and sorts by score', () => {
   assert.deepEqual(Object.keys(result.runs[0].parameters), ['rsiPeriod', 'buyLevel', 'sellLevel']);
 });
 
-test('RSI optimizer rejects oversized grids', () => {
-  const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
-  assert.throws(() => optimizeRsiStrategy(
-    base,
-    { type: 'rsi' },
-    {
-      rsiPeriod: { from: 1, to: 10, step: 1 },
-      buyLevel: { from: 1, to: 10, step: 1 },
-      sellLevel: { from: 1, to: 10, step: 1 }
-    },
-    calculateTradingStrategy,
-    { maxRuns: 10 }
-  ), /Слишком много прогонов/);
+test('RSI optimizer allows large parameter grids', () => {
+  const { createRsiParameterGrid } = require('../lib/optimizer');
+  const grid = createRsiParameterGrid({
+    rsiPeriod: { from: 1, to: 60, step: 1 },
+    buyLevel: { from: 1, to: 10, step: 1 },
+    sellLevel: { from: 1, to: 10, step: 1 }
+  });
+  assert.equal(grid.length, 6000);
 });
