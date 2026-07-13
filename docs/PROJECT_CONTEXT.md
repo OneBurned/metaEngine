@@ -711,6 +711,16 @@ Graph layout:
 1. base portfolio/preset graph and table;
 2. RSI subgraph with level lines when RSI strategy overlay is enabled;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+
+RSI optimizer:
+
+- the existing RSI strategy calculation is the tester engine for optimizer runs;
+- the optimizer repeatedly calls the RSI calculation with different parameters;
+- first optimized parameters are `rsiPeriod`, `buyLevel`, and `sellLevel`;
+- `upperLevel`, `lowerLevel`, and `baseline` are not optimized yet;
+- each run stores parameters, final accum, max drawdown, buy/sell counts, and score;
+- current score is Recovery-style: `finalAccum / abs(maxDrawdown)`;
+- zero max drawdown is handled separately to avoid division by zero.
 ## Экспорт CSV
 
 В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.

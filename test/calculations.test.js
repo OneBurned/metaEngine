@@ -11,6 +11,7 @@ const {
   calculatePreset,
   validatePresetItems
 } = require('../lib/calculations');
+const { expandNumericRange, optimizeRsiStrategy } = require('../lib/optimizer');
 const { calculateRsiFromEquity } = require('../strategies/rsi');
 const { calculateTradingStrategy, getStrategy } = require('../strategies');
 
@@ -131,4 +132,47 @@ test('RSI trading strategy changes position next point and builds strategy resul
 test('RSI trading strategy allows inverted levels without validation error', () => {
   const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
   assert.doesNotThrow(() => calculateTradingStrategy(base, { rsiPeriod: 2, buyLevel: 80, sellLevel: 20 }));
+});
+
+test('optimizer expands numeric ranges inclusively', () => {
+  assert.deepEqual(expandNumericRange('rsiPeriod', { from: 2, to: 4, step: 1 }, { integer: true }), [2, 3, 4]);
+  assert.deepEqual(expandNumericRange('buyLevel', { from: 20, to: 30, step: 5 }), [20, 25, 30]);
+});
+
+test('RSI optimizer runs parameter grid and sorts by score', () => {
+  const grid = Array.from({ length: 24 }, (_, i) => i);
+  const diffs = [0, -0.02, -0.02, -0.02, 0.03, 0.03, 0.03, -0.02, -0.02, 0.03, 0.03, -0.01, -0.01, 0.02, 0.02, -0.03, -0.03, 0.04, 0.04, -0.01, 0.02, -0.02, 0.03, 0.01];
+  const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
+  const result = optimizeRsiStrategy(
+    base,
+    { type: 'rsi' },
+    {
+      rsiPeriod: { from: 3, to: 4, step: 1 },
+      buyLevel: { from: 35, to: 40, step: 5 },
+      sellLevel: { from: 55, to: 60, step: 5 }
+    },
+    calculateTradingStrategy,
+    { maxResults: 3 }
+  );
+
+  assert.equal(result.totalRuns, 8);
+  assert.equal(result.returnedRuns, 3);
+  assert.equal(result.runs.length, 3);
+  assert.ok(result.runs[0].score >= result.runs[1].score);
+  assert.deepEqual(Object.keys(result.runs[0].parameters), ['rsiPeriod', 'buyLevel', 'sellLevel']);
+});
+
+test('RSI optimizer rejects oversized grids', () => {
+  const base = { ...calculateFromDiffs([0, 1, 2, 3], [0, -0.01, 0.02, 0.01]), step: 1 };
+  assert.throws(() => optimizeRsiStrategy(
+    base,
+    { type: 'rsi' },
+    {
+      rsiPeriod: { from: 1, to: 10, step: 1 },
+      buyLevel: { from: 1, to: 10, step: 1 },
+      sellLevel: { from: 1, to: 10, step: 1 }
+    },
+    calculateTradingStrategy,
+    { maxRuns: 10 }
+  ), /Слишком много прогонов/);
 });

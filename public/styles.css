@@ -37,6 +37,9 @@ button:hover { filter: brightness(.96); }
 .strategy-form label:nth-child(9),
 .strategy-form label:nth-child(10) { grid-column: span 2; }
 .strategy-form button { align-self: end; }
+.optimizer-panel { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e7ebf2; }
+.optimizer-grid { display: grid; grid-template-columns: repeat(6, minmax(130px, 1fr)); gap: 12px; align-items: end; }
+.optimizer-grid button { grid-column: span 2; align-self: end; }
 .date-pair { display: grid; grid-template-columns: minmax(180px, 1fr) 42px; gap: 8px; align-items: center; }
 .date-pair .date-open { width: 42px; min-width: 42px; padding: 0; background: #eef2ff; color: #315efb; font-size: 18px; line-height: 1; }
 .date-popup { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(23, 32, 51, .35); }
@@ -60,5 +63,5 @@ th { background: #f7f9fc; position: sticky; top: 0; }
 #rsiChart { width: 100%; height: 220px; background: #fbfcff; border: 1px solid #e1e6ef; border-radius: 12px; }
 .badge { display: inline-block; background: #eef2ff; color: #315efb; padding: 4px 8px; border-radius: 999px; font-size: 12px; }
 @media (max-width: 1100px) { .preset-row { grid-template-columns: repeat(2, minmax(260px, 1fr)); } }
-@media (max-width: 900px) { .strategy-form { grid-template-columns: repeat(2, minmax(220px, 1fr)); } .strategy-form label:nth-child(n) { grid-column: span 1; } }
-@media (max-width: 640px) { main { padding: 12px; } .preset-row, .grid-form, .strategy-form { grid-template-columns: 1fr; } .date-pair { grid-template-columns: 1fr; } .date-pair .date-open { width: 100%; } }
+@media (max-width: 900px) { .strategy-form, .optimizer-grid { grid-template-columns: repeat(2, minmax(220px, 1fr)); } .strategy-form label:nth-child(n) { grid-column: span 1; } .optimizer-grid button { grid-column: span 1; } }
+@media (max-width: 640px) { main { padding: 12px; } .preset-row, .grid-form, .strategy-form, .optimizer-grid { grid-template-columns: 1fr; } .date-pair { grid-template-columns: 1fr; } .date-pair .date-open { width: 100%; } }

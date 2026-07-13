@@ -6,6 +6,7 @@ let lastResultKey = null;
 let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
+let lastOptimizationResult = null;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -345,11 +346,16 @@ function clearStrategyMessage(kind = '') {
 
 function updateStrategyCalculateAvailability(showMessage = false) {
   const button = $('#calculateTradingStrategy');
+  const optimizeButton = $('#optimizeTradingStrategy');
   if (!button) return false;
   const message = strategyReadinessMessage();
   const ready = !message;
   button.disabled = !ready;
   button.title = message;
+  if (optimizeButton) {
+    optimizeButton.disabled = !ready;
+    optimizeButton.title = message;
+  }
   if (ready) {
     clearStrategyMessage('strategy-readiness');
   } else if (showMessage && !$('#strategyPanel').classList.contains('hidden')) {
@@ -389,7 +395,9 @@ async function calculate() {
   const result = await api('/api/calculate', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   result.calculationKey = currentKey;
   lastStrategyResult = null;
+  lastOptimizationResult = null;
   $('#strategyResultCard').classList.add('hidden');
+  $('#optimizationResultCard').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
   $('#rsiPanel').classList.add('hidden');
   if (result.warnings?.length) {
@@ -510,6 +518,29 @@ function collectStrategyBody() {
   };
 }
 
+function collectOptimizationBody() {
+  return {
+    ranges: {
+      rsiPeriod: {
+        from: $('#optRsiPeriodFrom').value,
+        to: $('#optRsiPeriodTo').value,
+        step: $('#optRsiPeriodStep').value
+      },
+      buyLevel: {
+        from: $('#optBuyFrom').value,
+        to: $('#optBuyTo').value,
+        step: $('#optBuyStep').value
+      },
+      sellLevel: {
+        from: $('#optSellFrom').value,
+        to: $('#optSellTo').value,
+        step: $('#optSellStep').value
+      }
+    },
+    maxResults: $('#optMaxResults').value
+  };
+}
+
 
 
 async function saveTradingStrategy(overwrite = false) {
@@ -550,6 +581,28 @@ async function calculateTradingStrategy() {
   updateStrategyCalculateAvailability();
 }
 
+async function optimizeTradingStrategy() {
+  const readiness = strategyReadinessMessage();
+  if (readiness) {
+    showStrategyMessage(readiness, 'strategy-readiness');
+    updateStrategyCalculateAvailability();
+    return;
+  }
+  const base = baseCalculationBody();
+  const strategy = collectStrategyBody();
+  const optimizationBody = collectOptimizationBody();
+  const result = await api('/api/strategies/optimize', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...base, strategy, ...optimizationBody })
+  });
+  lastResult = result.baseResult;
+  lastOptimizationResult = result.optimization;
+  showResult(result.baseResult);
+  showOptimizationResult(result.optimization);
+  updateStrategyCalculateAvailability();
+}
+
 function showStrategyResult(result, name) {
   $('#strategyResultCard').classList.remove('hidden');
   $('#strategyOverlayToggle').classList.remove('hidden');
@@ -567,6 +620,27 @@ function showStrategyResult(result, name) {
   renderRsiChart();
   renderStrategyChart();
   renderStrategyTable(result.rows);
+}
+
+function showOptimizationResult(result) {
+  $('#optimizationResultCard').classList.remove('hidden');
+  $('#optimizationSummary').innerHTML = `<table><tbody>
+    <tr><th>Метрика</th><td>Recovery</td></tr>
+    <tr><th>Всего прогонов</th><td>${result.totalRuns}</td></tr>
+    <tr><th>Показано</th><td>${result.returnedRuns}</td></tr>
+  </tbody></table>`;
+  $('#optimizationResultTable').innerHTML = `<thead><tr><th>#</th><th>RSI период</th><th>Купить</th><th>Продать</th><th>Score</th><th>Accum</th><th>MDD</th><th>Покупок</th><th>Продаж</th></tr></thead><tbody>${result.runs.map((run, index) => `
+    <tr>
+      <td>${index + 1}</td>
+      <td>${run.parameters.rsiPeriod}</td>
+      <td>${run.parameters.buyLevel}</td>
+      <td>${run.parameters.sellLevel}</td>
+      <td>${Number(run.score).toFixed(6)}</td>
+      <td>${fmtPct(run.summary.finalAccum)}</td>
+      <td>${fmtPct(run.summary.maxDrawdown)}</td>
+      <td>${run.summary.buyCount}</td>
+      <td>${run.summary.sellCount}</td>
+    </tr>`).join('')}</tbody>`;
 }
 
 function renderStrategyChart() {
@@ -694,6 +768,7 @@ $('#enableStrategies').addEventListener('change', (event) => {
 });
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
+$('#optimizeTradingStrategy').addEventListener('click', () => withLoadingButton($('#optimizeTradingStrategy'), 'Оптимизируется', optimizeTradingStrategy).catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
 $('#openCsvExport').addEventListener('click', openCsvExportPopup);
 $('#csvExportSource').addEventListener('change', updateCsvExportPopupState);
 $('#csvExportApply').addEventListener('click', () => exportCsv().catch((err) => alert(err.message)));

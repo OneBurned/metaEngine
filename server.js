@@ -14,6 +14,7 @@ const {
   validatePresetItems,
   formatNumber
 } = require('./lib/calculations');
+const { optimizeRsiStrategy } = require('./lib/optimizer');
 const tradingStrategies = require('./strategies');
 
 const ROOT = __dirname;
@@ -333,6 +334,23 @@ async function handleApi(req, res) {
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
       const result = tradingStrategies.calculateTradingStrategy(baseResult, strategy);
       return json(res, 200, { baseResult, strategyResult: result, strategy });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/strategies/optimize') {
+      const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
+      const baseResult = await calculateTarget(body);
+      const strategy = normalizeTradingStrategy(body.strategy ?? body);
+      const optimization = optimizeRsiStrategy(
+        baseResult,
+        strategy,
+        body.ranges,
+        tradingStrategies.calculateTradingStrategy,
+        { maxRuns: body.maxRuns, maxResults: body.maxResults }
+      );
+      const runId = crypto.randomUUID();
+      const payload = { runId, baseResult, strategy, optimization };
+      fs.writeFileSync(path.join(RUNS_DIR, `${runId}.optimizer.json`), JSON.stringify(payload, null, 2), 'utf8');
+      return json(res, 200, payload);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/strategies') {

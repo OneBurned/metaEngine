@@ -75,3 +75,31 @@ Rules:
 - when the calculation finishes or fails, the original button text is restored.
 
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.
+
+## RSI optimizer
+
+The RSI calculation is also used as the first optimizer target. The optimizer does not implement separate trading logic. It repeatedly calls the existing strategy calculation with different parameters, similar to the Tester/Optimizer split in OsEngine.
+
+For the first version only these RSI parameters are optimized:
+
+- `rsiPeriod`;
+- `buyLevel`;
+- `sellLevel`.
+
+`upperLevel`, `lowerLevel`, and `baseline` remain ordinary display/config values and are not part of the optimizer grid yet.
+
+The optimizer returns a ranked table of runs with:
+
+- parameter values;
+- final `accum`;
+- max drawdown;
+- buy/sell counts;
+- `score`.
+
+The first score is Recovery-style:
+
+```text
+score = finalAccum / abs(maxDrawdown)
+```
+
+If max drawdown is zero, the score is handled separately to avoid division by zero.

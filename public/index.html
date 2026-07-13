@@ -137,6 +137,23 @@
           <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
         </div>
         <p class="hint">RSI считается по equity-кривой. Сигнал применяется со следующей точки: без подглядывания в будущее.</p>
+        <div class="optimizer-panel">
+          <h3>Оптимизация RSI</h3>
+          <div class="optimizer-grid">
+            <label>RSI период от <input id="optRsiPeriodFrom" type="number" value="5" min="1" step="1" /></label>
+            <label>RSI период до <input id="optRsiPeriodTo" type="number" value="30" min="1" step="1" /></label>
+            <label>Шаг <input id="optRsiPeriodStep" type="number" value="1" min="1" step="1" /></label>
+            <label>Купить от <input id="optBuyFrom" type="number" value="20" step="0.1" /></label>
+            <label>Купить до <input id="optBuyTo" type="number" value="45" step="0.1" /></label>
+            <label>Шаг <input id="optBuyStep" type="number" value="5" min="0.1" step="0.1" /></label>
+            <label>Продать от <input id="optSellFrom" type="number" value="55" step="0.1" /></label>
+            <label>Продать до <input id="optSellTo" type="number" value="80" step="0.1" /></label>
+            <label>Шаг <input id="optSellStep" type="number" value="5" min="0.1" step="0.1" /></label>
+            <label>Показать лучших <input id="optMaxResults" type="number" value="100" min="1" max="500" step="1" /></label>
+            <button id="optimizeTradingStrategy" type="button">Оптимизировать RSI</button>
+          </div>
+          <p class="hint">Score считается как Recovery: итоговая доходность / модуль MDD.</p>
+        </div>
         <div id="tradingStrategies"></div>
         <div id="strategyWarningBox" class="warning hidden"></div>
       </div>
@@ -155,6 +172,13 @@
       </div>
       <svg id="strategyChart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
+    </section>
+
+
+    <section class="card hidden" id="optimizationResultCard">
+      <h2>7. Результат оптимизации RSI</h2>
+      <div id="optimizationSummary"></div>
+      <div class="table-wrap"><table id="optimizationResultTable"></table></div>
     </section>
 
 
