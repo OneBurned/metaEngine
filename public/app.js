@@ -91,8 +91,14 @@ function defaultStrategyName() {
 
 async function api(url, options = {}) {
   const res = await fetch(url, options);
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(body.error || body.message || 'Ошибка запроса');
+  const text = await res.text();
+  let body = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = {};
+  }
+  if (!res.ok) throw new Error(body.error || body.message || text.slice(0, 160) || `Ошибка запроса (${res.status})`);
   return body;
 }
 

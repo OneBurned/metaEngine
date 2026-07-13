@@ -318,6 +318,13 @@ function aggregateSampleRuns(parameters, sampleRuns) {
   };
 }
 
+function trimOptimizerRuns(job) {
+  const maxResults = Math.max(1, Number(job.maxResults ?? 100));
+  if (job.runs.length <= maxResults) return;
+  sortOptimizationRuns(job.runs);
+  job.runs = job.runs.slice(0, maxResults);
+}
+
 function getSampleRsi(sample, rsiPeriod) {
   if (!sample.rsiCache) sample.rsiCache = new Map();
   const key = String(rsiPeriod);
@@ -399,6 +406,7 @@ function continueOptimizerJob(job) {
       job.completedRuns = job.completedCombinations * job.samples.length;
     }
 
+    trimOptimizerRuns(job);
     job.updatedAt = Date.now();
 
     if (job.stopRequested) {
@@ -420,7 +428,7 @@ function continueOptimizerJob(job) {
 }
 
 function finishOptimizerJob(job, status) {
-  sortOptimizationRuns(job.runs);
+  trimOptimizerRuns(job);
   const maxResults = Number(job.maxResults ?? 100);
   job.optimization = {
     type: 'rsi',

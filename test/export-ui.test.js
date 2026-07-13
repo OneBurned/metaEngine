@@ -122,6 +122,7 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /run\.samples/);
   assert.match(server, /buildOptimizerSamples/);
   assert.match(server, /aggregateSampleRuns/);
+  assert.match(server, /trimOptimizerRuns/);
   assert.match(server, /compoundedAccum = accums\.reduce/);
   assert.match(server, /stability_worst_sample_score/);
   assert.match(server, /completedRuns: job\.completedRuns/);

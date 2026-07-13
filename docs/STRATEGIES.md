@@ -117,6 +117,8 @@ The optimizer can split the selected period into samples before optimization. Wi
 
 For performance, sample preparation happens before the parameter search. RSI is calculated once per `(sample, rsiPeriod)` and cached in memory for the running optimizer job. Buy/sell level combinations then use a metrics-only RSI evaluator that produces the same summary values as the full strategy calculation without rebuilding chart rows for every run.
 
+During long searches the backend keeps only the current top `maxResults` runs in memory. Progress counters still reflect the full grid, but completed low-ranked runs are not retained in the optimizer job object.
+
 For every RSI parameter combination the optimizer runs all samples and aggregates:
 
 - profitable sample count;

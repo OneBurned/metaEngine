@@ -727,7 +727,8 @@ RSI optimizer:
 - optimization can be stopped softly, after which the UI shows the ranked table for completed runs;
 - optimizer can split the selected period into samples before parameter search; each parameter combination is run on every sample;
 - sample-mode ranking uses the worst sample score as the stability score and shows per-sample results in the table;
-- sample-mode table also shows compounded accum: `(1 + sample1Accum) * (1 + sample2Accum) * ... - 1`.
+- sample-mode table also shows compounded accum: `(1 + sample1Accum) * (1 + sample2Accum) * ... - 1`;
+- long optimizer jobs keep only top `maxResults` runs in memory while progress counters continue tracking the full grid.
 ## Экспорт CSV
 
 В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.
