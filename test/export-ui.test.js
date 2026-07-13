@@ -110,3 +110,10 @@ test('RSI optimizer shows progress and can be stopped', () => {
   assert.match(server, /stopRequested/);
   assert.match(server, /finishOptimizerJob\(job, 'stopped'\)/);
 });
+
+test('strategy result card renders its own RSI chart', () => {
+  assert.match(html, /id="strategyRsiPanel"/);
+  assert.match(html, /id="strategyRsiChart"/);
+  assert.match(app, /function renderStrategyRsiChart\(\)/);
+  assert.match(app, /renderStrategyRsiChart\(\);\n\s*renderStrategyChart\(\)/);
+});

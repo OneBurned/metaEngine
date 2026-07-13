@@ -412,6 +412,7 @@ async function calculate() {
   $('#stopOptimization').classList.add('hidden');
   $('#strategyOverlayToggle').classList.add('hidden');
   $('#rsiPanel').classList.add('hidden');
+  $('#strategyRsiPanel').classList.add('hidden');
   if (result.warnings?.length) {
     pendingResult = result;
     showWarning(result);
@@ -504,7 +505,19 @@ function renderRsiChart() {
     return;
   }
   $('#rsiPanel').classList.remove('hidden');
-  const svg = $('#rsiChart');
+  renderRsiSvg($('#rsiChart'));
+}
+
+function renderStrategyRsiChart() {
+  if (!lastStrategyResult?.rsi?.length) {
+    $('#strategyRsiPanel').classList.add('hidden');
+    return;
+  }
+  $('#strategyRsiPanel').classList.remove('hidden');
+  renderRsiSvg($('#strategyRsiChart'));
+}
+
+function renderRsiSvg(svg) {
   const width = 900, height = 220, pad = 36;
   const rows = lastStrategyResult.rsi;
   const cfg = lastStrategyResult.config;
@@ -685,6 +698,7 @@ function showStrategyResult(result, name) {
     <tr><th>Продаж</th><td>${result.summary.sellCount}</td></tr>
   </tbody></table>`;
   renderRsiChart();
+  renderStrategyRsiChart();
   renderStrategyChart();
   renderStrategyTable(result.rows);
 }
@@ -911,7 +925,7 @@ document.addEventListener('change', (event) => {
   }
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
-$('#strategyToggles').addEventListener('change', renderStrategyChart);
+$('#strategyToggles').addEventListener('change', () => { renderStrategyRsiChart(); renderStrategyChart(); });
 
 const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
 if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;

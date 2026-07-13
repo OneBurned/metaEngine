@@ -165,6 +165,10 @@
     <section class="card hidden" id="strategyResultCard">
       <h2>6. Итог торговли по стратегии</h2>
       <div id="strategySummary"></div>
+      <div id="strategyRsiPanel" class="subchart hidden">
+        <h3>RSI</h3>
+        <svg id="strategyRsiChart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
+      </div>
       <div class="toggles" id="strategyToggles">
         <label style="--line-color: #7c8a9b"><input type="checkbox" data-strategy-line="strategy_diff" /> <span class="line-dot"></span> Diff</label>
         <label style="--line-color: #315efb"><input type="checkbox" data-strategy-line="strategy_accum" checked /> <span class="line-dot"></span> Accum</label>
