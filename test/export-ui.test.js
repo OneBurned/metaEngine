@@ -147,3 +147,9 @@ test('strategy result card compares source and strategy on one chart with shared
   assert.match(app, /strategy-detail-chart/);
   assert.match(app, /strategy-rsi-chart/);
 });
+
+test('line chart avoids spread min max for large histories', () => {
+  assert.doesNotMatch(app, /Math\.min\(\.\.\.values/);
+  assert.doesNotMatch(app, /Math\.max\(\.\.\.values/);
+  assert.match(app, /for \(const row of rows\)/);
+});

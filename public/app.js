@@ -475,9 +475,16 @@ function renderResultTable(rows) {
 function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) {
   if (!rows?.length) return;
   const width = 900, height = 360, pad = 42;
-  const values = rows.flatMap((row) => keys.map((key) => row[key])).filter((value) => value !== null && value !== undefined && Number.isFinite(Number(value)));
-  const min = Math.min(...values, 0);
-  const max = Math.max(...values, 0);
+  let min = 0;
+  let max = 0;
+  for (const row of rows) {
+    for (const key of keys) {
+      const value = Number(row[key]);
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+  }
   const span = max - min || 1;
   const x = (i) => pad + (i / Math.max(rows.length - 1, 1)) * (width - pad * 2);
   const y = (v) => height - pad - ((v - min) / span) * (height - pad * 2);
