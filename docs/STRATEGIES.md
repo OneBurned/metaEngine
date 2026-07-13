@@ -76,6 +76,14 @@ Rules:
 
 Strategy period dates mirror block **“3. Расчет”**. When the user changes calculation dates in block 3 and the strategy panel is open, the strategy period fields are updated to the same values. This keeps the strategy visibly tied to the current base calculation period.
 
+The strategy result block shows three chart areas:
+
+- source portfolio/preset result with its own `diff/accum/hwm/dd/mdd` toggles;
+- RSI chart;
+- trading strategy result with its own `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd` toggles.
+
+The source chart lets the user compare the original return/drawdown profile with the calculated strategy result. A shared chart-height selector resizes the source, RSI, and strategy-result charts together so details can be inspected more comfortably.
+
 ## RSI optimizer
 
 The RSI calculation is also used as the first optimizer target. The optimizer does not implement separate trading logic. It repeatedly calls the existing strategy calculation with different parameters, similar to the Tester/Optimizer split in OsEngine.

@@ -489,6 +489,23 @@ function renderLineChart(svg, rows, keys, colors, labelAccessor = (key) => key) 
   svg.innerHTML = `<line x1="${pad}" x2="${width - pad}" y1="${zeroY}" y2="${zeroY}" stroke="#cfd6e3"/><text x="8" y="${pad}" font-size="12">${fmtPct(max)}</text><text x="8" y="${height - pad}" font-size="12">${fmtPct(min)}</text>${lines}`;
 }
 
+function enrichSourceRows(rows) {
+  let hwm = 0;
+  let mdd = 0;
+  return rows.map((row, index) => {
+    const sourceAccum = Number(row.source_accum ?? 0);
+    hwm = index === 0 ? sourceAccum : Math.max(hwm, sourceAccum);
+    const dd = (1 + sourceAccum) / (1 + hwm) - 1;
+    mdd = Math.min(mdd, dd);
+    return {
+      ...row,
+      source_hwm: hwm,
+      source_dd: dd,
+      source_mdd: mdd
+    };
+  });
+}
+
 function renderChart() {
   const svg = $('#chart');
   if (!lastResult?.rows?.length) return;
@@ -516,6 +533,16 @@ function renderStrategyRsiChart() {
   }
   $('#strategyRsiPanel').classList.remove('hidden');
   renderRsiSvg($('#strategyRsiChart'), rsiRows);
+}
+
+function renderStrategySourceChart() {
+  const svg = $('#strategySourceChart');
+  if (!lastStrategyResult?.rows?.length) return;
+  const rows = enrichSourceRows(lastStrategyResult.rows);
+  const active = new Set($$('#strategySourceToggles input:checked').map((input) => input.dataset.sourceLine));
+  const keys = ['source_diff', 'source_accum', 'source_hwm', 'source_dd', 'source_mdd'].filter((key) => active.has(key));
+  const colors = { source_diff: '#7c8a9b', source_accum: '#315efb', source_hwm: '#16a56f', source_dd: '#e28a00', source_mdd: '#cf3341' };
+  renderLineChart(svg, rows, keys, colors);
 }
 
 function strategyRsiRows() {
@@ -706,6 +733,8 @@ function showStrategyResult(result, name) {
     <tr><th>Продаж</th><td>${result.summary.sellCount}</td></tr>
   </tbody></table>`;
   renderRsiChart();
+  applyStrategyChartSize();
+  renderStrategySourceChart();
   renderStrategyRsiChart();
   renderStrategyChart();
   renderStrategyTable(result.rows);
@@ -742,6 +771,14 @@ function renderStrategyChart() {
   const keys = ['strategy_diff', 'strategy_accum', 'strategy_hwm', 'strategy_dd', 'strategy_mdd'].filter((key) => active.has(key));
   const colors = { strategy_diff: '#7c8a9b', strategy_accum: '#315efb', strategy_hwm: '#16a56f', strategy_dd: '#e28a00', strategy_mdd: '#cf3341' };
   renderLineChart(svg, lastStrategyResult.rows, keys, colors);
+}
+
+function applyStrategyChartSize() {
+  const size = $('#strategyChartSize')?.value || 'normal';
+  const chartHeight = { compact: 260, normal: 360, large: 520, xlarge: 720 }[size] || 360;
+  const rsiHeight = { compact: 180, normal: 220, large: 320, xlarge: 420 }[size] || 220;
+  $$('.strategy-detail-chart').forEach((chart) => { chart.style.height = `${chartHeight}px`; });
+  $$('.strategy-rsi-chart').forEach((chart) => { chart.style.height = `${rsiHeight}px`; });
 }
 
 function renderStrategyTable(rows) {
@@ -934,6 +971,13 @@ document.addEventListener('change', (event) => {
 });
 $('#baseToggles').addEventListener('change', () => { renderChart(); renderRsiChart(); });
 $('#strategyToggles').addEventListener('change', () => { renderStrategyRsiChart(); renderStrategyChart(); });
+$('#strategySourceToggles').addEventListener('change', renderStrategySourceChart);
+$('#strategyChartSize').addEventListener('change', () => {
+  applyStrategyChartSize();
+  renderStrategySourceChart();
+  renderStrategyRsiChart();
+  renderStrategyChart();
+});
 
 const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
 if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;

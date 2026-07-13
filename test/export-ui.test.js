@@ -119,3 +119,18 @@ test('strategy result card renders its own RSI chart', () => {
   assert.match(app, /function strategyRsiRows\(\)/);
   assert.match(app, /renderStrategyRsiChart\(\);\n\s*renderStrategyChart\(\)/);
 });
+
+test('strategy result card compares source and strategy charts with shared size control', () => {
+  assert.match(html, /id="strategyChartSize"/);
+  assert.match(html, /Исходный ряд/);
+  assert.match(html, /id="strategySourceToggles"/);
+  assert.match(html, /id="strategySourceChart"/);
+  assert.match(html, /data-source-line="source_dd"/);
+  assert.match(html, /data-source-line="source_mdd"/);
+  assert.match(html, /Результат стратегии/);
+  assert.match(app, /function enrichSourceRows\(/);
+  assert.match(app, /function renderStrategySourceChart\(\)/);
+  assert.match(app, /function applyStrategyChartSize\(\)/);
+  assert.match(app, /strategy-detail-chart/);
+  assert.match(app, /strategy-rsi-chart/);
+});
