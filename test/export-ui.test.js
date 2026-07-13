@@ -145,14 +145,17 @@ test('RSI optimizer supports sample-based stability results', () => {
 test('strategy result card renders its own RSI chart', () => {
   assert.match(html, /id="strategyRsiPanel"/);
   assert.match(html, /id="strategyRsiChart"/);
+  assert.match(html, /\/vendor\/plotly\.min\.js/);
   assert.match(html, /RSI стратегии/);
   assert.match(app, /function renderStrategyRsiChart\(\)/);
+  assert.match(app, /function renderStrategyRsiPlot\(/);
   assert.match(app, /function strategyRsiRows\(\)/);
   assert.match(app, /renderStrategyRsiChart\(\);\n\s*renderStrategyChart\(\)/);
 });
 
 test('strategy result card compares source and strategy on one chart with shared size control', () => {
   assert.match(html, /id="strategyChartSize"/);
+  assert.match(html, /id="resetStrategyZoom"/);
   assert.match(html, /Сравнение исходного ряда и результата/);
   assert.match(html, /id="strategySourceToggles"/);
   assert.doesNotMatch(html, /id="strategySourceChart"/);
@@ -161,8 +164,12 @@ test('strategy result card compares source and strategy on one chart with shared
   assert.match(html, /Результат стратегии/);
   assert.match(app, /function enrichSourceRows\(/);
   assert.match(app, /const keys = \[\.\.\.sourceKeys, \.\.\.strategyKeys\]/);
-  assert.match(app, /const plotLeft = 12/);
-  assert.match(app, /text-anchor="end"/);
+  assert.match(app, /Plotly\.react/);
+  assert.match(app, /function syncStrategyChartRange/);
+  assert.match(app, /function resetStrategyZoom/);
+  assert.match(app, /dragmode: 'zoom'/);
+  assert.match(app, /scrollZoom: true/);
+  assert.match(server, /\/vendor\/plotly\.min\.js/);
   assert.match(app, /function applyStrategyChartSize\(\)/);
   assert.match(app, /strategy-detail-chart/);
   assert.match(app, /strategy-rsi-chart/);

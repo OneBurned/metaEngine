@@ -193,6 +193,13 @@ function defaultStrategyName() {
 
 function serveStatic(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
+  if (url.pathname === '/vendor/plotly.min.js') {
+    const plotlyPath = path.join(ROOT, 'node_modules', 'plotly.js-dist-min', 'plotly.min.js');
+    if (!fs.existsSync(plotlyPath)) return error(res, 404, 'Plotly не найден. Выполните npm install.');
+    res.writeHead(200, { 'content-type': 'text/javascript; charset=utf-8' });
+    fs.createReadStream(plotlyPath).pipe(res);
+    return;
+  }
   const requested = url.pathname === '/' ? '/index.html' : decodeURIComponent(url.pathname);
   const fullPath = path.normalize(path.join(PUBLIC_DIR, requested));
   if (!fullPath.startsWith(PUBLIC_DIR)) return error(res, 403, 'Запрещено');

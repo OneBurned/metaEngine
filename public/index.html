@@ -178,6 +178,7 @@
             <option value="xlarge">Очень большая</option>
           </select>
         </label>
+        <button id="resetStrategyZoom" class="secondary" type="button">Сбросить масштаб</button>
       </div>
       <div class="strategy-chart-group">
         <h3>Сравнение исходного ряда и результата</h3>
@@ -197,11 +198,11 @@
           <label style="--line-color: #e28a00"><input type="checkbox" data-strategy-line="strategy_dd" checked /> <span class="line-dot"></span> DD</label>
           <label style="--line-color: #cf3341"><input type="checkbox" data-strategy-line="strategy_mdd" checked /> <span class="line-dot"></span> MDD</label>
         </div>
-        <svg id="strategyChart" class="strategy-detail-chart" viewBox="0 0 900 360" role="img" aria-label="График стратегии"></svg>
+        <div id="strategyChart" class="strategy-detail-chart" role="img" aria-label="График стратегии"></div>
       </div>
       <div id="strategyRsiPanel" class="subchart hidden">
         <h3>RSI стратегии</h3>
-        <svg id="strategyRsiChart" class="strategy-rsi-chart" viewBox="0 0 900 220" role="img" aria-label="RSI график стратегии"></svg>
+        <div id="strategyRsiChart" class="strategy-rsi-chart" role="img" aria-label="RSI график стратегии"></div>
       </div>
       <div class="table-wrap"><table id="strategyResultTable"></table></div>
     </section>
@@ -278,6 +279,7 @@
     </div>
   </div>
 
+  <script src="/vendor/plotly.min.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

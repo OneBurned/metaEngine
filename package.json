@@ -10,5 +10,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "dependencies": {
+    "plotly.js-dist-min": "^3.7.0"
   }
 }

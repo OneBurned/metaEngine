@@ -710,7 +710,10 @@ Graph layout:
 
 1. base portfolio/preset graph and table;
 2. RSI subgraph with level lines when RSI strategy overlay is enabled;
-3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+3. strategy-result Plotly comparison graph and table with strategy diff/accum/HWM/DD/MDD;
+4. strategy-result Plotly RSI graph synchronized with the comparison graph by X range.
+
+Strategy-result Plotly graphs support mouse box zoom, pan/scroll zoom, double-click reset, and the explicit “Сбросить масштаб” button. The app serves Plotly locally from `plotly.js-dist-min` through `/vendor/plotly.min.js`.
 
 RSI optimizer:
 

@@ -11,6 +11,7 @@ let activeOptimizationJobId = null;
 let optimizationPollTimer = null;
 let optimizationSort = { key: 'score', direction: 'desc' };
 let lastOptimizationFilters = null;
+let strategyChartsSyncing = false;
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -552,7 +553,7 @@ function renderStrategyRsiChart() {
     return;
   }
   $('#strategyRsiPanel').classList.remove('hidden');
-  renderRsiSvg($('#strategyRsiChart'), rsiRows);
+  renderStrategyRsiPlot(rsiRows);
 }
 
 function strategyRsiRows() {
@@ -576,6 +577,87 @@ function renderRsiSvg(svg, rows = lastStrategyResult.rsi) {
   const rsiPoints = rows.map((row, i) => row.rsi === null ? null : `${x(i).toFixed(2)},${y(row.rsi).toFixed(2)}`).filter(Boolean).join(' ');
   const levelLine = (value, color, label) => `<line x1="${plotLeft}" x2="${plotRight}" y1="${y(value)}" y2="${y(value)}" stroke="${color}" stroke-dasharray="6 5"/><text x="${axisX}" y="${y(value) + 4}" font-size="12" fill="${color}" text-anchor="end">${label}</text>`;
   svg.innerHTML = `<line x1="${plotRight}" x2="${plotRight}" y1="${topPad}" y2="${height - bottomPad}" stroke="#d7deea"/>${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${levelLine(cfg.baseline, '#687386', cfg.baseline)}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
+}
+
+function plotlyReady() {
+  return window.Plotly && typeof window.Plotly.react === 'function';
+}
+
+function strategyChartHeight() {
+  const size = $('#strategyChartSize')?.value || 'normal';
+  return { compact: 260, normal: 360, large: 520, xlarge: 720 }[size] || 360;
+}
+
+function strategyRsiHeight() {
+  const size = $('#strategyChartSize')?.value || 'normal';
+  return { compact: 180, normal: 220, large: 320, xlarge: 420 }[size] || 220;
+}
+
+function plotlyStrategyLayout(height, yTitle = '') {
+  return {
+    height,
+    margin: { l: 18, r: 72, t: 12, b: 34 },
+    paper_bgcolor: '#fbfcff',
+    plot_bgcolor: '#fbfcff',
+    hovermode: 'x unified',
+    dragmode: 'zoom',
+    showlegend: true,
+    legend: { orientation: 'h', x: 0, y: 1.12 },
+    xaxis: {
+      type: 'date',
+      rangeslider: { visible: false },
+      showgrid: true,
+      gridcolor: '#e7ebf2',
+      zeroline: false
+    },
+    yaxis: {
+      side: 'right',
+      title: yTitle,
+      tickformat: '.2%',
+      showgrid: true,
+      gridcolor: '#e7ebf2',
+      zerolinecolor: '#cfd6e3'
+    }
+  };
+}
+
+function plotlyStrategyConfig() {
+  return {
+    responsive: true,
+    displaylogo: false,
+    scrollZoom: true,
+    doubleClick: 'reset',
+    modeBarButtonsToRemove: ['lasso2d', 'select2d']
+  };
+}
+
+function syncStrategyChartRange(sourceId, eventData) {
+  if (strategyChartsSyncing || !eventData) return;
+  const reset = eventData['xaxis.autorange'];
+  const from = eventData['xaxis.range[0]'];
+  const to = eventData['xaxis.range[1]'];
+  if (!reset && (from === undefined || to === undefined)) return;
+
+  strategyChartsSyncing = true;
+  const update = reset ? { 'xaxis.autorange': true } : { 'xaxis.range': [from, to] };
+  const targets = ['strategyChart', 'strategyRsiChart'].filter((id) => id !== sourceId && $(`#${id}`)?._fullLayout);
+  Promise.all(targets.map((id) => Plotly.relayout(id, update))).finally(() => {
+    strategyChartsSyncing = false;
+  });
+}
+
+function bindStrategyPlotlySync(id) {
+  const chart = $(`#${id}`);
+  if (!chart || chart.dataset.plotlySyncBound) return;
+  chart.on('plotly_relayout', (eventData) => syncStrategyChartRange(id, eventData));
+  chart.dataset.plotlySyncBound = '1';
+}
+
+function resetStrategyZoom() {
+  if (!plotlyReady()) return;
+  ['strategyChart', 'strategyRsiChart'].forEach((id) => {
+    if ($(`#${id}`)?._fullLayout) Plotly.relayout(id, { 'xaxis.autorange': true });
+  });
 }
 
 function collectStrategyBody() {
@@ -897,8 +979,12 @@ function showOptimizationResult(result) {
 }
 
 function renderStrategyChart() {
-  const svg = $('#strategyChart');
+  const chart = $('#strategyChart');
   if (!lastStrategyResult?.rows?.length) return;
+  if (!plotlyReady()) {
+    chart.innerHTML = '<p class="hint">Plotly не загружен. Обновите страницу или выполните npm install.</p>';
+    return;
+  }
   const rows = enrichSourceRows(lastStrategyResult.rows);
   const activeSource = new Set($$('#strategySourceToggles input:checked').map((input) => input.dataset.sourceLine));
   const activeStrategy = new Set($$('#strategyToggles input:checked').map((input) => input.dataset.strategyLine));
@@ -917,15 +1003,110 @@ function renderStrategyChart() {
     strategy_dd: '#d97706',
     strategy_mdd: '#dc2626'
   };
-  renderLineChart(svg, rows, keys, colors);
+  const labels = {
+    source_diff: 'source_diff',
+    source_accum: 'source_accum',
+    source_hwm: 'source_hwm',
+    source_dd: 'source_dd',
+    source_mdd: 'source_mdd',
+    strategy_diff: 'strategy_diff',
+    strategy_accum: 'strategy_accum',
+    strategy_hwm: 'strategy_hwm',
+    strategy_dd: 'strategy_dd',
+    strategy_mdd: 'strategy_mdd'
+  };
+  const x = rows.map((row) => row.timestamp);
+  const hoverTime = rows.map((row) => row.time);
+  const traces = keys.map((key) => ({
+    type: 'scatter',
+    mode: 'lines',
+    name: labels[key],
+    x,
+    y: rows.map((row) => row[key] ?? 0),
+    customdata: hoverTime,
+    line: { color: colors[key], width: 2 },
+    hovertemplate: '%{customdata}<br>%{fullData.name}: %{y:.4%}<extra></extra>'
+  }));
+  const layout = {
+    ...plotlyStrategyLayout(strategyChartHeight()),
+    uirevision: 'strategy-result-chart'
+  };
+  Plotly.react(chart, traces, layout, plotlyStrategyConfig()).then(() => bindStrategyPlotlySync('strategyChart'));
+}
+
+function renderStrategyRsiPlot(rows) {
+  const chart = $('#strategyRsiChart');
+  if (!plotlyReady()) {
+    chart.innerHTML = '<p class="hint">Plotly не загружен. Обновите страницу или выполните npm install.</p>';
+    return;
+  }
+  const cfg = lastStrategyResult.config;
+  const x = rows.map((row) => row.timestamp);
+  const hoverTime = rows.map((row) => row.time);
+  const traces = [{
+    type: 'scatter',
+    mode: 'lines',
+    name: 'RSI',
+    x,
+    y: rows.map((row) => row.rsi),
+    customdata: hoverTime,
+    line: { color: '#8e44ad', width: 1.4 },
+    connectgaps: false,
+    hovertemplate: '%{customdata}<br>RSI: %{y:.2f}<extra></extra>'
+  }];
+  const levelShape = (value, color) => ({
+    type: 'line',
+    xref: 'paper',
+    x0: 0,
+    x1: 1,
+    y0: value,
+    y1: value,
+    line: { color, width: 1, dash: 'dash' }
+  });
+  const levelAnnotation = (value, color, text) => ({
+    xref: 'paper',
+    x: 1,
+    xanchor: 'left',
+    y: value,
+    yanchor: 'middle',
+    text,
+    showarrow: false,
+    font: { color, size: 12 }
+  });
+  const layout = {
+    ...plotlyStrategyLayout(strategyRsiHeight()),
+    uirevision: 'strategy-rsi-chart',
+    showlegend: false,
+    yaxis: {
+      side: 'right',
+      range: [0, 100],
+      showgrid: true,
+      gridcolor: '#e7ebf2',
+      zeroline: false
+    },
+    shapes: [
+      levelShape(cfg.upperLevel, '#cf3341'),
+      levelShape(cfg.baseline, '#687386'),
+      levelShape(cfg.lowerLevel, '#16a56f')
+    ],
+    annotations: [
+      levelAnnotation(cfg.upperLevel, '#cf3341', String(cfg.upperLevel)),
+      levelAnnotation(cfg.baseline, '#687386', String(cfg.baseline)),
+      levelAnnotation(cfg.lowerLevel, '#16a56f', String(cfg.lowerLevel))
+    ]
+  };
+  Plotly.react(chart, traces, layout, plotlyStrategyConfig()).then(() => bindStrategyPlotlySync('strategyRsiChart'));
 }
 
 function applyStrategyChartSize() {
-  const size = $('#strategyChartSize')?.value || 'normal';
-  const chartHeight = { compact: 260, normal: 360, large: 520, xlarge: 720 }[size] || 360;
-  const rsiHeight = { compact: 180, normal: 220, large: 320, xlarge: 420 }[size] || 220;
+  const chartHeight = strategyChartHeight();
+  const rsiHeight = strategyRsiHeight();
   $$('.strategy-detail-chart').forEach((chart) => { chart.style.height = `${chartHeight}px`; });
   $$('.strategy-rsi-chart').forEach((chart) => { chart.style.height = `${rsiHeight}px`; });
+  if (plotlyReady()) {
+    if ($('#strategyChart')?._fullLayout) Plotly.relayout('strategyChart', { height: chartHeight });
+    if ($('#strategyRsiChart')?._fullLayout) Plotly.relayout('strategyRsiChart', { height: rsiHeight });
+  }
 }
 
 function renderStrategyTable(rows) {
@@ -1124,6 +1305,7 @@ $('#strategyChartSize').addEventListener('change', () => {
   renderStrategyRsiChart();
   renderStrategyChart();
 });
+$('#resetStrategyZoom').addEventListener('click', resetStrategyZoom);
 
 const savedValueType = localStorage.getItem(VALUE_TYPE_STORAGE_KEY);
 if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;

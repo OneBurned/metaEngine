@@ -81,7 +81,7 @@ The strategy result block shows two chart areas:
 - RSI chart;
 - one comparison chart with source portfolio/preset result and trading strategy result together.
 
-The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. A shared chart-height selector resizes the comparison chart and RSI chart together so details can be inspected more comfortably. Chart plot areas use most of the panel width, with value axes and line labels placed on the right.
+The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. The strategy-result comparison chart and RSI chart are rendered with Plotly. A shared chart-height selector resizes both charts together. Users can box-zoom by dragging on the chart, pan/scroll zoom through Plotly controls, reset with double-click, or use the explicit reset button. Both Plotly charts synchronize their X range.
 
 ## RSI optimizer
 
