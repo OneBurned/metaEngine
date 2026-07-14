@@ -733,6 +733,9 @@ Strategy optimizer:
 - MDD optimized parameters are `entry1..entryN`, `weight1..weightN`, and `exitLevel`;
 - `N` comes from the MDD entry-count field and is clamped to 1..10;
 - MDD optimizer skips parameter candidates whose total entry weight exceeds `maxTotalWeight`;
+- MDD optimizer has a `simple` parameter mode with one shared entry range, one shared weight range, and `minEntryDelta`;
+- MDD optimizer also has a `detailed` parameter mode where every entry has its own entry and weight ranges;
+- both MDD parameter modes normalize into the same candidate shape before calculation;
 - MDD default search mode is seeded random search with `maxCandidates`, so wide ranges such as `0..80` do not materialize a huge full grid in memory;
 - MDD full search remains available only for small ranges;
 - `upperLevel`, `lowerLevel`, and `baseline` are not separate RSI optimizer inputs;

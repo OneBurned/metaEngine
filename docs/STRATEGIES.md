@@ -118,6 +118,13 @@ For MDD these parameters are optimized:
 
 `N` comes from the UI field `Кол-во входов`; the local lab currently clamps it to 1..10. Optimizer candidates whose total weight exceeds `maxTotalWeight` are skipped before they enter the optimization job.
 
+MDD parameter input has two UI modes:
+
+- `simple` — one shared entry range, one shared weight range, `minEntryDelta`, and `maxTotalWeight`;
+- `detailed` — separate entry and weight ranges for every entry.
+
+Both modes normalize into the same optimizer candidate shape: `entry1..entryN`, `weight1..weightN`, `exitLevel`. In simple mode entries are sorted and accepted only when every neighboring pair respects `minEntryDelta`.
+
 MDD optimizer has two search modes:
 
 - `random` — default mode for wide ranges. It generates at most `maxCandidates` reproducible candidates from the configured ranges using `seed`, normalizes entry levels into strict ascending order, and does not materialize the full combinatorial grid in memory.

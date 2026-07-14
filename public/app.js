@@ -412,13 +412,24 @@ function renderMddEntryFields() {
     const defaultFrom = index * 5;
     const defaultTo = (index + 1) * 10;
     return `
-      <label>Вход ${n} от <input id="optMddEntry${n}From" type="number" value="${currentInputValue(`optMddEntry${n}From`, defaultFrom)}" min="0" step="0.1" /></label>
-      <label>Вход ${n} до <input id="optMddEntry${n}To" type="number" value="${currentInputValue(`optMddEntry${n}To`, defaultTo)}" min="0" step="0.1" /></label>
-      <label>Шаг входа ${n} <input id="optMddEntry${n}Step" type="number" value="${currentInputValue(`optMddEntry${n}Step`, 5)}" min="0.1" step="0.1" /></label>
-      <label>Вес ${n} от <input id="optMddWeight${n}From" type="number" value="${currentInputValue(`optMddWeight${n}From`, defaultWeight)}" min="1" max="100" step="0.1" /></label>
-      <label>Вес ${n} до <input id="optMddWeight${n}To" type="number" value="${currentInputValue(`optMddWeight${n}To`, defaultWeight)}" min="1" max="100" step="0.1" /></label>
-      <label>Шаг веса ${n} <input id="optMddWeight${n}Step" type="number" value="${currentInputValue(`optMddWeight${n}Step`, 10)}" min="0.1" step="0.1" /></label>`;
+      <div class="mdd-entry-row">
+        <strong>Вход ${n}</strong>
+        <label>DD от <input id="optMddEntry${n}From" type="number" value="${currentInputValue(`optMddEntry${n}From`, defaultFrom)}" min="0" step="0.1" /></label>
+        <label>DD до <input id="optMddEntry${n}To" type="number" value="${currentInputValue(`optMddEntry${n}To`, defaultTo)}" min="0" step="0.1" /></label>
+        <label>Шаг DD <input id="optMddEntry${n}Step" type="number" value="${currentInputValue(`optMddEntry${n}Step`, 5)}" min="0.1" step="0.1" /></label>
+        <label>Вес от <input id="optMddWeight${n}From" type="number" value="${currentInputValue(`optMddWeight${n}From`, defaultWeight)}" min="0" max="100" step="0.1" /></label>
+        <label>Вес до <input id="optMddWeight${n}To" type="number" value="${currentInputValue(`optMddWeight${n}To`, defaultWeight)}" min="0" max="100" step="0.1" /></label>
+        <label>Шаг веса <input id="optMddWeight${n}Step" type="number" value="${currentInputValue(`optMddWeight${n}Step`, 10)}" min="0.1" step="0.1" /></label>
+      </div>`;
   }).join('');
+  updateMddParameterModeUi();
+}
+
+function updateMddParameterModeUi() {
+  const isMdd = $('#tradingStrategyType')?.value === 'mdd';
+  const mode = $('#optMddParameterMode')?.value ?? 'simple';
+  $$('.optimizer-mdd-simple').forEach((node) => node.classList.toggle('hidden', !isMdd || mode !== 'simple'));
+  $$('.optimizer-mdd-detailed').forEach((node) => node.classList.toggle('hidden', !isMdd || mode !== 'detailed'));
 }
 
 function updateStrategyCalculateAvailability(showMessage = false) {
@@ -764,10 +775,12 @@ function collectStrategyBody() {
 function collectOptimizationBody() {
   const type = $('#tradingStrategyType').value;
   const count = mddEntryCount();
+  const mddParameterMode = $('#optMddParameterMode')?.value ?? 'simple';
   const ranges = type === 'mdd'
     ? {
       entryCount: count,
       maxTotalWeight: $('#mddMaxTotalWeight').value,
+      parameterMode: mddParameterMode,
       exitLevel: { from: $('#optMddExitFrom').value, to: $('#optMddExitTo').value, step: $('#optMddExitStep').value }
     }
     : {
@@ -787,7 +800,12 @@ function collectOptimizationBody() {
         step: $('#optSellStep').value
       }
     };
-  if (type === 'mdd') {
+  if (type === 'mdd' && mddParameterMode === 'simple') {
+    ranges.entry = { from: $('#optMddEntryFrom').value, to: $('#optMddEntryTo').value, step: $('#optMddEntryStep').value };
+    ranges.weight = { from: $('#optMddWeightFrom').value, to: $('#optMddWeightTo').value, step: $('#optMddWeightStep').value };
+    ranges.minEntryDelta = $('#optMddMinEntryDelta').value;
+  }
+  if (type === 'mdd' && mddParameterMode === 'detailed') {
     for (let i = 1; i <= count; i += 1) {
       ranges[`entry${i}`] = { from: $(`#optMddEntry${i}From`).value, to: $(`#optMddEntry${i}To`).value, step: $(`#optMddEntry${i}Step`).value };
       ranges[`weight${i}`] = { from: $(`#optMddWeight${i}From`).value, to: $(`#optMddWeight${i}To`).value, step: $(`#optMddWeight${i}Step`).value };
@@ -1376,6 +1394,7 @@ $('#tradingStrategyType').addEventListener('change', () => {
   renderStrategyChart();
 });
 $('#mddEntryCount').addEventListener('change', renderMddEntryFields);
+$('#optMddParameterMode').addEventListener('change', updateMddParameterModeUi);
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
 $('#optimizeTradingStrategy').addEventListener('click', () => optimizeTradingStrategy().catch((err) => showStrategyMessage(err.message, 'optimizer-error')));

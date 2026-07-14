@@ -150,10 +150,29 @@
             <label class="optimizer-rsi-field">Продать от <input id="optSellFrom" type="number" value="55" step="0.1" /></label>
             <label class="optimizer-rsi-field">Продать до <input id="optSellTo" type="number" value="80" step="0.1" /></label>
             <label class="optimizer-rsi-field">Шаг <input id="optSellStep" type="number" value="5" min="0.1" step="0.1" /></label>
-            <div id="optMddEntryFields" class="optimizer-mdd-field mdd-entry-grid hidden"></div>
-            <label class="optimizer-mdd-field hidden">Выход от <input id="optMddExitFrom" type="number" value="0" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Выход до <input id="optMddExitTo" type="number" value="5" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddExitStep" type="number" value="1" min="0.1" step="0.1" /></label>
+            <label class="optimizer-mdd-field hidden">Режим параметров
+              <select id="optMddParameterMode">
+                <option value="simple" selected>Простой</option>
+                <option value="detailed">Детальный</option>
+              </select>
+            </label>
+            <div id="optMddSimpleFields" class="optimizer-mdd-field optimizer-mdd-simple mdd-section hidden">
+              <h4>Входы</h4>
+              <label>Вход от <input id="optMddEntryFrom" type="number" value="0" min="0" step="0.1" /></label>
+              <label>Вход до <input id="optMddEntryTo" type="number" value="80" min="0" step="0.1" /></label>
+              <label>Шаг входа <input id="optMddEntryStep" type="number" value="1" min="0.1" step="0.1" /></label>
+              <label>Мин. дельта, % <input id="optMddMinEntryDelta" type="number" value="5" min="0" step="0.1" /></label>
+              <label>Вес от <input id="optMddWeightFrom" type="number" value="0" min="0" max="100" step="0.1" /></label>
+              <label>Вес до <input id="optMddWeightTo" type="number" value="100" min="0" max="100" step="0.1" /></label>
+              <label>Шаг веса <input id="optMddWeightStep" type="number" value="5" min="0.1" step="0.1" /></label>
+            </div>
+            <div id="optMddEntryFields" class="optimizer-mdd-field optimizer-mdd-detailed mdd-detail-list hidden"></div>
+            <div class="optimizer-mdd-field mdd-section hidden">
+              <h4>Выход</h4>
+              <label>Выход от <input id="optMddExitFrom" type="number" value="0" min="0" step="0.1" /></label>
+              <label>Выход до <input id="optMddExitTo" type="number" value="5" min="0" step="0.1" /></label>
+              <label>Шаг <input id="optMddExitStep" type="number" value="1" min="0.1" step="0.1" /></label>
+            </div>
             <label class="optimizer-mdd-field hidden">Режим поиска
               <select id="optMddSearchMode">
                 <option value="random" selected>Случайный</option>

@@ -264,6 +264,23 @@ test('MDD optimizer grid keeps ordered entry levels', () => {
   ]);
 });
 
+test('MDD simple optimizer grid expands shared ranges with min entry delta and weight cap', () => {
+  const grid = createMddParameterGrid({
+    parameterMode: 'simple',
+    entryCount: 3,
+    maxTotalWeight: 100,
+    minEntryDelta: 5,
+    entry: { from: 0, to: 10, step: 5 },
+    weight: { from: 0, to: 100, step: 50 },
+    exitLevel: { from: 0, to: 0, step: 1 }
+  });
+
+  assert.ok(grid.length > 0);
+  assert.equal(grid.every((item) => item.entry2 - item.entry1 >= 5 && item.entry3 - item.entry2 >= 5), true);
+  assert.equal(grid.every((item) => item.weight1 + item.weight2 + item.weight3 <= item.maxTotalWeight), true);
+  assert.deepEqual([...new Set(grid.map((item) => `${item.entry1}/${item.entry2}/${item.entry3}`))], ['0/5/10']);
+});
+
 test('MDD random optimizer grid is bounded and reproducible', () => {
   const ranges = {
     entryCount: 5,
@@ -287,4 +304,21 @@ test('MDD random optimizer grid is bounded and reproducible', () => {
   assert.deepEqual(first, second);
   assert.equal(first.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
   assert.equal(first.every((item) => item.weight1 + item.weight2 + item.weight3 + item.weight4 + item.weight5 <= item.maxTotalWeight), true);
+});
+
+test('MDD simple random optimizer grid is bounded by min entry delta', () => {
+  const ranges = {
+    parameterMode: 'simple',
+    entryCount: 3,
+    maxTotalWeight: 100,
+    minEntryDelta: 10,
+    entry: { from: 0, to: 80, step: 1 },
+    weight: { from: 0, to: 50, step: 10 },
+    exitLevel: { from: 0, to: 20, step: 1 }
+  };
+  const grid = createMddRandomParameterGrid(ranges, { maxCandidates: 50, seed: 42 });
+
+  assert.equal(grid.length, 50);
+  assert.equal(grid.every((item) => item.entry2 - item.entry1 >= 10 && item.entry3 - item.entry2 >= 10), true);
+  assert.equal(grid.every((item) => item.weight1 + item.weight2 + item.weight3 <= item.maxTotalWeight), true);
 });
