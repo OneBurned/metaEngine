@@ -277,8 +277,36 @@ test('MDD simple optimizer grid expands shared ranges with min entry delta and w
 
   assert.ok(grid.length > 0);
   assert.equal(grid.every((item) => item.entry2 - item.entry1 >= 5 && item.entry3 - item.entry2 >= 5), true);
+  assert.equal(grid.every((item) => item.weight1 <= item.weight2 && item.weight2 <= item.weight3), true);
   assert.equal(grid.every((item) => item.weight1 + item.weight2 + item.weight3 <= item.maxTotalWeight), true);
   assert.deepEqual([...new Set(grid.map((item) => `${item.entry1}/${item.entry2}/${item.entry3}`))], ['0/5/10']);
+});
+
+test('MDD optimizer allows equal weights and rejects decreasing weights', () => {
+  const equalWeights = createMddParameterGrid({
+    parameterMode: 'simple',
+    entryCount: 3,
+    maxTotalWeight: 100,
+    minEntryDelta: 5,
+    entry: { from: 0, to: 10, step: 5 },
+    weight: { from: 20, to: 20, step: 1 },
+    exitLevel: { from: 0, to: 0, step: 1 }
+  });
+  const decreasingOnly = createMddParameterGrid({
+    entryCount: 3,
+    maxTotalWeight: 100,
+    entry1: { from: 0, to: 0, step: 1 },
+    weight1: { from: 30, to: 30, step: 1 },
+    entry2: { from: 5, to: 5, step: 1 },
+    weight2: { from: 20, to: 20, step: 1 },
+    entry3: { from: 10, to: 10, step: 1 },
+    weight3: { from: 10, to: 10, step: 1 },
+    exitLevel: { from: 0, to: 0, step: 1 }
+  });
+
+  assert.ok(equalWeights.length > 0);
+  assert.equal(equalWeights.every((item) => item.weight1 === item.weight2 && item.weight2 === item.weight3), true);
+  assert.equal(decreasingOnly.length, 0);
 });
 
 test('MDD random optimizer grid is bounded and reproducible', () => {
@@ -303,6 +331,7 @@ test('MDD random optimizer grid is bounded and reproducible', () => {
   assert.equal(first.length, 50);
   assert.deepEqual(first, second);
   assert.equal(first.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
+  assert.equal(first.every((item) => item.weight1 <= item.weight2 && item.weight2 <= item.weight3 && item.weight3 <= item.weight4 && item.weight4 <= item.weight5), true);
   assert.equal(first.every((item) => item.weight1 + item.weight2 + item.weight3 + item.weight4 + item.weight5 <= item.maxTotalWeight), true);
 });
 
@@ -320,5 +349,6 @@ test('MDD simple random optimizer grid is bounded by min entry delta', () => {
 
   assert.equal(grid.length, 50);
   assert.equal(grid.every((item) => item.entry2 - item.entry1 >= 10 && item.entry3 - item.entry2 >= 10), true);
+  assert.equal(grid.every((item) => item.weight1 <= item.weight2 && item.weight2 <= item.weight3), true);
   assert.equal(grid.every((item) => item.weight1 + item.weight2 + item.weight3 <= item.maxTotalWeight), true);
 });

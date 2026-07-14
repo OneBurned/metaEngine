@@ -116,7 +116,7 @@ For MDD these parameters are optimized:
 - `weight1..weightN`;
 - `exitLevel`.
 
-`N` comes from the UI field `Кол-во входов`; the local lab currently clamps it to 1..10. Optimizer candidates whose total weight exceeds `maxTotalWeight` are skipped before they enter the optimization job.
+`N` comes from the UI field `Кол-во входов`; the local lab currently clamps it to 1..10. Optimizer candidates whose total weight exceeds `maxTotalWeight` are skipped before they enter the optimization job. MDD optimizer weights must be non-decreasing by entry number; equal neighboring weights are allowed.
 
 MDD parameter input has two UI modes:
 
