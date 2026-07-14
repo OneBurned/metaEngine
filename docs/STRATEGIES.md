@@ -105,6 +105,38 @@ MDD strategy rows should distinguish:
 
 For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table input columns are shown first (`IN Diff`, `IN Accum`, `IN DD`), then local MDD/TP fields and output strategy columns (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). User-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
 
+## Strategy optimizer
+
+Block **“5. Стратегии”** includes an optimizer for the current selected strategy type.
+
+Shared optimizer rules:
+
+- the optimizer uses the already selected portfolio/preset and period from block **“3. Расчет”**;
+- the track can be split into `N` sequential samples before optimization;
+- every parameter candidate is calculated on every sample;
+- the result table shows per-sample metrics, compounded sample accum, worst MDD, trade count and Recovery score;
+- stop requests finish the current candidate and then save/show the best accumulated results;
+- table rows can be sorted by metric columns, and a row can be applied back to block **“5. Стратегии”** to calculate and plot the strategy.
+
+RSI optimizer parameters:
+
+- `rsiPeriod`;
+- `buyLevel`;
+- `sellLevel`.
+
+For RSI, `upperLevel` and `lowerLevel` in the form mirror `sellLevel` and `buyLevel`. `baseline` is not optimized.
+
+MDD Mean Reversion optimizer parameters:
+
+- level count;
+- drawdown levels;
+- target weights;
+- take profit;
+- minimum drawdown delta between levels;
+- maximum total target weight.
+
+MDD optimizer weights are **target total position weights**, not incremental buys. For example, levels `10%`, `20%`, `30%` mean the deepest level targets `30%` total exposure. The optimizer requires weights to be nondecreasing, equality is allowed. “Макс. общий вес” limits the maximum target weight level, not the sum of all level values.
+
 ## Adding future strategies
 
 When adding a new strategy:

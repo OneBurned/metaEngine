@@ -198,6 +198,122 @@
           <button id="calculateTradingStrategy" type="button">Рассчитать стратегию</button>
         </div>
         <p class="hint">RSI считается по equity-кривой. MDD Mean Reversion набирает вес по локальной просадке. Все сигналы применяются со следующей точки: без подглядывания в будущее.</p>
+        <div class="optimizer-panel">
+          <h3 id="optimizerTitle">Оптимизация RSI</h3>
+          <div class="optimizer-grid">
+            <label class="optimizer-rsi-field">RSI период от
+              <input id="optRsiPeriodFrom" type="number" value="5" min="1" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">RSI период до
+              <input id="optRsiPeriodTo" type="number" value="30" min="1" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Шаг
+              <input id="optRsiPeriodStep" type="number" value="1" min="1" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Купить от
+              <input id="optBuyFrom" type="number" value="20" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Купить до
+              <input id="optBuyTo" type="number" value="45" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Шаг
+              <input id="optBuyStep" type="number" value="5" min="0.1" step="0.1" />
+            </label>
+            <label class="optimizer-rsi-field">Продать от
+              <input id="optSellFrom" type="number" value="55" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Продать до
+              <input id="optSellTo" type="number" value="80" step="1" />
+            </label>
+            <label class="optimizer-rsi-field">Шаг
+              <input id="optSellStep" type="number" value="5" min="0.1" step="0.1" />
+            </label>
+
+            <label class="optimizer-mdd-field hidden">Режим параметров
+              <select id="optMddParameterMode">
+                <option value="simple">Простой</option>
+                <option value="detailed">Детальный</option>
+              </select>
+            </label>
+            <label class="optimizer-mdd-field hidden">Кол-во входов
+              <input id="optMddLevelCount" type="number" value="5" min="1" max="10" step="1" />
+            </label>
+            <label class="optimizer-mdd-field hidden">Макс. общий вес, %
+              <input id="optMddMaxTotalWeight" type="number" value="100" min="1" step="1" />
+            </label>
+            <label class="optimizer-mdd-field hidden">Мин. дельта DD, %
+              <input id="optMddMinEntryDelta" type="number" value="5" min="0" step="0.1" />
+            </label>
+            <div id="optMddSimpleFields" class="optimizer-mdd-field mdd-section hidden">
+              <label>Вход DD от, %
+                <input id="optMddDrawdownFrom" type="number" value="0" min="0" step="1" />
+              </label>
+              <label>Вход DD до, %
+                <input id="optMddDrawdownTo" type="number" value="80" min="0" step="1" />
+              </label>
+              <label>Шаг DD, %
+                <input id="optMddDrawdownStep" type="number" value="5" min="0.1" step="0.1" />
+              </label>
+              <label>Вес от, %
+                <input id="optMddWeightFrom" type="number" value="10" min="0" step="1" />
+              </label>
+              <label>Вес до, %
+                <input id="optMddWeightTo" type="number" value="100" min="0" step="1" />
+              </label>
+              <label>Шаг веса, %
+                <input id="optMddWeightStep" type="number" value="10" min="0.1" step="0.1" />
+              </label>
+            </div>
+            <div id="optMddLevelFields" class="optimizer-mdd-field mdd-detail-list hidden"></div>
+            <div class="optimizer-mdd-field mdd-section hidden">
+              <label>TP от, %
+                <input id="optMddTpFrom" type="number" value="0" min="0" step="0.1" />
+              </label>
+              <label>TP до, %
+                <input id="optMddTpTo" type="number" value="5" min="0" step="0.1" />
+              </label>
+              <label>Шаг TP, %
+                <input id="optMddTpStep" type="number" value="1" min="0.1" step="0.1" />
+              </label>
+              <label>Режим поиска
+                <select id="optMddSearchMode">
+                  <option value="random">Случайный</option>
+                  <option value="full">Полный перебор</option>
+                </select>
+              </label>
+              <label>Кандидатов
+                <input id="optMddMaxCandidates" type="number" value="100000" min="1" step="1000" />
+              </label>
+              <label>Seed
+                <input id="optMddSeed" type="number" value="42" step="1" />
+              </label>
+            </div>
+
+            <label>Семплов
+              <input id="optSampleCount" type="number" value="1" min="1" max="100" step="1" />
+            </label>
+            <label>Показать лучших
+              <input id="optMaxResults" type="number" value="100" min="1" step="1" />
+            </label>
+            <label>Макс. просадка, %
+              <input id="optMaxDrawdown" type="number" placeholder="например 20" min="0" step="0.1" />
+            </label>
+            <label>Мин. трейдов
+              <input id="optMinTrades" type="number" placeholder="например 5" min="0" step="1" />
+            </label>
+            <label>Мин. прибыльных семплов
+              <input id="optMinProfitableSamples" type="number" placeholder="например 2" min="0" step="1" />
+            </label>
+            <button id="optimizeTradingStrategy" type="button">Оптимизировать RSI</button>
+            <button id="stopOptimization" type="button" class="secondary hidden">Остановить оптимизацию</button>
+          </div>
+          <p class="hint">Score считается как Recovery: итоговая доходность / модуль MDD. Для MDD веса уровней являются целевым общим весом позиции.</p>
+          <div id="optimizationProgress" class="optimizer-progress hidden"></div>
+          <div id="optimizationResultCard" class="hidden">
+            <div id="optimizationSummary"></div>
+            <div class="table-wrap optimizer-table-wrap"><table id="optimizationResultTable"></table></div>
+          </div>
+        </div>
         <div id="tradingStrategies"></div>
         <div id="strategyWarningBox" class="warning hidden"></div>
       </div>

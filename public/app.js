@@ -6,6 +6,10 @@ let lastResultKey = null;
 let pendingResult = null;
 let lastStrategyResult = null;
 let lastStrategyConfig = null;
+let activeOptimizationJobId = null;
+let optimizationPollTimer = null;
+let lastOptimizationResult = null;
+let optimizationSort = { key: 'score', direction: 'desc' };
 
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
@@ -84,6 +88,12 @@ function downloadCsv(filename, csv) {
 
 function fmtPct(value) {
   return `${(Number(value) * 100).toFixed(6).replace(/0+$/, '').replace(/\.$/, '')}%`;
+}
+
+function fmtNumber(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  return number.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
 }
 
 function normalizeDateInput(value) {
@@ -432,6 +442,11 @@ function updateStrategyCalculateAvailability(showMessage = false) {
   const ready = !message;
   button.disabled = !ready;
   button.title = message;
+  const optimizerButton = $('#optimizeTradingStrategy');
+  if (optimizerButton) {
+    optimizerButton.disabled = !ready || Boolean(activeOptimizationJobId);
+    optimizerButton.title = message;
+  }
   if (ready) {
     clearStrategyMessage('strategy-readiness');
   } else if (showMessage && !$('#strategyPanel').classList.contains('hidden')) {
@@ -702,11 +717,129 @@ function collectMddLevels() {
   }));
 }
 
+function numberInputValue(selector, fallback = 0) {
+  const value = Number($(selector)?.value);
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function rangeFromInputs(prefix) {
+  return {
+    from: numberInputValue(`#${prefix}From`),
+    to: numberInputValue(`#${prefix}To`),
+    step: numberInputValue(`#${prefix}Step`, 1)
+  };
+}
+
+function optimizerStrategyType() {
+  return $('#tradingStrategyType')?.value === 'mdd_mean_reversion' ? 'mdd_mean_reversion' : 'rsi';
+}
+
+function mddOptimizerLevelCount() {
+  return Math.min(10, Math.max(1, Math.floor(numberInputValue('#optMddLevelCount', 5))));
+}
+
+function renderMddOptimizerLevelFields() {
+  const container = $('#optMddLevelFields');
+  if (!container) return;
+  const count = mddOptimizerLevelCount();
+  container.innerHTML = Array.from({ length: count }, (_, index) => {
+    const n = index + 1;
+    const drawdownFrom = index === 0 ? 0 : index * 10;
+    const drawdownTo = index === 0 ? 10 : (index + 1) * 10;
+    const weightFrom = (index + 1) * 10;
+    const weightTo = Math.min(100, (index + 1) * 20);
+    return `<div class="mdd-entry-row">
+      <strong>Вход ${n}</strong>
+      <label>DD от, %<input id="optMddDrawdown${n}From" type="number" value="${drawdownFrom}" min="0" step="0.1" /></label>
+      <label>DD до, %<input id="optMddDrawdown${n}To" type="number" value="${drawdownTo}" min="0" step="0.1" /></label>
+      <label>Шаг DD, %<input id="optMddDrawdown${n}Step" type="number" value="1" min="0.1" step="0.1" /></label>
+      <label>Вес от, %<input id="optMddWeight${n}From" type="number" value="${weightFrom}" min="0" step="0.1" /></label>
+      <label>Вес до, %<input id="optMddWeight${n}To" type="number" value="${weightTo}" min="0" step="0.1" /></label>
+      <label>Шаг веса, %<input id="optMddWeight${n}Step" type="number" value="10" min="0.1" step="0.1" /></label>
+    </div>`;
+  }).join('');
+}
+
+function updateMddParameterModeUi() {
+  const mode = $('#optMddParameterMode')?.value || 'simple';
+  $('#optMddSimpleFields')?.classList.toggle('hidden', mode !== 'simple');
+  $('#optMddLevelFields')?.classList.toggle('hidden', mode !== 'detailed');
+  if (mode === 'detailed') renderMddOptimizerLevelFields();
+}
+
+function updateOptimizerTypeUi() {
+  const type = optimizerStrategyType();
+  $$('.optimizer-rsi-field').forEach((el) => el.classList.toggle('hidden', type !== 'rsi'));
+  $$('.optimizer-mdd-field').forEach((el) => el.classList.toggle('hidden', type !== 'mdd_mean_reversion'));
+  $('#optimizerTitle').textContent = type === 'mdd_mean_reversion' ? 'Оптимизация MDD Mean Reversion' : 'Оптимизация RSI';
+  $('#optimizeTradingStrategy').textContent = type === 'mdd_mean_reversion' ? 'Оптимизировать MDD' : 'Оптимизировать RSI';
+  updateMddParameterModeUi();
+}
+
+function collectOptimizerFilters() {
+  return {
+    maxDrawdownPercent: $('#optMaxDrawdown').value,
+    minTrades: $('#optMinTrades').value,
+    minProfitableSamples: $('#optMinProfitableSamples').value
+  };
+}
+
+function collectMddOptimizerRanges() {
+  const count = mddOptimizerLevelCount();
+  const mode = $('#optMddParameterMode')?.value || 'simple';
+  const ranges = {
+    parameterMode: mode,
+    levelCount: count,
+    maxTotalWeight: numberInputValue('#optMddMaxTotalWeight', 100),
+    minEntryDelta: numberInputValue('#optMddMinEntryDelta', 0),
+    takeProfit: rangeFromInputs('optMddTp')
+  };
+  if (mode === 'simple') {
+    ranges.drawdown = rangeFromInputs('optMddDrawdown');
+    ranges.weight = rangeFromInputs('optMddWeight');
+    return ranges;
+  }
+  for (let index = 1; index <= count; index += 1) {
+    ranges[`drawdown${index}`] = rangeFromInputs(`optMddDrawdown${index}`);
+    ranges[`weight${index}`] = rangeFromInputs(`optMddWeight${index}`);
+  }
+  return ranges;
+}
+
+function collectOptimizationBody() {
+  const type = optimizerStrategyType();
+  const strategy = collectStrategyBody();
+  const body = {
+    ...baseCalculationBody(),
+    timeframe: strategy.timeframe,
+    strategy,
+    sampleCount: numberInputValue('#optSampleCount', 1),
+    maxResults: numberInputValue('#optMaxResults', 100),
+    filters: collectOptimizerFilters()
+  };
+  if (type === 'mdd_mean_reversion') {
+    body.ranges = collectMddOptimizerRanges();
+    body.search = {
+      mode: $('#optMddSearchMode').value,
+      maxCandidates: numberInputValue('#optMddMaxCandidates', 100000),
+      seed: numberInputValue('#optMddSeed', 42)
+    };
+  } else {
+    body.ranges = {
+      rsiPeriod: rangeFromInputs('optRsiPeriod'),
+      buyLevel: rangeFromInputs('optBuy'),
+      sellLevel: rangeFromInputs('optSell')
+    };
+  }
+  return body;
+}
+
 function syncStrategyTypeUi() {
   const type = $('#tradingStrategyType').value;
   $$('.rsi-params').forEach((el) => el.classList.toggle('hidden', type !== 'rsi'));
   $$('.mdd-params').forEach((el) => el.classList.toggle('hidden', type !== 'mdd_mean_reversion'));
   if (!$('#tradingStrategyName').value || /^rsi_|^mdd_/.test($('#tradingStrategyName').value)) $('#tradingStrategyName').value = defaultStrategyName();
+  updateOptimizerTypeUi();
 }
 
 function collectStrategyBody() {
@@ -809,6 +942,202 @@ async function calculateTradingStrategy() {
   showStrategyResult(result.strategyResult, result.strategy.name, { resetDisplayTimeframe: true });
   showStrategyWarnings(result.strategyResult.warnings);
   updateStrategyCalculateAvailability();
+}
+
+function setOptimizationRunning(running) {
+  activeOptimizationJobId = running ? activeOptimizationJobId : null;
+  $('#optimizeTradingStrategy').disabled = running || Boolean(strategyReadinessMessage());
+  $('#stopOptimization')?.classList.toggle('hidden', !running);
+}
+
+function optimizerParametersText(run) {
+  if (run.type === 'mdd_mean_reversion') {
+    const levels = (run.parameters.levels ?? [])
+      .map((level) => `${level.drawdownPercent}%→${level.weightPercent}%`)
+      .join(', ');
+    return `TP ${(Number(run.parameters.takeProfit) * 100).toFixed(2).replace(/\.?0+$/, '')}%; ${levels}`;
+  }
+  return `RSI ${run.parameters.rsiPeriod}, buy ${run.parameters.buyLevel}, sell ${run.parameters.sellLevel}`;
+}
+
+function showOptimizationProgress(data) {
+  const box = $('#optimizationProgress');
+  if (!box) return;
+  box.classList.remove('hidden');
+  const best = data.best ? `Лучший сейчас: score ${fmtNumber(data.best.score)}, accum ${fmtPct(data.best.summary.finalAccum)}, MDD ${fmtPct(data.best.summary.maxDrawdown)}` : 'Лучший сейчас: пока нет';
+  const current = data.currentParameters ? `Текущий набор: ${optimizerParametersText({ type: optimizerStrategyType(), parameters: data.currentParameters })}` : '';
+  box.innerHTML = `<strong>${data.status === 'running' ? 'Оптимизация' : 'Готово'}: ${data.processed} / ${data.total} прогонов</strong><br>
+    Отобрано: ${data.filtered ?? 0}<br>
+    Семплов: ${data.sampleCount ?? 1}<br>
+    ${current}<br>
+    ${best}`;
+}
+
+function optimizationColumnValue(run, key) {
+  if (key === 'score') return run.score;
+  if (key === 'finalAccum') return run.summary.finalAccum;
+  if (key === 'avgAccum') return run.summary.avgAccum;
+  if (key === 'worstAccum') return run.summary.worstAccum;
+  if (key === 'maxDrawdown') return run.summary.maxDrawdown;
+  if (key === 'trades') return run.summary.trades;
+  if (key === 'profitableSamples') return run.summary.profitableSamples;
+  if (key === 'rsiPeriod') return run.parameters.rsiPeriod;
+  if (key === 'buyLevel') return run.parameters.buyLevel;
+  if (key === 'sellLevel') return run.parameters.sellLevel;
+  if (key === 'takeProfit') return run.parameters.takeProfit;
+  const level = key.match(/^level(\d+)(Drawdown|Weight)$/);
+  if (level) {
+    const item = run.parameters.levels?.[Number(level[1]) - 1];
+    return level[2] === 'Drawdown' ? item?.drawdownPercent : item?.weightPercent;
+  }
+  const sample = key.match(/^sample(\d+)$/);
+  if (sample) return run.samples?.[Number(sample[1]) - 1]?.finalAccum;
+  return '';
+}
+
+function sortedOptimizationRuns() {
+  const runs = [...(lastOptimizationResult?.results ?? [])];
+  runs.sort((a, b) => {
+    const av = optimizationColumnValue(a, optimizationSort.key);
+    const bv = optimizationColumnValue(b, optimizationSort.key);
+    const diff = Number(av) - Number(bv);
+    return (Number.isFinite(diff) && diff !== 0 ? diff : String(av).localeCompare(String(bv))) * (optimizationSort.direction === 'asc' ? 1 : -1);
+  });
+  return runs;
+}
+
+function sortHeader(key, label) {
+  const marker = optimizationSort.key === key ? (optimizationSort.direction === 'asc' ? ' ↑' : ' ↓') : '';
+  return `<button class="sort-button" type="button" data-opt-sort="${key}">${label}${marker}</button>`;
+}
+
+function bindOptimizationSortHeaders() {
+  $$('[data-opt-sort]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const key = button.dataset.optSort;
+      optimizationSort = {
+        key,
+        direction: optimizationSort.key === key && optimizationSort.direction === 'desc' ? 'asc' : 'desc'
+      };
+      showOptimizationResult(lastOptimizationResult);
+    });
+  });
+  $$('.apply-optimization-run').forEach((button) => {
+    button.addEventListener('click', () => applyOptimizationRun(Number(button.dataset.runIndex)));
+  });
+}
+
+function showOptimizationResult(result) {
+  if (!result) return;
+  lastOptimizationResult = result;
+  $('#optimizationResultCard').classList.remove('hidden');
+  $('#optimizationSummary').innerHTML = `<table><tbody>
+    <tr><th>Статус</th><td>${result.status}</td></tr>
+    <tr><th>Прогонов</th><td>${result.processed} / ${result.total}</td></tr>
+    <tr><th>Отобрано</th><td>${result.results.length}</td></tr>
+    <tr><th>Семплов</th><td>${result.sampleCount}</td></tr>
+  </tbody></table>`;
+  const runs = sortedOptimizationRuns();
+  const type = runs[0]?.type || optimizerStrategyType();
+  const maxLevels = Math.max(0, ...runs.map((run) => run.parameters.levels?.length ?? 0));
+  const maxSamples = Math.max(0, ...runs.map((run) => run.samples?.length ?? 0));
+  const parameterHeaders = type === 'mdd_mean_reversion'
+    ? `${Array.from({ length: maxLevels }, (_, index) => `<th>${sortHeader(`level${index + 1}Drawdown`, `DD ${index + 1}`)}</th><th>${sortHeader(`level${index + 1}Weight`, `Вес ${index + 1}`)}</th>`).join('')}<th>${sortHeader('takeProfit', 'TP')}</th>`
+    : `<th>${sortHeader('rsiPeriod', 'RSI')}</th><th>${sortHeader('buyLevel', 'Купить')}</th><th>${sortHeader('sellLevel', 'Продать')}</th>`;
+  const sampleHeaders = Array.from({ length: maxSamples }, (_, index) => `<th>${sortHeader(`sample${index + 1}`, `Семпл ${index + 1}`)}</th>`).join('');
+  $('#optimizationResultTable').innerHTML = `<thead><tr>
+    <th>#</th>${parameterHeaders}
+    <th>${sortHeader('score', 'Устойчивость')}</th>
+    <th>${sortHeader('profitableSamples', 'Прибыльных')}</th>
+    <th>${sortHeader('trades', 'Трейдов')}</th>
+    <th>${sortHeader('finalAccum', 'Сцепл. accum')}</th>
+    <th>${sortHeader('avgAccum', 'Ср. accum')}</th>
+    <th>${sortHeader('worstAccum', 'Худш. accum')}</th>
+    <th>${sortHeader('maxDrawdown', 'Худш. MDD')}</th>
+    ${sampleHeaders}<th></th>
+  </tr></thead><tbody>${runs.map((run, index) => {
+    const parameterCells = type === 'mdd_mean_reversion'
+      ? `${Array.from({ length: maxLevels }, (_, levelIndex) => {
+        const level = run.parameters.levels?.[levelIndex];
+        return `<td>${level ? `${level.drawdownPercent}%` : ''}</td><td>${level ? `${level.weightPercent}%` : ''}</td>`;
+      }).join('')}<td>${fmtPct(run.parameters.takeProfit)}</td>`
+      : `<td>${run.parameters.rsiPeriod}</td><td>${run.parameters.buyLevel}</td><td>${run.parameters.sellLevel}</td>`;
+    const sampleCells = Array.from({ length: maxSamples }, (_, sampleIndex) => {
+      const sample = run.samples?.[sampleIndex];
+      return `<td>${sample ? `${sample.name}<br>${fmtPct(sample.finalAccum)}<br>MDD ${fmtPct(sample.maxDrawdown)}<br>score ${fmtNumber(sample.score)}` : ''}</td>`;
+    }).join('');
+    return `<tr>
+      <td>${index + 1}</td>${parameterCells}
+      <td>${fmtNumber(run.score)}</td>
+      <td>${run.summary.profitableSamples}/${run.summary.sampleCount}</td>
+      <td>${run.summary.trades}</td>
+      <td>${fmtPct(run.summary.finalAccum)}</td>
+      <td>${fmtPct(run.summary.avgAccum)}</td>
+      <td>${fmtPct(run.summary.worstAccum)}</td>
+      <td>${fmtPct(run.summary.maxDrawdown)}</td>
+      ${sampleCells}
+      <td><button class="apply-optimization-run" type="button" data-run-index="${index}">Построить график</button></td>
+    </tr>`;
+  }).join('')}</tbody>`;
+  bindOptimizationSortHeaders();
+}
+
+function applyOptimizationRun(index) {
+  const run = sortedOptimizationRuns()[index];
+  if (!run) return;
+  $('#tradingStrategyType').value = run.type;
+  syncStrategyTypeUi();
+  if (run.type === 'mdd_mean_reversion') {
+    $('#mddTakeProfit').value = (Number(run.parameters.takeProfit) * 100).toString();
+    resetMddLevels(run.parameters.levels ?? []);
+  } else {
+    $('#rsiPeriod').value = run.parameters.rsiPeriod;
+    $('#buyLevel').value = run.parameters.buyLevel;
+    $('#sellLevel').value = run.parameters.sellLevel;
+    $('#rsiUpper').value = run.parameters.sellLevel;
+    $('#rsiLower').value = run.parameters.buyLevel;
+  }
+  calculateTradingStrategy().catch((err) => alert(err.message));
+}
+
+async function pollOptimizationStatus() {
+  if (!activeOptimizationJobId) return;
+  const data = await api(`/api/strategies/optimize/status?jobId=${encodeURIComponent(activeOptimizationJobId)}`);
+  showOptimizationProgress(data);
+  if (data.status === 'running') {
+    optimizationPollTimer = setTimeout(() => pollOptimizationStatus().catch((err) => alert(err.message)), 700);
+    return;
+  }
+  setOptimizationRunning(false);
+  showOptimizationResult(data.result);
+}
+
+async function optimizeTradingStrategy() {
+  const readiness = strategyReadinessMessage();
+  if (readiness) {
+    showStrategyMessage(readiness, 'strategy-readiness');
+    updateStrategyCalculateAvailability();
+    return;
+  }
+  const data = await api('/api/strategies/optimize/start', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(collectOptimizationBody())
+  });
+  activeOptimizationJobId = data.jobId;
+  setOptimizationRunning(true);
+  showOptimizationProgress(data);
+  clearTimeout(optimizationPollTimer);
+  pollOptimizationStatus().catch((err) => alert(err.message));
+}
+
+async function stopOptimization() {
+  if (!activeOptimizationJobId) return;
+  await api('/api/strategies/optimize/stop', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ jobId: activeOptimizationJobId })
+  });
 }
 
 function showStrategyResult(result, name, options = {}) {
@@ -1049,8 +1378,18 @@ $('#tradingStrategies').addEventListener('click', (event) => {
 });
 $('#addPresetRow').addEventListener('click', addPresetRow);
 $('#savePreset').addEventListener('click', () => savePreset(false));
-$('#targetType').addEventListener('change', () => { renderTargetOptions(); syncTimeframeToTarget(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
-$('#targetName').addEventListener('change', () => { applyTargetRange(); syncTimeframeToTarget(); syncStrategyPeriodIfEnabled(); updateStrategyCalculateAvailability(true); });
+$('#targetType').addEventListener('change', () => {
+  renderTargetOptions();
+  syncTimeframeToTarget();
+  syncStrategyPeriodIfEnabled();
+  updateStrategyCalculateAvailability(true);
+});
+$('#targetName').addEventListener('change', () => {
+  applyTargetRange();
+  syncTimeframeToTarget();
+  syncStrategyPeriodIfEnabled();
+  updateStrategyCalculateAvailability(true);
+});
 $('#timeframe').addEventListener('change', () => {
   updateStrategyCalculateAvailability(true);
 });
@@ -1061,6 +1400,10 @@ $('#chartMode').addEventListener('change', () => { applyChartModeSideEffects($('
 $('#strategyTimeframe').addEventListener('change', () => updateStrategyCalculateAvailability(true));
 $('#tradingStrategyType').addEventListener('change', syncStrategyTypeUi);
 $('#addMddLevel').addEventListener('click', () => addMddLevel(-10, 10));
+$('#optMddParameterMode').addEventListener('change', updateMddParameterModeUi);
+$('#optMddLevelCount').addEventListener('change', renderMddOptimizerLevelFields);
+$('#optimizeTradingStrategy').addEventListener('click', () => optimizeTradingStrategy().catch((err) => alert(err.message)));
+$('#stopOptimization').addEventListener('click', () => stopOptimization().catch((err) => alert(err.message)));
 $('#strategyDisplayTimeframe').addEventListener('change', () => {
   if (lastStrategyResult) rerenderWithStatus('#strategyDisplayRecalcStatus', () => showStrategyResult(lastStrategyResult, lastStrategyConfig?.name));
 });

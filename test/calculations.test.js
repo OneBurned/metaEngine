@@ -13,6 +13,11 @@ const {
 } = require('../lib/calculations');
 const { calculateRsiFromEquity } = require('../strategies/rsi');
 const { calculateTradingStrategy, getStrategy } = require('../strategies');
+const {
+  expandNumericRange,
+  createMddParameterGrid,
+  createMddRandomParameterGrid
+} = require('../lib/optimizer');
 
 test('formats timestamps as YYYY-MM-DD HH:MM without shifting the Unix time', () => {
   assert.equal(formatTimestamp(1777557600000), '2026-04-30 14:00');
@@ -47,6 +52,48 @@ test('calculates accum, hwm, dd and mdd series', () => {
   assert.deepEqual(result.rows.map((row) => Number(row.dd.toFixed(2))), [0, -0.02, -0.05, -0.01, -0.08, -0.03]);
   assert.deepEqual(result.rows.map((row) => Number(row.mdd.toFixed(2))), [0, -0.02, -0.05, -0.05, -0.08, -0.08]);
   assert.equal(result.summary.hwm, 0);
+});
+
+test('expands optimizer numeric ranges inclusively without floating point drift', () => {
+  assert.deepEqual(expandNumericRange('x', { from: 0, to: 0.3, step: 0.1 }), [0, 0.1, 0.2, 0.3]);
+  assert.deepEqual(expandNumericRange('x', { from: 1, to: 3, step: 1 }, { integer: true }), [1, 2, 3]);
+});
+
+test('creates MDD optimizer grid with separated drawdowns and nondecreasing target weights', () => {
+  const grid = createMddParameterGrid({
+    parameterMode: 'simple',
+    levelCount: 2,
+    drawdown: { from: 5, to: 10, step: 5 },
+    weight: { from: 10, to: 20, step: 10 },
+    takeProfit: { from: 1, to: 1, step: 1 },
+    minEntryDelta: 5,
+    maxTotalWeight: 20
+  });
+  assert.equal(grid.length, 3);
+  assert.deepEqual(grid.map((item) => item.levels.map((level) => level.drawdownPercent)), [[5, 10], [5, 10], [5, 10]]);
+  assert.deepEqual(grid.map((item) => item.levels.map((level) => level.weightPercent)), [[10, 10], [10, 20], [20, 20]]);
+  assert.equal(grid[0].takeProfit, 0.01);
+});
+
+test('creates bounded random MDD candidates with target weights capped by max total weight', () => {
+  const grid = createMddRandomParameterGrid({
+    parameterMode: 'simple',
+    levelCount: 3,
+    drawdown: { from: 0, to: 30, step: 5 },
+    weight: { from: 10, to: 40, step: 10 },
+    takeProfit: { from: 0, to: 2, step: 1 },
+    minEntryDelta: 5,
+    maxTotalWeight: 30
+  }, { maxCandidates: 20, seed: 7 });
+  assert.ok(grid.length <= 20);
+  assert.ok(grid.length > 0);
+  for (const item of grid) {
+    const drawdowns = item.levels.map((level) => level.drawdownPercent);
+    const weights = item.levels.map((level) => level.weightPercent);
+    assert.ok(drawdowns.every((value, index) => index === 0 || value - drawdowns[index - 1] >= 5));
+    assert.ok(weights.every((value, index) => index === 0 || value >= weights[index - 1]));
+    assert.ok(weights.at(-1) <= 30);
+  }
 });
 
 test('rejects overlapping rebalance periods for the same portfolio', () => {

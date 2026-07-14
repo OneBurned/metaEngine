@@ -746,6 +746,17 @@ MDD Mean Reversion:
 
 Strategy tables and current-strategy CSV export follow the IN/OUT table convention: `IN ...` columns are input values from the base calculation, while `OUT ...` columns are the strategy result. Saved strategy configs can be applied back into block 5 with **Применить**; CSV exports the current calculated strategy result table, not saved JSON configs.
 
+Strategy optimizer:
+
+- lives in block “5. Стратегии” and follows the selected strategy type;
+- supports RSI and MDD Mean Reversion;
+- can split the selected track into multiple sequential samples before optimization;
+- ranks candidates by Recovery score and shows per-sample accum/MDD/score, compounded sample accum, worst MDD and trade counts;
+- supports stop: the current candidate finishes, then no new candidates are taken and current best results are shown;
+- result rows can be sorted and applied back to block 5 to calculate and plot the strategy.
+
+RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies level count, DD levels, target weights and TP. MDD weights are target total position weights, not incremental buys; weights must be nondecreasing, equality is allowed, and “Макс. общий вес” limits the maximum target weight level rather than the sum of all levels.
+
 Graph layout:
 
 1. base portfolio/preset graph and table;

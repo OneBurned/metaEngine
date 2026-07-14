@@ -76,5 +76,19 @@ th { background: #f7f9fc; position: sticky; top: 0; }
 #mddLevels { counter-reset: mdd-level; display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 10px; align-items: stretch; }
 .mdd-level-row { counter-increment: mdd-level; grid-template-columns: 1fr; padding: 10px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fbfcff; }
 .mdd-level-row::before { content: "Точка " counter(mdd-level); font-weight: 700; color: #3d4658; }
+.optimizer-panel { margin: 16px 0 18px; padding-top: 16px; border-top: 1px solid #e7ebf2; }
+.optimizer-grid { display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 14px 12px; align-items: end; }
+.optimizer-grid button { align-self: end; }
+.optimizer-rsi-field, .optimizer-mdd-field { min-width: 0; }
+.mdd-section { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(6, minmax(120px, 1fr)); gap: 14px 12px; padding: 12px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fbfcff; }
+.mdd-detail-list { grid-column: 1 / -1; display: grid; gap: 10px; }
+.mdd-entry-row { display: grid; grid-template-columns: repeat(6, minmax(110px, 1fr)); gap: 10px; padding: 12px; border: 1px solid #e1e6ef; border-radius: 12px; background: #fbfcff; }
+.mdd-entry-row strong { display: flex; align-items: center; color: #3d4658; }
+.optimizer-progress { margin: 12px 0; padding: 12px; border: 1px solid #dbe4ff; border-radius: 12px; background: #f7f9ff; color: #33415c; line-height: 1.5; }
+.optimizer-table-wrap { max-height: 520px; }
+.sort-button { border: 0; background: transparent; color: inherit; padding: 0; font-weight: 800; cursor: pointer; }
+.apply-optimization-run { width: auto; min-width: 130px; padding: 8px 10px; }
 @media (max-width: 1100px) { #mddLevels { grid-template-columns: repeat(3, minmax(140px, 1fr)); } }
+@media (max-width: 1100px) { .optimizer-grid, .mdd-section, .mdd-entry-row { grid-template-columns: repeat(3, minmax(160px, 1fr)); } }
 @media (max-width: 700px) { #mddLevels { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .optimizer-grid, .mdd-section, .mdd-entry-row { grid-template-columns: 1fr; } }
