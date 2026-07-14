@@ -387,6 +387,15 @@ function mddEntryCount() {
   return Math.min(MAX_MDD_ENTRIES, Math.max(1, Number.isFinite(value) ? value : 5));
 }
 
+function syncMddEntryCountInputs(sourceId) {
+  const source = $(`#${sourceId}`);
+  if (!source) return;
+  const value = Math.min(MAX_MDD_ENTRIES, Math.max(1, Math.floor(Number(source.value)) || 5));
+  source.value = value;
+  if (sourceId !== 'mddEntryCount' && $('#mddEntryCount')) $('#mddEntryCount').value = value;
+  if (sourceId !== 'optMddEntryCount' && $('#optMddEntryCount')) $('#optMddEntryCount').value = value;
+}
+
 function currentInputValue(id, fallback) {
   const input = $(`#${id}`);
   return input ? input.value : fallback;
@@ -397,6 +406,7 @@ function renderMddEntryFields() {
   const strategyBox = $('#mddEntryFields');
   const optimizerBox = $('#optMddEntryFields');
   if (!strategyBox || !optimizerBox) return;
+  if ($('#optMddEntryCount')) $('#optMddEntryCount').value = count;
   const defaultWeight = (100 / count).toFixed(2).replace(/\.?0+$/, '');
 
   strategyBox.innerHTML = Array.from({ length: count }, (_, index) => {
@@ -1393,7 +1403,14 @@ $('#tradingStrategyType').addEventListener('change', () => {
   renderStrategyRsiChart();
   renderStrategyChart();
 });
-$('#mddEntryCount').addEventListener('change', renderMddEntryFields);
+$('#mddEntryCount').addEventListener('change', () => {
+  syncMddEntryCountInputs('mddEntryCount');
+  renderMddEntryFields();
+});
+$('#optMddEntryCount').addEventListener('change', () => {
+  syncMddEntryCountInputs('optMddEntryCount');
+  renderMddEntryFields();
+});
 $('#optMddParameterMode').addEventListener('change', updateMddParameterModeUi);
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));

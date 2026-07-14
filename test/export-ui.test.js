@@ -121,6 +121,7 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(html, /id="mddExitLevel"/);
   assert.match(html, /id="optMddParameterMode"/);
   assert.match(html, /id="optMddSimpleFields"/);
+  assert.match(html, /id="optMddEntryCount"/);
   assert.match(html, /id="optMddEntryFrom"/);
   assert.match(html, /id="optMddMinEntryDelta"/);
   assert.match(html, /id="optMddWeightFrom"/);
@@ -143,6 +144,7 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /seed: \$\('#optMddSeed'\)\.value/);
   assert.match(app, /function renderMddEntryFields/);
   assert.match(app, /function updateMddParameterModeUi/);
+  assert.match(app, /function syncMddEntryCountInputs/);
   assert.match(app, /mddWeight/);
   assert.match(app, /optMddWeight/);
   assert.match(app, /parameterMode: mddParameterMode/);
