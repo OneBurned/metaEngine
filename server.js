@@ -320,7 +320,7 @@ async function buildOptimizerSamples(body) {
     const from = Math.floor((rows.length * index) / count);
     const to = Math.floor((rows.length * (index + 1)) / count);
     const sampleRows = rows.slice(from, Math.max(from + 1, to));
-    const grid = sampleRows.map((row) => row.time);
+    const grid = sampleRows.map((row) => row.timestamp);
     const diffs = sampleRows.map((row) => Number(row.diff) || 0);
     const sampleBaseResult = calculateFromDiffs(grid, diffs);
     sampleBaseResult.step = baseResult.step;
