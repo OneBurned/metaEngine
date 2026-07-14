@@ -1,7 +1,9 @@
 const rsi = require('./rsi');
+const mdd = require('./mdd');
 
 const registry = {
-  rsi
+  rsi,
+  mdd
 };
 
 function getStrategy(type) {

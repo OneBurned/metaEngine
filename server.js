@@ -17,12 +17,14 @@ const {
 } = require('./lib/calculations');
 const {
   createRsiParameterGrid,
+  createMddParameterGrid,
   recoveryScore,
   optimizeRsiStrategy,
   sortOptimizationRuns
 } = require('./lib/optimizer');
 const tradingStrategies = require('./strategies');
 const rsiStrategy = tradingStrategies.getStrategy('rsi');
+const mddStrategy = tradingStrategies.getStrategy('mdd');
 
 const ROOT = __dirname;
 const PUBLIC_DIR = path.join(ROOT, 'public');
@@ -252,16 +254,33 @@ async function calculateTarget(body) {
 
 function normalizeTradingStrategy(body) {
   const name = safeName(body.name || defaultStrategyName(), '.json').replace(/\.json$/i, '');
+  const type = body.type === 'mdd' ? 'mdd' : 'rsi';
+  if (type === 'mdd') {
+    return {
+      name,
+      type,
+      created_at: body.created_at || new Date().toISOString(),
+      entry1: Number(body.entry1 ?? 5),
+      entry2: Number(body.entry2 ?? 10),
+      entry3: Number(body.entry3 ?? 15),
+      entry4: Number(body.entry4 ?? 20),
+      entry5: Number(body.entry5 ?? 25),
+      exitLevel: Number(body.exitLevel ?? 2),
+      periodFrom: body.periodFrom,
+      periodTo: body.periodTo
+    };
+  }
+  const buyLevel = Number(body.buyLevel ?? 30);
+  const sellLevel = Number(body.sellLevel ?? 70);
   const strategy = {
     name,
-    type: 'rsi',
+    type,
     created_at: body.created_at || new Date().toISOString(),
     rsiPeriod: Number(body.rsiPeriod ?? 14),
-    upperLevel: Number(body.upperLevel ?? 70),
-    lowerLevel: Number(body.lowerLevel ?? 30),
-    baseline: Number(body.baseline ?? 50),
-    buyLevel: Number(body.buyLevel ?? 30),
-    sellLevel: Number(body.sellLevel ?? 70),
+    upperLevel: sellLevel,
+    lowerLevel: buyLevel,
+    buyLevel,
+    sellLevel,
     periodFrom: body.periodFrom,
     periodTo: body.periodTo
   };
@@ -294,7 +313,7 @@ async function buildOptimizerSamples(body) {
   return samples;
 }
 
-function aggregateSampleRuns(parameters, sampleRuns) {
+function aggregateSampleRuns(type, parameters, sampleRuns) {
   const scores = sampleRuns.map((sample) => sample.score);
   const accums = sampleRuns.map((sample) => sample.summary.finalAccum);
   const drawdowns = sampleRuns.map((sample) => sample.summary.maxDrawdown);
@@ -303,7 +322,7 @@ function aggregateSampleRuns(parameters, sampleRuns) {
   const compoundedAccum = accums.reduce((total, accum) => total * (1 + accum), 1) - 1;
   const score = Math.min(...scores);
   return {
-    strategy: 'rsi',
+    strategy: type,
     parameters: { ...parameters },
     summary: {
       finalAccum: average(accums),
@@ -397,6 +416,41 @@ function runRsiOptimizationSample(sample, baseConfig, parameters) {
   };
 }
 
+function runMddOptimizationSample(sample, baseConfig, parameters) {
+  const result = mddStrategy.calculateMetricsFromRows(sample.baseResult.rows, {
+    ...baseConfig,
+    type: 'mdd',
+    ...parameters
+  });
+  const finalAccum = result.summary.finalAccum;
+  const maxDrawdown = result.summary.maxDrawdown;
+  return {
+    strategy: 'mdd',
+    parameters: { ...parameters },
+    summary: {
+      finalAccum,
+      maxDrawdown,
+      buyCount: result.summary.buyCount,
+      sellCount: result.summary.sellCount,
+      points: result.summary.points
+    },
+    score: recoveryScore(finalAccum, maxDrawdown),
+    name: sample.name,
+    periodFrom: sample.periodFrom,
+    periodTo: sample.periodTo
+  };
+}
+
+function runOptimizationSample(sample, baseConfig, parameters) {
+  if (baseConfig.type === 'mdd') return runMddOptimizationSample(sample, baseConfig, parameters);
+  return runRsiOptimizationSample(sample, baseConfig, parameters);
+}
+
+function createStrategyParameterGrid(type, ranges) {
+  if (type === 'mdd') return createMddParameterGrid(ranges);
+  return createRsiParameterGrid(ranges);
+}
+
 function publicOptimizerJob(job) {
   return {
     jobId: job.jobId,
@@ -433,13 +487,13 @@ function continueOptimizerJob(job) {
       job.currentParameters = parameters;
       const sampleRuns = job.samples.map((sample) => {
         job.currentSample = sample.name;
-        return runRsiOptimizationSample(sample, {
+        return runOptimizationSample(sample, {
           ...job.strategy,
           periodFrom: sample.periodFrom,
           periodTo: sample.periodTo
         }, parameters);
       });
-      const run = aggregateSampleRuns(parameters, sampleRuns);
+      const run = aggregateSampleRuns(job.strategy.type, parameters, sampleRuns);
       if (optimizerRunPassesFilters(run, job.filters)) {
         job.runs.push(run);
         job.acceptedCombinations += 1;
@@ -476,7 +530,7 @@ function finishOptimizerJob(job, status) {
   trimOptimizerRuns(job);
   const maxResults = Number(job.maxResults ?? 100);
   job.optimization = {
-    type: 'rsi',
+    type: job.strategy.type,
     metric: 'stability_worst_sample_score',
     totalRuns: job.grid.length * job.samples.length,
     completedRuns: job.completedRuns,
@@ -606,7 +660,7 @@ async function handleApi(req, res) {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const samples = await buildOptimizerSamples(body);
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
-      const grid = createRsiParameterGrid(body.ranges);
+      const grid = createStrategyParameterGrid(strategy.type, body.ranges);
       const filters = normalizeOptimizerFilters(body.filters);
       const jobId = crypto.randomUUID();
       const job = {

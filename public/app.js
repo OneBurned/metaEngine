@@ -89,7 +89,8 @@ function forceZeroMinutes(input) {
 function defaultStrategyName() {
   const d = new Date();
   const pad = (n) => String(n).padStart(2, '0');
-  return `rsi_${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}_${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+  const type = $('#tradingStrategyType')?.value || 'rsi';
+  return `${type}_${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}_${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
 }
 
 async function api(url, options = {}) {
@@ -159,9 +160,16 @@ function renderTradingStrategies() {
     <tr>
       <td><strong>${s.name}</strong></td>
       <td>${s.type}</td>
-      <td>RSI ${s.rsiPeriod}, buy ${s.buyLevel}, sell ${s.sellLevel}</td>
+      <td>${strategyParamsLabel(s)}</td>
       <td><button class="danger" data-delete-trading-strategy="${s.name}">Удалить</button></td>
     </tr>`).join('')}</tbody></table>`;
+}
+
+function strategyParamsLabel(strategy) {
+  if (strategy.type === 'mdd') {
+    return `entries ${[strategy.entry1, strategy.entry2, strategy.entry3, strategy.entry4, strategy.entry5].join('/')}, exit ${strategy.exitLevel}`;
+  }
+  return `RSI ${strategy.rsiPeriod}, buy ${strategy.buyLevel}, sell ${strategy.sellLevel}`;
 }
 
 function portfolioOptions(selected = '') {
@@ -353,6 +361,21 @@ function clearStrategyMessage(kind = '') {
   box.classList.add('hidden');
   box.textContent = '';
   delete box.dataset.kind;
+}
+
+function updateStrategyTypeUi() {
+  const type = $('#tradingStrategyType').value;
+  const isMdd = type === 'mdd';
+  $$('.strategy-rsi-field, .optimizer-rsi-field').forEach((node) => node.classList.toggle('hidden', isMdd));
+  $$('.strategy-mdd-field, .optimizer-mdd-field').forEach((node) => node.classList.toggle('hidden', !isMdd));
+  $('#optimizerTitle').textContent = isMdd ? 'Оптимизация MDD Mean Reversion' : 'Оптимизация RSI';
+  $('#optimizeTradingStrategy').textContent = isMdd ? 'Оптимизировать MDD' : 'Оптимизировать RSI';
+  $('#strategyTypeHint').textContent = isMdd
+    ? 'MDD Mean Reversion добирает позицию по пяти уровням просадки и закрывает ее при восстановлении DD до уровня выхода.'
+    : 'RSI считается по equity-кривой. Верхний/нижний уровни берутся из “Продать на” и “Купить на”. Сигнал применяется со следующей точки: без подглядывания в будущее.';
+  if (!$('#tradingStrategyName').value || /^(rsi|mdd)_\d{8}_\d{6}$/.test($('#tradingStrategyName').value)) {
+    $('#tradingStrategyName').value = defaultStrategyName();
+  }
 }
 
 function updateStrategyCalculateAvailability(showMessage = false) {
@@ -576,7 +599,8 @@ function renderRsiSvg(svg, rows = lastStrategyResult.rsi) {
   const y = (v) => height - bottomPad - (v / 100) * (height - topPad - bottomPad);
   const rsiPoints = rows.map((row, i) => row.rsi === null ? null : `${x(i).toFixed(2)},${y(row.rsi).toFixed(2)}`).filter(Boolean).join(' ');
   const levelLine = (value, color, label) => `<line x1="${plotLeft}" x2="${plotRight}" y1="${y(value)}" y2="${y(value)}" stroke="${color}" stroke-dasharray="6 5"/><text x="${axisX}" y="${y(value) + 4}" font-size="12" fill="${color}" text-anchor="end">${label}</text>`;
-  svg.innerHTML = `<line x1="${plotRight}" x2="${plotRight}" y1="${topPad}" y2="${height - bottomPad}" stroke="#d7deea"/>${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${levelLine(cfg.baseline, '#687386', cfg.baseline)}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
+  const baselineLine = Number.isFinite(Number(cfg.baseline)) ? levelLine(cfg.baseline, '#687386', cfg.baseline) : '';
+  svg.innerHTML = `<line x1="${plotRight}" x2="${plotRight}" y1="${topPad}" y2="${height - bottomPad}" stroke="#d7deea"/>${levelLine(cfg.upperLevel, '#cf3341', cfg.upperLevel)}${baselineLine}${levelLine(cfg.lowerLevel, '#16a56f', cfg.lowerLevel)}<polyline fill="none" stroke="#8e44ad" stroke-width="2" points="${rsiPoints}"/>`;
 }
 
 function plotlyReady() {
@@ -661,24 +685,48 @@ function resetStrategyZoom() {
 }
 
 function collectStrategyBody() {
+  const type = $('#tradingStrategyType').value;
+  if (type === 'mdd') {
+    return {
+      name: $('#tradingStrategyName').value || defaultStrategyName(),
+      type,
+      entry1: $('#mddEntry1').value,
+      entry2: $('#mddEntry2').value,
+      entry3: $('#mddEntry3').value,
+      entry4: $('#mddEntry4').value,
+      entry5: $('#mddEntry5').value,
+      exitLevel: $('#mddExitLevel').value,
+      periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
+      periodTo: normalizeDateInput($('#strategyPeriodTo').value)
+    };
+  }
+  const buyLevel = $('#buyLevel').value;
+  const sellLevel = $('#sellLevel').value;
   return {
     name: $('#tradingStrategyName').value || defaultStrategyName(),
-    type: $('#tradingStrategyType').value,
+    type,
     rsiPeriod: $('#rsiPeriod').value,
-    upperLevel: $('#rsiUpper').value,
-    lowerLevel: $('#rsiLower').value,
-    baseline: $('#rsiBaseline').value,
-    buyLevel: $('#buyLevel').value,
-    sellLevel: $('#sellLevel').value,
+    upperLevel: sellLevel,
+    lowerLevel: buyLevel,
+    buyLevel,
+    sellLevel,
     periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
     periodTo: normalizeDateInput($('#strategyPeriodTo').value)
   };
 }
 
 function collectOptimizationBody() {
-  return {
-    sampleCount: $('#optSampleCount').value,
-    ranges: {
+  const type = $('#tradingStrategyType').value;
+  const ranges = type === 'mdd'
+    ? {
+      entry1: { from: $('#optMddEntry1From').value, to: $('#optMddEntry1To').value, step: $('#optMddEntry1Step').value },
+      entry2: { from: $('#optMddEntry2From').value, to: $('#optMddEntry2To').value, step: $('#optMddEntry2Step').value },
+      entry3: { from: $('#optMddEntry3From').value, to: $('#optMddEntry3To').value, step: $('#optMddEntry3Step').value },
+      entry4: { from: $('#optMddEntry4From').value, to: $('#optMddEntry4To').value, step: $('#optMddEntry4Step').value },
+      entry5: { from: $('#optMddEntry5From').value, to: $('#optMddEntry5To').value, step: $('#optMddEntry5Step').value },
+      exitLevel: { from: $('#optMddExitFrom').value, to: $('#optMddExitTo').value, step: $('#optMddExitStep').value }
+    }
+    : {
       rsiPeriod: {
         from: $('#optRsiPeriodFrom').value,
         to: $('#optRsiPeriodTo').value,
@@ -694,7 +742,10 @@ function collectOptimizationBody() {
         to: $('#optSellTo').value,
         step: $('#optSellStep').value
       }
-    },
+    };
+  return {
+    sampleCount: $('#optSampleCount').value,
+    ranges,
     maxResults: $('#optMaxResults').value,
     filters: {
       maxDrawdownPercent: $('#optMaxDrawdownPercent').value,
@@ -736,11 +787,18 @@ function formatRunLine(run) {
   return `score ${Number(run.score).toFixed(6)}, accum ${fmtPct(run.summary.finalAccum)}, MDD ${fmtPct(run.summary.maxDrawdown)}`;
 }
 
+function formatParameters(parameters = {}) {
+  if (parameters.entry1 !== undefined) {
+    return `entry ${parameters.entry1}/${parameters.entry2}/${parameters.entry3}/${parameters.entry4}/${parameters.entry5}, exit ${parameters.exitLevel}`;
+  }
+  return `RSI ${parameters.rsiPeriod}, buy ${parameters.buyLevel}, sell ${parameters.sellLevel}`;
+}
+
 function showOptimizationProgress(job) {
   const box = $('#optimizationProgress');
   box.classList.remove('hidden');
   const current = job.currentParameters
-    ? `RSI ${job.currentParameters.rsiPeriod}, buy ${job.currentParameters.buyLevel}, sell ${job.currentParameters.sellLevel}`
+    ? formatParameters(job.currentParameters)
     : '-';
   const statusLabel = job.status === 'stopped' ? 'Остановлено' : job.status === 'done' ? 'Готово' : job.status === 'error' ? 'Ошибка' : 'Оптимизация';
   const sample = job.currentSample ? `<br>Текущий семпл: ${job.currentSample}` : '';
@@ -879,6 +937,12 @@ function optimizationColumnValue(run, key) {
     rsiPeriod: run.parameters.rsiPeriod,
     buyLevel: run.parameters.buyLevel,
     sellLevel: run.parameters.sellLevel,
+    entry1: run.parameters.entry1,
+    entry2: run.parameters.entry2,
+    entry3: run.parameters.entry3,
+    entry4: run.parameters.entry4,
+    entry5: run.parameters.entry5,
+    exitLevel: run.parameters.exitLevel,
     score: run.score,
     profitableSamples: run.summary.profitableSamples,
     averageScore: run.summary.averageScore,
@@ -940,11 +1004,26 @@ function showOptimizationResult(result) {
     <tr><th>Показано</th><td>${displayRuns.length}</td></tr>
   </tbody></table>`;
   const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
+  const parameterHeaders = result.type === 'mdd'
+    ? [
+      sortHeader('entry1', 'Вход 1'),
+      sortHeader('entry2', 'Вход 2'),
+      sortHeader('entry3', 'Вход 3'),
+      sortHeader('entry4', 'Вход 4'),
+      sortHeader('entry5', 'Вход 5'),
+      sortHeader('exitLevel', 'Выход')
+    ]
+    : [
+      sortHeader('rsiPeriod', 'RSI период'),
+      sortHeader('buyLevel', 'Купить'),
+      sortHeader('sellLevel', 'Продать')
+    ];
+  const parameterCells = (run) => result.type === 'mdd'
+    ? `<td>${run.parameters.entry1}</td><td>${run.parameters.entry2}</td><td>${run.parameters.entry3}</td><td>${run.parameters.entry4}</td><td>${run.parameters.entry5}</td><td>${run.parameters.exitLevel}</td>`
+    : `<td>${run.parameters.rsiPeriod}</td><td>${run.parameters.buyLevel}</td><td>${run.parameters.sellLevel}</td>`;
   const headers = [
     '<th>#</th>',
-    sortHeader('rsiPeriod', 'RSI период'),
-    sortHeader('buyLevel', 'Купить'),
-    sortHeader('sellLevel', 'Продать'),
+    ...parameterHeaders,
     sortHeader('score', 'Устойчивость'),
     sortHeader('profitableSamples', 'Прибыльных'),
     sortHeader('trades', 'Трейдов'),
@@ -957,13 +1036,11 @@ function showOptimizationResult(result) {
     sampleHeaders
   ].join('');
   const rows = sortedOptimizationRuns({ ...result, runs: displayRuns });
-  const emptyRow = `<tr><td colspan="${13 + sampleCount}">Нет результатов, прошедших отсечение.</td></tr>`;
+  const emptyRow = `<tr><td colspan="${1 + parameterHeaders.length + 9 + sampleCount}">Нет результатов, прошедших отсечение.</td></tr>`;
   $('#optimizationResultTable').innerHTML = `<thead><tr>${headers}</tr></thead><tbody>${rows.length ? rows.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
-      <td>${run.parameters.rsiPeriod}</td>
-      <td>${run.parameters.buyLevel}</td>
-      <td>${run.parameters.sellLevel}</td>
+      ${parameterCells(run)}
       <td>${Number(run.score).toFixed(6)}</td>
       <td>${run.summary.profitableSamples}/${run.summary.sampleCount}</td>
       <td>${(run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0)}</td>
@@ -1027,6 +1104,18 @@ function renderStrategyChart() {
     line: { color: colors[key], width: 2 },
     hovertemplate: '%{customdata}<br>%{fullData.name}: %{y:.4%}<extra></extra>'
   }));
+  const shapes = [
+    levelShape(cfg.upperLevel, '#cf3341'),
+    levelShape(cfg.lowerLevel, '#16a56f')
+  ];
+  const annotations = [
+    levelAnnotation(cfg.upperLevel, '#cf3341', String(cfg.upperLevel)),
+    levelAnnotation(cfg.lowerLevel, '#16a56f', String(cfg.lowerLevel))
+  ];
+  if (Number.isFinite(Number(cfg.baseline))) {
+    shapes.splice(1, 0, levelShape(cfg.baseline, '#687386'));
+    annotations.splice(1, 0, levelAnnotation(cfg.baseline, '#687386', String(cfg.baseline)));
+  }
   const layout = {
     ...plotlyStrategyLayout(strategyChartHeight()),
     uirevision: 'strategy-result-chart'
@@ -1084,16 +1173,8 @@ function renderStrategyRsiPlot(rows) {
       gridcolor: '#e7ebf2',
       zeroline: false
     },
-    shapes: [
-      levelShape(cfg.upperLevel, '#cf3341'),
-      levelShape(cfg.baseline, '#687386'),
-      levelShape(cfg.lowerLevel, '#16a56f')
-    ],
-    annotations: [
-      levelAnnotation(cfg.upperLevel, '#cf3341', String(cfg.upperLevel)),
-      levelAnnotation(cfg.baseline, '#687386', String(cfg.baseline)),
-      levelAnnotation(cfg.lowerLevel, '#16a56f', String(cfg.lowerLevel))
-    ]
+    shapes,
+    annotations
   };
   Plotly.react(chart, traces, layout, plotlyStrategyConfig()).then(() => bindStrategyPlotlySync('strategyRsiChart'));
 }
@@ -1111,7 +1192,7 @@ function applyStrategyChartSize() {
 
 function renderStrategyTable(rows) {
   $('#strategyResultTable').innerHTML = `<thead><tr><th>Дата</th><th>RSI</th><th>Сигнал</th><th>Исполнение</th><th>Позиция</th><th>Source Diff</th><th>Diff</th><th>Accum</th><th>HWM</th><th>DD</th><th>MDD</th></tr></thead><tbody>${rows.map((r) => `
-    <tr><td>${r.time}</td><td>${r.rsi === null ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
+    <tr><td>${r.time}</td><td>${r.rsi === null || r.rsi === undefined ? '-' : r.rsi.toFixed(2)}</td><td>${r.signal || '-'}</td><td>${r.execution || '-'}</td><td>${r.position}</td><td>${fmtPct(r.source_diff)}</td><td>${fmtPct(r.strategy_diff)}</td><td>${fmtPct(r.strategy_accum)}</td><td>${fmtPct(r.strategy_hwm)}</td><td>${fmtPct(r.strategy_dd)}</td><td>${fmtPct(r.strategy_mdd)}</td></tr>`).join('')}</tbody>`;
 }
 
 function renderCsvPortfolioOptions() {
@@ -1223,6 +1304,11 @@ $('#enableStrategies').addEventListener('change', (event) => {
   if (event.target.checked) syncStrategyPeriodToCalculation();
   updateStrategyCalculateAvailability(event.target.checked);
 });
+$('#tradingStrategyType').addEventListener('change', () => {
+  updateStrategyTypeUi();
+  renderStrategyRsiChart();
+  renderStrategyChart();
+});
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
 $('#optimizeTradingStrategy').addEventListener('click', () => optimizeTradingStrategy().catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
@@ -1312,4 +1398,5 @@ if (savedValueType && $('#valueType')) $('#valueType').value = savedValueType;
 $('#valueType').addEventListener('change', () => localStorage.setItem(VALUE_TYPE_STORAGE_KEY, $('#valueType').value));
 addPresetRow();
 $('#tradingStrategyName').value = defaultStrategyName();
+updateStrategyTypeUi();
 refreshAll().then(() => updateStrategyCalculateAvailability()).catch((err) => alert(err.message));

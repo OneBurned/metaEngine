@@ -11,8 +11,9 @@ const {
   calculatePreset,
   validatePresetItems
 } = require('../lib/calculations');
-const { expandNumericRange, optimizeRsiStrategy } = require('../lib/optimizer');
+const { expandNumericRange, optimizeRsiStrategy, createMddParameterGrid } = require('../lib/optimizer');
 const { calculateRsiFromEquity, calculateMetricsFromRsi } = require('../strategies/rsi');
+const { calculateMetricsFromRows: calculateMddMetricsFromRows } = require('../strategies/mdd');
 const { calculateTradingStrategy, getStrategy } = require('../strategies');
 
 test('formats timestamps as YYYY-MM-DD HH:MM without shifting the Unix time', () => {
@@ -89,6 +90,14 @@ test('strategy registry exposes the RSI module', () => {
   assert.equal(typeof rsi.calculateMetricsFromRsi, 'function');
 });
 
+test('strategy registry exposes the MDD module', () => {
+  const mdd = getStrategy('mdd');
+  assert.ok(mdd);
+  assert.equal(mdd.type, 'mdd');
+  assert.equal(typeof mdd.calculate, 'function');
+  assert.equal(typeof mdd.calculateMetricsFromRows, 'function');
+});
+
 test('calculates RSI from equity curve', () => {
   const grid = Array.from({ length: 18 }, (_, i) => i);
   const diffs = [0, 0.01, 0.01, -0.01, 0.02, -0.02, 0.01, 0.01, -0.01, 0.02, -0.01, 0.01, 0.01, -0.02, 0.03, 0.01, -0.01, 0.02];
@@ -151,6 +160,21 @@ test('RSI metrics-only calculation matches full strategy summary', () => {
   assert.equal(metrics.summary.points, full.summary.points);
 });
 
+test('MDD metrics-only calculation matches full strategy summary', () => {
+  const grid = Array.from({ length: 18 }, (_, i) => i);
+  const diffs = [0, 0.03, -0.02, -0.03, -0.04, 0.02, 0.03, -0.05, 0.02, 0.04, -0.01, -0.04, 0.03, 0.02, -0.02, 0.03, 0.01, -0.01];
+  const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
+  const config = { type: 'mdd', entry1: 2, entry2: 4, entry3: 6, entry4: 8, entry5: 10, exitLevel: 1 };
+  const full = calculateTradingStrategy(base, config);
+  const metrics = calculateMddMetricsFromRows(base.rows, config);
+
+  assert.equal(metrics.summary.finalAccum, full.summary.finalAccum);
+  assert.equal(metrics.summary.maxDrawdown, full.summary.maxDrawdown);
+  assert.equal(metrics.summary.buyCount, full.summary.buyCount);
+  assert.equal(metrics.summary.sellCount, full.summary.sellCount);
+  assert.equal(metrics.summary.points, full.summary.points);
+});
+
 test('optimizer expands numeric ranges inclusively', () => {
   assert.deepEqual(expandNumericRange('rsiPeriod', { from: 2, to: 4, step: 1 }, { integer: true }), [2, 3, 4]);
   assert.deepEqual(expandNumericRange('buyLevel', { from: 20, to: 30, step: 5 }), [20, 25, 30]);
@@ -187,4 +211,18 @@ test('RSI optimizer allows large parameter grids', () => {
     sellLevel: { from: 1, to: 10, step: 1 }
   });
   assert.equal(grid.length, 6000);
+});
+
+test('MDD optimizer grid keeps ordered entry levels', () => {
+  const grid = createMddParameterGrid({
+    entry1: { from: 5, to: 10, step: 5 },
+    entry2: { from: 10, to: 15, step: 5 },
+    entry3: { from: 15, to: 20, step: 5 },
+    entry4: { from: 20, to: 25, step: 5 },
+    entry5: { from: 25, to: 30, step: 5 },
+    exitLevel: { from: 0, to: 1, step: 1 }
+  });
+  assert.ok(grid.length > 0);
+  assert.equal(grid.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
+  assert.deepEqual(Object.keys(grid[0]), ['entry1', 'entry2', 'entry3', 'entry4', 'entry5', 'exitLevel']);
 });

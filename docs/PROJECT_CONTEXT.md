@@ -691,16 +691,21 @@ The UI must use “Портфолио” for uploaded CSV return series.
 
 The word “Стратегии” is reserved for trading rules applied on top of the already selected and calculated portfolio/preset from the calculation block.
 
-Current first trading strategy:
+Current trading strategies:
 
 - type: RSI;
 - RSI source: equity curve `1 + accum`;
 - visible returns still display as `accum = equity - 1`, so the start is shown as `0%`;
-- defaults: period `14`, upper `70`, lower `30`, baseline `50`;
+- defaults: period `14`, buy `30`, sell `70`;
+- RSI upper/lower chart levels are derived from `sellLevel/buyLevel`; there is no separate baseline parameter;
 - long-only trading rule: buy on a downward cross of `buyLevel` (`previous RSI > buyLevel && current RSI <= buyLevel`), sell on an upward cross of `sellLevel` (`previous RSI < sellLevel && current RSI >= sellLevel`);
 - the first strategy-period point is not signalable, and repeated buy/sell signals are ignored when already in the corresponding position state;
 - signal execution starts on the next point, not the same point, to avoid lookahead;
 - if the strategy period goes outside the base calculation period, warn and fill missing data by the existing missing-data rule.
+- type: MDD Mean Reversion;
+- MDD source: current drawdown `dd` from the calculated portfolio/preset result;
+- MDD has five entry levels and one common exit level for now;
+- each reached entry level adds one fifth of full position, and the common exit closes all steps.
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.
 
@@ -715,14 +720,16 @@ Graph layout:
 
 Strategy-result Plotly graphs support mouse box zoom, pan/scroll zoom, double-click reset, and the explicit “Сбросить масштаб” button. The app serves Plotly locally from `plotly.js-dist-min` through `/vendor/plotly.min.js`.
 
-RSI optimizer:
+Strategy optimizer:
 
-- the existing RSI strategy rules are the tester engine for optimizer runs;
+- the existing strategy rules are the tester engine for optimizer runs;
 - sample rows are prepared before the parameter search;
 - RSI is cached per sample and `rsiPeriod` during an optimizer job;
-- buy/sell combinations use a metrics-only RSI evaluator so chart rows are not rebuilt for every optimizer run;
+- RSI buy/sell combinations use a metrics-only RSI evaluator so chart rows are not rebuilt for every optimizer run;
+- MDD combinations use a metrics-only MDD evaluator over sample rows;
 - first optimized parameters are `rsiPeriod`, `buyLevel`, and `sellLevel`;
-- `upperLevel`, `lowerLevel`, and `baseline` are not optimized yet;
+- MDD optimized parameters are `entry1..entry5` and `exitLevel`;
+- `upperLevel`, `lowerLevel`, and `baseline` are not separate RSI optimizer inputs;
 - each run stores parameters, final accum, max drawdown, buy/sell counts, and score;
 - current score is Recovery-style: `finalAccum / abs(maxDrawdown)`;
 - zero max drawdown is handled separately to avoid division by zero;

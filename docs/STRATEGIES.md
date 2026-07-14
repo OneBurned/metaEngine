@@ -11,7 +11,7 @@ strategies/          Code modules for trading strategies
 samples/strategies/  User-saved JSON configs for trading strategies
 ```
 
-`strategies/` is part of the application source code. It contains reusable strategy implementations such as RSI.
+`strategies/` is part of the application source code. It contains reusable strategy implementations such as RSI and MDD Mean Reversion.
 
 `samples/strategies/` is working user data. The backend stores JSON configs there when the user saves a strategy from the UI. Do not delete or overwrite files in `samples/strategies/` unless the user explicitly asks.
 
@@ -20,6 +20,7 @@ samples/strategies/  User-saved JSON configs for trading strategies
 ```text
 strategies/index.js  Strategy registry and dispatcher
 strategies/rsi.js    RSI strategy implementation
+strategies/mdd.js    MDD Mean Reversion strategy implementation
 ```
 
 The server should call the strategy registry instead of importing one concrete strategy directly. This keeps the backend ready for future strategy types.
@@ -31,7 +32,8 @@ The first trading strategy is RSI:
 - type: `rsi`;
 - RSI source: equity curve `1 + accum` from the already calculated portfolio/preset result;
 - visible return series still uses `accum = equity - 1`, so the chart starts from `0%`;
-- default parameters: period `14`, upper `70`, lower `30`, baseline `50`;
+- default parameters: period `14`, buy `30`, sell `70`;
+- chart upper/lower levels are derived from `sellLevel` / `buyLevel`; there is no separate RSI baseline parameter;
 - long-only trading for now;
 - buy signal: downward cross of `buyLevel` (`previous RSI > buyLevel && current RSI <= buyLevel`);
 - sell signal: upward cross of `sellLevel` (`previous RSI < sellLevel && current RSI >= sellLevel`);
@@ -40,6 +42,18 @@ The first trading strategy is RSI:
 - repeated buy/sell signals are ignored when already in the corresponding position state;
 - if the strategy period goes outside the base calculation period, fill missing source data by the existing missing-data rule and warn the user;
 - short logic is intentionally not implemented yet.
+
+## MDD Mean Reversion strategy rules
+
+The second trading strategy is MDD Mean Reversion:
+
+- type: `mdd`;
+- source signal: current drawdown `dd` from the already calculated portfolio/preset result;
+- five entry levels are configured as positive drawdown percentages, for example `5/10/15/20/25`;
+- each reached entry level adds one fifth of full position;
+- one common exit level is configured as a positive drawdown percentage;
+- when the source `dd` recovers to the exit level, the strategy closes all entry steps;
+- execution uses the next point, matching the no-lookahead rule used by RSI.
 
 ## Result rows
 
@@ -83,17 +97,26 @@ The strategy result block shows two chart areas:
 
 The comparison chart has separate toggles for source `diff/accum/hwm/dd/mdd` and strategy `strategy_diff/strategy_accum/strategy_hwm/strategy_dd/strategy_mdd`. The strategy-result comparison chart and RSI chart are rendered with Plotly. A shared chart-height selector resizes both charts together. Users can box-zoom by dragging on the chart, pan/scroll zoom through Plotly controls, reset with double-click, or use the explicit reset button. Both Plotly charts synchronize their X range.
 
-## RSI optimizer
+## Strategy optimizer
 
-The RSI calculation is also used as the first optimizer target. The optimizer keeps the same trading rules as the ordinary RSI strategy, similar to the Tester/Optimizer split in OsEngine.
+The optimizer supports RSI and MDD Mean Reversion. It keeps the same trading rules as the ordinary strategy calculation, similar to the Tester/Optimizer split in OsEngine.
 
-For the first version only these RSI parameters are optimized:
+For RSI these parameters are optimized:
 
 - `rsiPeriod`;
 - `buyLevel`;
 - `sellLevel`.
 
-`upperLevel`, `lowerLevel`, and `baseline` remain ordinary display/config values and are not part of the optimizer grid yet.
+`upperLevel`, `lowerLevel`, and `baseline` are not separate RSI optimizer inputs. `upperLevel/lowerLevel` are derived from `sellLevel/buyLevel`.
+
+For MDD these parameters are optimized:
+
+- `entry1`;
+- `entry2`;
+- `entry3`;
+- `entry4`;
+- `entry5`;
+- `exitLevel`.
 
 The optimizer returns a ranked table of runs with:
 
@@ -118,7 +141,7 @@ The result table supports client-side sorting by clicking numeric column headers
 
 The optimizer can split the selected period into samples before optimization. With `sampleCount = 1`, behavior is the old full-track optimization. With `sampleCount > 1`, the already calculated source rows are split into sequential chunks by point count. Each sample is recalculated from its own `diff` series so its `accum` starts from zero.
 
-For performance, sample preparation happens before the parameter search. RSI is calculated once per `(sample, rsiPeriod)` and cached in memory for the running optimizer job. Buy/sell level combinations then use a metrics-only RSI evaluator that produces the same summary values as the full strategy calculation without rebuilding chart rows for every run.
+For performance, sample preparation happens before the parameter search. RSI is calculated once per `(sample, rsiPeriod)` and cached in memory for the running optimizer job. Buy/sell level combinations then use a metrics-only RSI evaluator. MDD uses a metrics-only evaluator over the sample rows. Both paths produce the same summary values as the full strategy calculation without rebuilding chart rows for every run.
 
 During long searches the backend keeps only the current top `maxResults` runs in memory. Progress counters still reflect the full grid, but completed low-ranked runs are not retained in the optimizer job object.
 
@@ -130,7 +153,7 @@ Optional cutoff filters are applied before a run is retained in top results:
 
 The final table renders only runs that pass the active cutoff filters. If all retained runs are filtered out, the table shows an empty-state row instead of stale results.
 
-For every RSI parameter combination the optimizer runs all samples and aggregates:
+For every parameter combination the optimizer runs all samples and aggregates:
 
 - profitable sample count;
 - average and worst score;

@@ -150,9 +150,8 @@ function calculate(baseResult, config) {
     },
     config: {
       rsiPeriod,
-      upperLevel: Number(config.upperLevel ?? 70),
-      lowerLevel: Number(config.lowerLevel ?? 30),
-      baseline: Number(config.baseline ?? 50),
+      upperLevel: sellLevel,
+      lowerLevel: buyLevel,
       buyLevel,
       sellLevel,
       periodFrom: formatTimestamp(from),
