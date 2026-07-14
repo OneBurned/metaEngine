@@ -1104,18 +1104,6 @@ function renderStrategyChart() {
     line: { color: colors[key], width: 2 },
     hovertemplate: '%{customdata}<br>%{fullData.name}: %{y:.4%}<extra></extra>'
   }));
-  const shapes = [
-    levelShape(cfg.upperLevel, '#cf3341'),
-    levelShape(cfg.lowerLevel, '#16a56f')
-  ];
-  const annotations = [
-    levelAnnotation(cfg.upperLevel, '#cf3341', String(cfg.upperLevel)),
-    levelAnnotation(cfg.lowerLevel, '#16a56f', String(cfg.lowerLevel))
-  ];
-  if (Number.isFinite(Number(cfg.baseline))) {
-    shapes.splice(1, 0, levelShape(cfg.baseline, '#687386'));
-    annotations.splice(1, 0, levelAnnotation(cfg.baseline, '#687386', String(cfg.baseline)));
-  }
   const layout = {
     ...plotlyStrategyLayout(strategyChartHeight()),
     uirevision: 'strategy-result-chart'
@@ -1162,6 +1150,18 @@ function renderStrategyRsiPlot(rows) {
     showarrow: false,
     font: { color, size: 12 }
   });
+  const shapes = [
+    levelShape(cfg.upperLevel, '#cf3341'),
+    levelShape(cfg.lowerLevel, '#16a56f')
+  ];
+  const annotations = [
+    levelAnnotation(cfg.upperLevel, '#cf3341', String(cfg.upperLevel)),
+    levelAnnotation(cfg.lowerLevel, '#16a56f', String(cfg.lowerLevel))
+  ];
+  if (Number.isFinite(Number(cfg.baseline))) {
+    shapes.splice(1, 0, levelShape(cfg.baseline, '#687386'));
+    annotations.splice(1, 0, levelAnnotation(cfg.baseline, '#687386', String(cfg.baseline)));
+  }
   const layout = {
     ...plotlyStrategyLayout(strategyRsiHeight()),
     uirevision: 'strategy-rsi-chart',
