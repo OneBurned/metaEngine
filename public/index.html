@@ -176,6 +176,14 @@
             <label class="optimizer-mdd-field hidden">Выход от <input id="optMddExitFrom" type="number" value="0" min="0" step="0.1" /></label>
             <label class="optimizer-mdd-field hidden">Выход до <input id="optMddExitTo" type="number" value="5" min="0" step="0.1" /></label>
             <label class="optimizer-mdd-field hidden">Шаг <input id="optMddExitStep" type="number" value="1" min="0.1" step="0.1" /></label>
+            <label class="optimizer-mdd-field hidden">Режим поиска
+              <select id="optMddSearchMode">
+                <option value="random" selected>Случайный</option>
+                <option value="full">Полный перебор</option>
+              </select>
+            </label>
+            <label class="optimizer-mdd-field hidden">Кандидатов <input id="optMddMaxCandidates" type="number" value="100000" min="1" step="1000" /></label>
+            <label class="optimizer-mdd-field hidden">Seed <input id="optMddSeed" type="number" value="42" step="1" /></label>
             <label>Семплов <input id="optSampleCount" type="number" value="1" min="1" step="1" /></label>
             <label>Показать лучших <input id="optMaxResults" type="number" value="100" min="1" max="500" step="1" /></label>
             <label>Макс. просадка, % <input id="optMaxDrawdownPercent" type="number" value="" min="0" step="0.1" placeholder="20" /></label>

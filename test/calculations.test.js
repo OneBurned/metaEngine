@@ -11,7 +11,7 @@ const {
   calculatePreset,
   validatePresetItems
 } = require('../lib/calculations');
-const { expandNumericRange, optimizeRsiStrategy, createMddParameterGrid } = require('../lib/optimizer');
+const { expandNumericRange, optimizeRsiStrategy, createMddParameterGrid, createMddRandomParameterGrid } = require('../lib/optimizer');
 const { calculateRsiFromEquity, calculateMetricsFromRsi } = require('../strategies/rsi');
 const { calculateMetricsFromRows: calculateMddMetricsFromRows } = require('../strategies/mdd');
 const { calculateTradingStrategy, getStrategy } = require('../strategies');
@@ -225,4 +225,21 @@ test('MDD optimizer grid keeps ordered entry levels', () => {
   assert.ok(grid.length > 0);
   assert.equal(grid.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
   assert.deepEqual(Object.keys(grid[0]), ['entry1', 'entry2', 'entry3', 'entry4', 'entry5', 'exitLevel']);
+});
+
+test('MDD random optimizer grid is bounded and reproducible', () => {
+  const ranges = {
+    entry1: { from: 0, to: 80, step: 1 },
+    entry2: { from: 0, to: 80, step: 1 },
+    entry3: { from: 0, to: 80, step: 1 },
+    entry4: { from: 0, to: 80, step: 1 },
+    entry5: { from: 0, to: 80, step: 1 },
+    exitLevel: { from: 0, to: 80, step: 1 }
+  };
+  const first = createMddRandomParameterGrid(ranges, { maxCandidates: 50, seed: 42 });
+  const second = createMddRandomParameterGrid(ranges, { maxCandidates: 50, seed: 42 });
+
+  assert.equal(first.length, 50);
+  assert.deepEqual(first, second);
+  assert.equal(first.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
 });

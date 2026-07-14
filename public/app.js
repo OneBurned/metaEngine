@@ -746,6 +746,11 @@ function collectOptimizationBody() {
   return {
     sampleCount: $('#optSampleCount').value,
     ranges,
+    search: type === 'mdd' ? {
+      mode: $('#optMddSearchMode').value,
+      maxCandidates: $('#optMddMaxCandidates').value,
+      seed: $('#optMddSeed').value
+    } : {},
     maxResults: $('#optMaxResults').value,
     filters: {
       maxDrawdownPercent: $('#optMaxDrawdownPercent').value,
@@ -803,7 +808,8 @@ function showOptimizationProgress(job) {
   const statusLabel = job.status === 'stopped' ? 'Остановлено' : job.status === 'done' ? 'Готово' : job.status === 'error' ? 'Ошибка' : 'Оптимизация';
   const sample = job.currentSample ? `<br>Текущий семпл: ${job.currentSample}` : '';
   const selected = job.acceptedCombinations === undefined ? '' : `<br>Отобрано: ${job.acceptedCombinations}, отсечено: ${job.filteredCombinations ?? 0}`;
-  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Комбинаций: ${job.completedCombinations ?? 0} / ${job.totalCombinations ?? job.totalRuns}${selected}<br>Семплов: ${job.sampleCount ?? 1}<br>Текущий набор: ${current}${sample}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
+  const search = job.search?.mode === 'random' ? `<br>Поиск: случайный, кандидатов ${job.totalCombinations}, seed ${job.search.seed}` : '';
+  box.innerHTML = `<strong>${statusLabel}: ${job.completedRuns} / ${job.totalRuns} прогонов</strong><br>Комбинаций: ${job.completedCombinations ?? 0} / ${job.totalCombinations ?? job.totalRuns}${selected}${search}<br>Семплов: ${job.sampleCount ?? 1}<br>Текущий набор: ${current}${sample}<br>Лучший результат сейчас: ${formatRunLine(job.bestRun)}`;
 }
 
 function clearOptimizationPoll() {
@@ -992,6 +998,9 @@ function showOptimizationResult(result) {
   const filterRow = filters.enabled
     ? `<tr><th>Отсечение</th><td>MDD ${filters.maxDrawdownPercent ?? '-'}%, трейдов ${filters.minTrades ?? 0}, прибыльных семплов ${filters.minProfitableSamples ?? 0}</td></tr>`
     : '';
+  const searchRow = result.search?.mode === 'random'
+    ? `<tr><th>Поиск</th><td>Случайный: ${result.totalCombinations} кандидатов, seed ${result.search.seed}</td></tr>`
+    : '';
   $('#optimizationSummary').innerHTML = `<table><tbody>
     ${statusRow}
     <tr><th>Метрика</th><td>Устойчивость: худший score по семплам</td></tr>
@@ -1000,6 +1009,7 @@ function showOptimizationResult(result) {
     <tr><th>Выполнено</th><td>${result.completedRuns ?? result.totalRuns}</td></tr>
     <tr><th>Отобрано</th><td>${result.acceptedCombinations ?? result.runs.length}</td></tr>
     <tr><th>Отсечено</th><td>${result.filteredCombinations ?? 0}</td></tr>
+    ${searchRow}
     ${filterRow}
     <tr><th>Показано</th><td>${displayRuns.length}</td></tr>
   </tbody></table>`;

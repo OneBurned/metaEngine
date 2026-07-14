@@ -118,6 +118,11 @@ For MDD these parameters are optimized:
 - `entry5`;
 - `exitLevel`.
 
+MDD optimizer has two search modes:
+
+- `random` — default mode for wide ranges. It generates at most `maxCandidates` reproducible candidates from the configured ranges using `seed`, normalizes entry levels into strict ascending order, and does not materialize the full combinatorial grid in memory.
+- `full` — full Cartesian search with ordered entries, intended only for small ranges.
+
 The optimizer returns a ranked table of runs with:
 
 - parameter values;

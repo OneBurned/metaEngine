@@ -119,6 +119,9 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(html, /id="mddExitLevel"/);
   assert.match(html, /id="optMddEntry1From"/);
   assert.match(html, /id="optMddExitTo"/);
+  assert.match(html, /id="optMddSearchMode"/);
+  assert.match(html, /id="optMddMaxCandidates"/);
+  assert.match(html, /id="optMddSeed"/);
   assert.match(html, /id="optMaxDrawdownPercent"/);
   assert.match(html, /id="optMinTrades"/);
   assert.match(html, /id="optMinProfitableSamples"/);
@@ -129,6 +132,8 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /data-optimizer-sort/);
   assert.match(app, /function sortedOptimizationRuns/);
   assert.match(app, /function updateStrategyTypeUi/);
+  assert.match(app, /maxCandidates: \$\('#optMddMaxCandidates'\)\.value/);
+  assert.match(app, /seed: \$\('#optMddSeed'\)\.value/);
   assert.match(app, /entry1/);
   assert.match(app, /Семплов: \$\{job\.sampleCount/);
   assert.match(app, /Отобрано: \$\{job\.acceptedCombinations/);
@@ -144,6 +149,8 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(server, /normalizeOptimizerFilters/);
   assert.match(server, /optimizerRunPassesFilters/);
   assert.match(server, /createMddParameterGrid/);
+  assert.match(server, /createMddRandomParameterGrid/);
+  assert.match(server, /normalizeOptimizerSearch/);
   assert.match(server, /runMddOptimizationSample/);
   assert.match(server, /trimOptimizerRuns/);
   assert.match(server, /compoundedAccum = accums\.reduce/);

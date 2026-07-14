@@ -18,6 +18,7 @@ const {
 const {
   createRsiParameterGrid,
   createMddParameterGrid,
+  createMddRandomParameterGrid,
   recoveryScore,
   optimizeRsiStrategy,
   sortOptimizationRuns
@@ -446,8 +447,20 @@ function runOptimizationSample(sample, baseConfig, parameters) {
   return runRsiOptimizationSample(sample, baseConfig, parameters);
 }
 
-function createStrategyParameterGrid(type, ranges) {
-  if (type === 'mdd') return createMddParameterGrid(ranges);
+function normalizeOptimizerSearch(type, search = {}) {
+  if (type !== 'mdd') return { mode: 'full' };
+  return {
+    mode: search.mode === 'full' ? 'full' : 'random',
+    maxCandidates: Math.max(1, Math.floor(Number(search.maxCandidates ?? 100000))),
+    seed: Math.floor(Number(search.seed ?? 42))
+  };
+}
+
+function createStrategyParameterGrid(type, ranges, search) {
+  if (type === 'mdd') {
+    if (search.mode === 'random') return createMddRandomParameterGrid(ranges, search);
+    return createMddParameterGrid(ranges);
+  }
   return createRsiParameterGrid(ranges);
 }
 
@@ -466,6 +479,7 @@ function publicOptimizerJob(job) {
     currentParameters: job.currentParameters,
     currentSample: job.currentSample,
     bestRun: job.bestRun,
+    search: job.search,
     filters: { ...job.filters, enabled: optimizerFiltersEnabled(job.filters) },
     optimization: job.optimization,
     runId: job.runId
@@ -541,6 +555,7 @@ function finishOptimizerJob(job, status) {
     completedCombinations: job.completedCombinations,
     returnedRuns: Math.min(job.runs.length, maxResults),
     stopped: status === 'stopped',
+    search: job.search,
     filters: { ...job.filters, enabled: optimizerFiltersEnabled(job.filters) },
     runs: job.runs.slice(0, maxResults)
   };
@@ -660,7 +675,8 @@ async function handleApi(req, res) {
       const body = JSON.parse((await readBody(req)).toString('utf8') || '{}');
       const samples = await buildOptimizerSamples(body);
       const strategy = normalizeTradingStrategy(body.strategy ?? body);
-      const grid = createStrategyParameterGrid(strategy.type, body.ranges);
+      const search = normalizeOptimizerSearch(strategy.type, body.search);
+      const grid = createStrategyParameterGrid(strategy.type, body.ranges, search);
       const filters = normalizeOptimizerFilters(body.filters);
       const jobId = crypto.randomUUID();
       const job = {
@@ -680,6 +696,7 @@ async function handleApi(req, res) {
         samples,
         strategy,
         grid,
+        search,
         filters,
         runs: [],
         maxResults: body.maxResults,

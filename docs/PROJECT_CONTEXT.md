@@ -729,6 +729,8 @@ Strategy optimizer:
 - MDD combinations use a metrics-only MDD evaluator over sample rows;
 - first optimized parameters are `rsiPeriod`, `buyLevel`, and `sellLevel`;
 - MDD optimized parameters are `entry1..entry5` and `exitLevel`;
+- MDD default search mode is seeded random search with `maxCandidates`, so wide ranges such as `0..80` do not materialize a huge full grid in memory;
+- MDD full search remains available only for small ranges;
 - `upperLevel`, `lowerLevel`, and `baseline` are not separate RSI optimizer inputs;
 - each run stores parameters, final accum, max drawdown, buy/sell counts, and score;
 - current score is Recovery-style: `finalAccum / abs(maxDrawdown)`;
