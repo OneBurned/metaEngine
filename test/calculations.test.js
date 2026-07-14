@@ -164,7 +164,22 @@ test('MDD metrics-only calculation matches full strategy summary', () => {
   const grid = Array.from({ length: 18 }, (_, i) => i);
   const diffs = [0, 0.03, -0.02, -0.03, -0.04, 0.02, 0.03, -0.05, 0.02, 0.04, -0.01, -0.04, 0.03, 0.02, -0.02, 0.03, 0.01, -0.01];
   const base = { ...calculateFromDiffs(grid, diffs), step: 1 };
-  const config = { type: 'mdd', entry1: 2, entry2: 4, entry3: 6, entry4: 8, entry5: 10, exitLevel: 1 };
+  const config = {
+    type: 'mdd',
+    entryCount: 5,
+    maxTotalWeight: 100,
+    entry1: 2,
+    weight1: 20,
+    entry2: 4,
+    weight2: 20,
+    entry3: 6,
+    weight3: 20,
+    entry4: 8,
+    weight4: 20,
+    entry5: 10,
+    weight5: 20,
+    exitLevel: 1
+  };
   const full = calculateTradingStrategy(base, config);
   const metrics = calculateMddMetricsFromRows(base.rows, config);
 
@@ -215,25 +230,54 @@ test('RSI optimizer allows large parameter grids', () => {
 
 test('MDD optimizer grid keeps ordered entry levels', () => {
   const grid = createMddParameterGrid({
+    entryCount: 5,
+    maxTotalWeight: 100,
     entry1: { from: 5, to: 10, step: 5 },
+    weight1: { from: 20, to: 20, step: 1 },
     entry2: { from: 10, to: 15, step: 5 },
+    weight2: { from: 20, to: 20, step: 1 },
     entry3: { from: 15, to: 20, step: 5 },
+    weight3: { from: 20, to: 20, step: 1 },
     entry4: { from: 20, to: 25, step: 5 },
+    weight4: { from: 20, to: 20, step: 1 },
     entry5: { from: 25, to: 30, step: 5 },
+    weight5: { from: 20, to: 20, step: 1 },
     exitLevel: { from: 0, to: 1, step: 1 }
   });
   assert.ok(grid.length > 0);
   assert.equal(grid.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
-  assert.deepEqual(Object.keys(grid[0]), ['entry1', 'entry2', 'entry3', 'entry4', 'entry5', 'exitLevel']);
+  assert.equal(grid.every((item) => item.weight1 + item.weight2 + item.weight3 + item.weight4 + item.weight5 <= item.maxTotalWeight), true);
+  assert.deepEqual(Object.keys(grid[0]), [
+    'entryCount',
+    'maxTotalWeight',
+    'exitLevel',
+    'entry1',
+    'weight1',
+    'entry2',
+    'weight2',
+    'entry3',
+    'weight3',
+    'entry4',
+    'weight4',
+    'entry5',
+    'weight5'
+  ]);
 });
 
 test('MDD random optimizer grid is bounded and reproducible', () => {
   const ranges = {
+    entryCount: 5,
+    maxTotalWeight: 100,
     entry1: { from: 0, to: 80, step: 1 },
+    weight1: { from: 10, to: 30, step: 10 },
     entry2: { from: 0, to: 80, step: 1 },
+    weight2: { from: 10, to: 30, step: 10 },
     entry3: { from: 0, to: 80, step: 1 },
+    weight3: { from: 10, to: 30, step: 10 },
     entry4: { from: 0, to: 80, step: 1 },
+    weight4: { from: 10, to: 30, step: 10 },
     entry5: { from: 0, to: 80, step: 1 },
+    weight5: { from: 10, to: 30, step: 10 },
     exitLevel: { from: 0, to: 80, step: 1 }
   };
   const first = createMddRandomParameterGrid(ranges, { maxCandidates: 50, seed: 42 });
@@ -242,4 +286,5 @@ test('MDD random optimizer grid is bounded and reproducible', () => {
   assert.equal(first.length, 50);
   assert.deepEqual(first, second);
   assert.equal(first.every((item) => item.entry1 < item.entry2 && item.entry2 < item.entry3 && item.entry3 < item.entry4 && item.entry4 < item.entry5), true);
+  assert.equal(first.every((item) => item.weight1 + item.weight2 + item.weight3 + item.weight4 + item.weight5 <= item.maxTotalWeight), true);
 });

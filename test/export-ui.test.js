@@ -115,9 +115,11 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(html, /id="optSampleCount"/);
   assert.match(html, /value="mdd">MDD Mean Reversion/);
   assert.doesNotMatch(html, /id="rsiBaseline"/);
-  assert.match(html, /id="mddEntry1"/);
+  assert.match(html, /id="mddEntryCount"/);
+  assert.match(html, /id="mddMaxTotalWeight"/);
+  assert.match(html, /id="mddEntryFields"/);
   assert.match(html, /id="mddExitLevel"/);
-  assert.match(html, /id="optMddEntry1From"/);
+  assert.match(html, /id="optMddEntryFields"/);
   assert.match(html, /id="optMddExitTo"/);
   assert.match(html, /id="optMddSearchMode"/);
   assert.match(html, /id="optMddMaxCandidates"/);
@@ -134,6 +136,10 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /function updateStrategyTypeUi/);
   assert.match(app, /maxCandidates: \$\('#optMddMaxCandidates'\)\.value/);
   assert.match(app, /seed: \$\('#optMddSeed'\)\.value/);
+  assert.match(app, /function renderMddEntryFields/);
+  assert.match(app, /mddWeight/);
+  assert.match(app, /optMddWeight/);
+  assert.match(app, /maxTotalWeight/);
   assert.match(app, /entry1/);
   assert.match(app, /Семплов: \$\{job\.sampleCount/);
   assert.match(app, /Отобрано: \$\{job\.acceptedCombinations/);

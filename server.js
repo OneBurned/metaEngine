@@ -257,19 +257,23 @@ function normalizeTradingStrategy(body) {
   const name = safeName(body.name || defaultStrategyName(), '.json').replace(/\.json$/i, '');
   const type = body.type === 'mdd' ? 'mdd' : 'rsi';
   if (type === 'mdd') {
-    return {
+    const entryCount = Math.min(10, Math.max(1, Math.floor(Number(body.entryCount ?? 5)) || 5));
+    const strategy = {
       name,
       type,
       created_at: body.created_at || new Date().toISOString(),
-      entry1: Number(body.entry1 ?? 5),
-      entry2: Number(body.entry2 ?? 10),
-      entry3: Number(body.entry3 ?? 15),
-      entry4: Number(body.entry4 ?? 20),
-      entry5: Number(body.entry5 ?? 25),
+      entryCount,
+      maxTotalWeight: Number(body.maxTotalWeight ?? 100),
       exitLevel: Number(body.exitLevel ?? 2),
       periodFrom: body.periodFrom,
       periodTo: body.periodTo
     };
+    const defaultWeight = 100 / entryCount;
+    for (let i = 1; i <= entryCount; i += 1) {
+      strategy[`entry${i}`] = Number(body[`entry${i}`] ?? i * 5);
+      strategy[`weight${i}`] = Number(body[`weight${i}`] ?? defaultWeight);
+    }
+    return strategy;
   }
   const buyLevel = Number(body.buyLevel ?? 30);
   const sellLevel = Number(body.sellLevel ?? 70);

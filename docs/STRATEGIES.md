@@ -49,8 +49,9 @@ The second trading strategy is MDD Mean Reversion:
 
 - type: `mdd`;
 - source signal: current drawdown `dd` from the already calculated portfolio/preset result;
-- five entry levels are configured as positive drawdown percentages, for example `5/10/15/20/25`;
-- each reached entry level adds one fifth of full position;
+- entry count is configurable, currently from 1 to 10;
+- each entry has its own positive drawdown percentage and weight percentage;
+- `maxTotalWeight` limits the sum of all entry weights, for example `100` means no more than one full position;
 - one common exit level is configured as a positive drawdown percentage;
 - when the source `dd` recovers to the exit level, the strategy closes all entry steps;
 - execution uses the next point, matching the no-lookahead rule used by RSI.
@@ -111,12 +112,11 @@ For RSI these parameters are optimized:
 
 For MDD these parameters are optimized:
 
-- `entry1`;
-- `entry2`;
-- `entry3`;
-- `entry4`;
-- `entry5`;
+- `entry1..entryN`;
+- `weight1..weightN`;
 - `exitLevel`.
+
+`N` comes from the UI field `Кол-во входов`; the local lab currently clamps it to 1..10. Optimizer candidates whose total weight exceeds `maxTotalWeight` are skipped before they enter the optimization job.
 
 MDD optimizer has two search modes:
 

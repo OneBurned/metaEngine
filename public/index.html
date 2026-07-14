@@ -123,21 +123,13 @@
           <label class="strategy-rsi-field">RSI период
             <input id="rsiPeriod" type="number" value="14" min="1" step="1" />
           </label>
-          <label class="strategy-mdd-field hidden">Вход 1, DD %
-            <input id="mddEntry1" type="number" value="5" min="0" step="0.1" />
+          <label class="strategy-mdd-field hidden">Кол-во входов
+            <input id="mddEntryCount" type="number" value="5" min="1" max="10" step="1" />
           </label>
-          <label class="strategy-mdd-field hidden">Вход 2, DD %
-            <input id="mddEntry2" type="number" value="10" min="0" step="0.1" />
+          <label class="strategy-mdd-field hidden">Макс. общий вес, %
+            <input id="mddMaxTotalWeight" type="number" value="100" min="1" step="1" />
           </label>
-          <label class="strategy-mdd-field hidden">Вход 3, DD %
-            <input id="mddEntry3" type="number" value="15" min="0" step="0.1" />
-          </label>
-          <label class="strategy-mdd-field hidden">Вход 4, DD %
-            <input id="mddEntry4" type="number" value="20" min="0" step="0.1" />
-          </label>
-          <label class="strategy-mdd-field hidden">Вход 5, DD %
-            <input id="mddEntry5" type="number" value="25" min="0" step="0.1" />
-          </label>
+          <div id="mddEntryFields" class="strategy-mdd-field mdd-entry-grid hidden"></div>
           <label class="strategy-mdd-field hidden">Выход, DD %
             <input id="mddExitLevel" type="number" value="2" min="0" step="0.1" />
           </label>
@@ -158,21 +150,7 @@
             <label class="optimizer-rsi-field">Продать от <input id="optSellFrom" type="number" value="55" step="0.1" /></label>
             <label class="optimizer-rsi-field">Продать до <input id="optSellTo" type="number" value="80" step="0.1" /></label>
             <label class="optimizer-rsi-field">Шаг <input id="optSellStep" type="number" value="5" min="0.1" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 1 от <input id="optMddEntry1From" type="number" value="5" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 1 до <input id="optMddEntry1To" type="number" value="10" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddEntry1Step" type="number" value="5" min="0.1" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 2 от <input id="optMddEntry2From" type="number" value="10" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 2 до <input id="optMddEntry2To" type="number" value="15" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddEntry2Step" type="number" value="5" min="0.1" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 3 от <input id="optMddEntry3From" type="number" value="15" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 3 до <input id="optMddEntry3To" type="number" value="20" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddEntry3Step" type="number" value="5" min="0.1" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 4 от <input id="optMddEntry4From" type="number" value="20" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 4 до <input id="optMddEntry4To" type="number" value="25" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddEntry4Step" type="number" value="5" min="0.1" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 5 от <input id="optMddEntry5From" type="number" value="25" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Вход 5 до <input id="optMddEntry5To" type="number" value="30" min="0" step="0.1" /></label>
-            <label class="optimizer-mdd-field hidden">Шаг <input id="optMddEntry5Step" type="number" value="5" min="0.1" step="0.1" /></label>
+            <div id="optMddEntryFields" class="optimizer-mdd-field mdd-entry-grid hidden"></div>
             <label class="optimizer-mdd-field hidden">Выход от <input id="optMddExitFrom" type="number" value="0" min="0" step="0.1" /></label>
             <label class="optimizer-mdd-field hidden">Выход до <input id="optMddExitTo" type="number" value="5" min="0" step="0.1" /></label>
             <label class="optimizer-mdd-field hidden">Шаг <input id="optMddExitStep" type="number" value="1" min="0.1" step="0.1" /></label>

@@ -704,8 +704,10 @@ Current trading strategies:
 - if the strategy period goes outside the base calculation period, warn and fill missing data by the existing missing-data rule.
 - type: MDD Mean Reversion;
 - MDD source: current drawdown `dd` from the calculated portfolio/preset result;
-- MDD has five entry levels and one common exit level for now;
-- each reached entry level adds one fifth of full position, and the common exit closes all steps.
+- MDD entry count is configurable from 1 to 10;
+- each MDD entry has its own DD level and weight percentage;
+- `maxTotalWeight` limits the sum of entry weights, for example `100` means no more than one full position;
+- one common exit level closes all active entries.
 
 The strategy block is hidden by default and appears only after the user enables the “Стратегии” toggle.
 
@@ -728,7 +730,9 @@ Strategy optimizer:
 - RSI buy/sell combinations use a metrics-only RSI evaluator so chart rows are not rebuilt for every optimizer run;
 - MDD combinations use a metrics-only MDD evaluator over sample rows;
 - first optimized parameters are `rsiPeriod`, `buyLevel`, and `sellLevel`;
-- MDD optimized parameters are `entry1..entry5` and `exitLevel`;
+- MDD optimized parameters are `entry1..entryN`, `weight1..weightN`, and `exitLevel`;
+- `N` comes from the MDD entry-count field and is clamped to 1..10;
+- MDD optimizer skips parameter candidates whose total entry weight exceeds `maxTotalWeight`;
 - MDD default search mode is seeded random search with `maxCandidates`, so wide ranges such as `0..80` do not materialize a huge full grid in memory;
 - MDD full search remains available only for small ranges;
 - `upperLevel`, `lowerLevel`, and `baseline` are not separate RSI optimizer inputs;

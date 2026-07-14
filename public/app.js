@@ -18,6 +18,7 @@ const $$ = (selector) => [...document.querySelectorAll(selector)];
 
 const EXPORT_COLUMNS = ['timestamp', 'diff', 'accum', 'hwm', 'dd', 'mdd'];
 const VALUE_TYPE_STORAGE_KEY = 'metaEngine.valueType';
+const MAX_MDD_ENTRIES = 10;
 
 function exportFileName(prefix, columns) {
   return `${prefix}_${columns.join('_')}.csv`;
@@ -167,7 +168,9 @@ function renderTradingStrategies() {
 
 function strategyParamsLabel(strategy) {
   if (strategy.type === 'mdd') {
-    return `entries ${[strategy.entry1, strategy.entry2, strategy.entry3, strategy.entry4, strategy.entry5].join('/')}, exit ${strategy.exitLevel}`;
+    const count = Number(strategy.entryCount ?? 5);
+    const entries = Array.from({ length: count }, (_, index) => `${strategy[`entry${index + 1}`]}@${strategy[`weight${index + 1}`]}%`);
+    return `entries ${entries.join('/')}, exit ${strategy.exitLevel}, max ${strategy.maxTotalWeight}%`;
   }
   return `RSI ${strategy.rsiPeriod}, buy ${strategy.buyLevel}, sell ${strategy.sellLevel}`;
 }
@@ -376,6 +379,46 @@ function updateStrategyTypeUi() {
   if (!$('#tradingStrategyName').value || /^(rsi|mdd)_\d{8}_\d{6}$/.test($('#tradingStrategyName').value)) {
     $('#tradingStrategyName').value = defaultStrategyName();
   }
+  renderMddEntryFields();
+}
+
+function mddEntryCount() {
+  const value = Math.floor(Number($('#mddEntryCount')?.value ?? 5));
+  return Math.min(MAX_MDD_ENTRIES, Math.max(1, Number.isFinite(value) ? value : 5));
+}
+
+function currentInputValue(id, fallback) {
+  const input = $(`#${id}`);
+  return input ? input.value : fallback;
+}
+
+function renderMddEntryFields() {
+  const count = mddEntryCount();
+  const strategyBox = $('#mddEntryFields');
+  const optimizerBox = $('#optMddEntryFields');
+  if (!strategyBox || !optimizerBox) return;
+  const defaultWeight = (100 / count).toFixed(2).replace(/\.?0+$/, '');
+
+  strategyBox.innerHTML = Array.from({ length: count }, (_, index) => {
+    const n = index + 1;
+    const defaultEntry = n * 5;
+    return `
+      <label>Вход ${n}, DD % <input id="mddEntry${n}" type="number" value="${currentInputValue(`mddEntry${n}`, defaultEntry)}" min="0" step="0.1" /></label>
+      <label>Вес ${n}, % <input id="mddWeight${n}" type="number" value="${currentInputValue(`mddWeight${n}`, defaultWeight)}" min="1" max="100" step="0.1" /></label>`;
+  }).join('');
+
+  optimizerBox.innerHTML = Array.from({ length: count }, (_, index) => {
+    const n = index + 1;
+    const defaultFrom = index * 5;
+    const defaultTo = (index + 1) * 10;
+    return `
+      <label>Вход ${n} от <input id="optMddEntry${n}From" type="number" value="${currentInputValue(`optMddEntry${n}From`, defaultFrom)}" min="0" step="0.1" /></label>
+      <label>Вход ${n} до <input id="optMddEntry${n}To" type="number" value="${currentInputValue(`optMddEntry${n}To`, defaultTo)}" min="0" step="0.1" /></label>
+      <label>Шаг входа ${n} <input id="optMddEntry${n}Step" type="number" value="${currentInputValue(`optMddEntry${n}Step`, 5)}" min="0.1" step="0.1" /></label>
+      <label>Вес ${n} от <input id="optMddWeight${n}From" type="number" value="${currentInputValue(`optMddWeight${n}From`, defaultWeight)}" min="1" max="100" step="0.1" /></label>
+      <label>Вес ${n} до <input id="optMddWeight${n}To" type="number" value="${currentInputValue(`optMddWeight${n}To`, defaultWeight)}" min="1" max="100" step="0.1" /></label>
+      <label>Шаг веса ${n} <input id="optMddWeight${n}Step" type="number" value="${currentInputValue(`optMddWeight${n}Step`, 10)}" min="0.1" step="0.1" /></label>`;
+  }).join('');
 }
 
 function updateStrategyCalculateAvailability(showMessage = false) {
@@ -687,18 +730,21 @@ function resetStrategyZoom() {
 function collectStrategyBody() {
   const type = $('#tradingStrategyType').value;
   if (type === 'mdd') {
-    return {
+    const count = mddEntryCount();
+    const body = {
       name: $('#tradingStrategyName').value || defaultStrategyName(),
       type,
-      entry1: $('#mddEntry1').value,
-      entry2: $('#mddEntry2').value,
-      entry3: $('#mddEntry3').value,
-      entry4: $('#mddEntry4').value,
-      entry5: $('#mddEntry5').value,
+      entryCount: count,
+      maxTotalWeight: $('#mddMaxTotalWeight').value,
       exitLevel: $('#mddExitLevel').value,
       periodFrom: normalizeDateInput($('#strategyPeriodFrom').value),
       periodTo: normalizeDateInput($('#strategyPeriodTo').value)
     };
+    for (let i = 1; i <= count; i += 1) {
+      body[`entry${i}`] = $(`#mddEntry${i}`).value;
+      body[`weight${i}`] = $(`#mddWeight${i}`).value;
+    }
+    return body;
   }
   const buyLevel = $('#buyLevel').value;
   const sellLevel = $('#sellLevel').value;
@@ -717,13 +763,11 @@ function collectStrategyBody() {
 
 function collectOptimizationBody() {
   const type = $('#tradingStrategyType').value;
+  const count = mddEntryCount();
   const ranges = type === 'mdd'
     ? {
-      entry1: { from: $('#optMddEntry1From').value, to: $('#optMddEntry1To').value, step: $('#optMddEntry1Step').value },
-      entry2: { from: $('#optMddEntry2From').value, to: $('#optMddEntry2To').value, step: $('#optMddEntry2Step').value },
-      entry3: { from: $('#optMddEntry3From').value, to: $('#optMddEntry3To').value, step: $('#optMddEntry3Step').value },
-      entry4: { from: $('#optMddEntry4From').value, to: $('#optMddEntry4To').value, step: $('#optMddEntry4Step').value },
-      entry5: { from: $('#optMddEntry5From').value, to: $('#optMddEntry5To').value, step: $('#optMddEntry5Step').value },
+      entryCount: count,
+      maxTotalWeight: $('#mddMaxTotalWeight').value,
       exitLevel: { from: $('#optMddExitFrom').value, to: $('#optMddExitTo').value, step: $('#optMddExitStep').value }
     }
     : {
@@ -743,6 +787,12 @@ function collectOptimizationBody() {
         step: $('#optSellStep').value
       }
     };
+  if (type === 'mdd') {
+    for (let i = 1; i <= count; i += 1) {
+      ranges[`entry${i}`] = { from: $(`#optMddEntry${i}From`).value, to: $(`#optMddEntry${i}To`).value, step: $(`#optMddEntry${i}Step`).value };
+      ranges[`weight${i}`] = { from: $(`#optMddWeight${i}From`).value, to: $(`#optMddWeight${i}To`).value, step: $(`#optMddWeight${i}Step`).value };
+    }
+  }
   return {
     sampleCount: $('#optSampleCount').value,
     ranges,
@@ -794,7 +844,12 @@ function formatRunLine(run) {
 
 function formatParameters(parameters = {}) {
   if (parameters.entry1 !== undefined) {
-    return `entry ${parameters.entry1}/${parameters.entry2}/${parameters.entry3}/${parameters.entry4}/${parameters.entry5}, exit ${parameters.exitLevel}`;
+    const count = Math.min(MAX_MDD_ENTRIES, Math.max(1, Math.floor(Number(parameters.entryCount ?? 5)) || 5));
+    const entries = Array.from({ length: count }, (_, index) => {
+      const n = index + 1;
+      return `${parameters[`entry${n}`]}@${parameters[`weight${n}`]}%`;
+    });
+    return `entry ${entries.join('/')}, exit ${parameters.exitLevel}`;
   }
   return `RSI ${parameters.rsiPeriod}, buy ${parameters.buyLevel}, sell ${parameters.sellLevel}`;
 }
@@ -939,15 +994,11 @@ function showStrategyResult(result, name) {
 
 function optimizationColumnValue(run, key) {
   const trades = (run.summary.buyCount ?? 0) + (run.summary.sellCount ?? 0);
+  if (/^(entry|weight)\d+$/.test(key)) return Number(run.parameters[key] ?? 0);
   const values = {
     rsiPeriod: run.parameters.rsiPeriod,
     buyLevel: run.parameters.buyLevel,
     sellLevel: run.parameters.sellLevel,
-    entry1: run.parameters.entry1,
-    entry2: run.parameters.entry2,
-    entry3: run.parameters.entry3,
-    entry4: run.parameters.entry4,
-    entry5: run.parameters.entry5,
     exitLevel: run.parameters.exitLevel,
     score: run.score,
     profitableSamples: run.summary.profitableSamples,
@@ -1014,13 +1065,15 @@ function showOptimizationResult(result) {
     <tr><th>Показано</th><td>${displayRuns.length}</td></tr>
   </tbody></table>`;
   const sampleHeaders = Array.from({ length: sampleCount }, (_, index) => `<th>Семпл ${index + 1}</th>`).join('');
+  const mddEntryColumnCount = result.type === 'mdd'
+    ? Math.min(MAX_MDD_ENTRIES, Math.max(1, ...((result.runs ?? []).map((run) => Math.floor(Number(run.parameters.entryCount ?? 5)) || 5))))
+    : 0;
   const parameterHeaders = result.type === 'mdd'
     ? [
-      sortHeader('entry1', 'Вход 1'),
-      sortHeader('entry2', 'Вход 2'),
-      sortHeader('entry3', 'Вход 3'),
-      sortHeader('entry4', 'Вход 4'),
-      sortHeader('entry5', 'Вход 5'),
+      ...Array.from({ length: mddEntryColumnCount }, (_, index) => [
+        sortHeader(`entry${index + 1}`, `Вход ${index + 1}`),
+        sortHeader(`weight${index + 1}`, `Вес ${index + 1}`)
+      ]).flat(),
       sortHeader('exitLevel', 'Выход')
     ]
     : [
@@ -1029,7 +1082,10 @@ function showOptimizationResult(result) {
       sortHeader('sellLevel', 'Продать')
     ];
   const parameterCells = (run) => result.type === 'mdd'
-    ? `<td>${run.parameters.entry1}</td><td>${run.parameters.entry2}</td><td>${run.parameters.entry3}</td><td>${run.parameters.entry4}</td><td>${run.parameters.entry5}</td><td>${run.parameters.exitLevel}</td>`
+    ? `${Array.from({ length: mddEntryColumnCount }, (_, index) => {
+      const n = index + 1;
+      return `<td>${run.parameters[`entry${n}`] ?? '-'}</td><td>${run.parameters[`weight${n}`] ?? '-'}</td>`;
+    }).join('')}<td>${run.parameters.exitLevel}</td>`
     : `<td>${run.parameters.rsiPeriod}</td><td>${run.parameters.buyLevel}</td><td>${run.parameters.sellLevel}</td>`;
   const headers = [
     '<th>#</th>',
@@ -1319,6 +1375,7 @@ $('#tradingStrategyType').addEventListener('change', () => {
   renderStrategyRsiChart();
   renderStrategyChart();
 });
+$('#mddEntryCount').addEventListener('change', renderMddEntryFields);
 $('#saveTradingStrategy').addEventListener('click', () => saveTradingStrategy(false));
 $('#calculateTradingStrategy').addEventListener('click', () => withLoadingButton($('#calculateTradingStrategy'), 'Рассчитывается', calculateTradingStrategy).catch((err) => showStrategyMessage(err.message, 'strategy-error')));
 $('#optimizeTradingStrategy').addEventListener('click', () => optimizeTradingStrategy().catch((err) => showStrategyMessage(err.message, 'optimizer-error')));
