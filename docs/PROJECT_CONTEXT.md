@@ -745,6 +745,7 @@ Strategy optimizer:
 - optimizer progress is shown while runs are processed: completed / total, current parameter set, and best score so far;
 - optimization can be stopped softly, after which the UI shows the ranked table for completed runs;
 - result table supports client-side sorting by numeric columns;
+- every optimization row can copy its parameters into strategy block 5 and immediately build the strategy-result chart in block 6;
 - optimizer filters can exclude runs before they enter the retained top results: max drawdown percent, minimum total trades, and minimum profitable samples;
 - optimizer can split the selected period into samples before parameter search; each parameter combination is run on every sample;
 - sample-mode ranking uses the worst sample score as the stability score and shows per-sample results in the table;

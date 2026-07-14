@@ -1068,6 +1068,47 @@ function bindOptimizationSortHeaders() {
   });
 }
 
+function applyOptimizationRunToStrategy(run, type) {
+  if (!run?.parameters) return;
+  $('#tradingStrategyType').value = type;
+  updateStrategyTypeUi();
+  $('#tradingStrategyName').value = defaultStrategyName();
+
+  if (type === 'mdd') {
+    const count = Math.min(MAX_MDD_ENTRIES, Math.max(1, Math.floor(Number(run.parameters.entryCount ?? 5)) || 5));
+    $('#mddEntryCount').value = count;
+    syncMddEntryCountInputs('mddEntryCount');
+    renderMddEntryFields();
+    $('#mddMaxTotalWeight').value = run.parameters.maxTotalWeight ?? $('#mddMaxTotalWeight').value;
+    $('#mddExitLevel').value = run.parameters.exitLevel ?? $('#mddExitLevel').value;
+    for (let i = 1; i <= count; i += 1) {
+      if ($(`#mddEntry${i}`)) $(`#mddEntry${i}`).value = run.parameters[`entry${i}`] ?? $(`#mddEntry${i}`).value;
+      if ($(`#mddWeight${i}`)) $(`#mddWeight${i}`).value = run.parameters[`weight${i}`] ?? $(`#mddWeight${i}`).value;
+    }
+    return;
+  }
+
+  $('#rsiPeriod').value = run.parameters.rsiPeriod ?? $('#rsiPeriod').value;
+  $('#buyLevel').value = run.parameters.buyLevel ?? $('#buyLevel').value;
+  $('#sellLevel').value = run.parameters.sellLevel ?? $('#sellLevel').value;
+}
+
+async function buildChartFromOptimizationRun(run, type) {
+  applyOptimizationRunToStrategy(run, type);
+  await calculateTradingStrategy();
+  $('#strategyResultCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function bindOptimizationApplyButtons(rows, result) {
+  $$('[data-optimizer-apply]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const index = Number(button.dataset.optimizerApply);
+      const run = rows[index];
+      buildChartFromOptimizationRun(run, result.type).catch((err) => showStrategyMessage(err.message, 'strategy-error'));
+    });
+  });
+}
+
 function showOptimizationResult(result) {
   $('#optimizationResultCard').classList.remove('hidden');
   const statusRow = result.stopped ? '<tr><th>Статус</th><td>Остановлено пользователем</td></tr>' : '';
@@ -1127,10 +1168,11 @@ function showOptimizationResult(result) {
     sortHeader('averageAccum', 'Ср. accum'),
     sortHeader('worstAccum', 'Худш. accum'),
     sortHeader('worstDrawdown', 'Худш. MDD'),
-    sampleHeaders
+    sampleHeaders,
+    '<th>График</th>'
   ].join('');
   const rows = sortedOptimizationRuns({ ...result, runs: displayRuns });
-  const emptyRow = `<tr><td colspan="${1 + parameterHeaders.length + 9 + sampleCount}">Нет результатов, прошедших отсечение.</td></tr>`;
+  const emptyRow = `<tr><td colspan="${1 + parameterHeaders.length + 10 + sampleCount}">Нет результатов, прошедших отсечение.</td></tr>`;
   $('#optimizationResultTable').innerHTML = `<thead><tr>${headers}</tr></thead><tbody>${rows.length ? rows.map((run, index) => `
     <tr>
       <td>${index + 1}</td>
@@ -1145,8 +1187,10 @@ function showOptimizationResult(result) {
       <td>${fmtPct(run.summary.worstAccum)}</td>
       <td>${fmtPct(run.summary.worstDrawdown)}</td>
       ${(run.samples ?? []).map((sample) => `<td>${sample.name}<br>${sample.periodFrom} → ${sample.periodTo}<br>accum ${fmtPct(sample.summary.finalAccum)}<br>MDD ${fmtPct(sample.summary.maxDrawdown)}<br>score ${Number(sample.score).toFixed(4)}</td>`).join('')}
+      <td><button type="button" class="secondary" data-optimizer-apply="${index}">Построить график</button></td>
     </tr>`).join('') : emptyRow}</tbody>`;
   bindOptimizationSortHeaders();
+  bindOptimizationApplyButtons(rows, result);
 }
 
 function renderStrategyChart() {

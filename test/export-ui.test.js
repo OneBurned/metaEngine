@@ -138,7 +138,10 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /function normalizeOptimizationFilters/);
   assert.match(app, /function optimizationRunPassesFilters/);
   assert.match(app, /data-optimizer-sort/);
+  assert.match(app, /data-optimizer-apply/);
   assert.match(app, /function sortedOptimizationRuns/);
+  assert.match(app, /function applyOptimizationRunToStrategy/);
+  assert.match(app, /function buildChartFromOptimizationRun/);
   assert.match(app, /function updateStrategyTypeUi/);
   assert.match(app, /maxCandidates: \$\('#optMddMaxCandidates'\)\.value/);
   assert.match(app, /seed: \$\('#optMddSeed'\)\.value/);
@@ -157,6 +160,7 @@ test('RSI optimizer supports sample-based stability results', () => {
   assert.match(app, /Сцепл\. accum/);
   assert.match(app, /Трейдов/);
   assert.match(app, /Нет результатов, прошедших отсечение/);
+  assert.match(app, /Построить график/);
   assert.match(app, /run\.summary\.compoundedAccum/);
   assert.match(app, /sampleHeaders/);
   assert.match(app, /run\.samples/);
