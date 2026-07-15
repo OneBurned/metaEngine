@@ -476,6 +476,13 @@ golden fixtures.
 | P6. Staging | Миграция данных, load/security/restore tests и приемка |
 | P7. Production | Backup, monitoring, runbook, release и rollback check |
 
+Текущий прогресс:
+
+- P0: созданы общие golden fixtures и Node.js contract tests;
+- P1a: создан .NET 10 solution, отдельные API/Worker, общий контракт модулей,
+  descriptors RSI/MDD и первые .NET contract tests;
+- PostgreSQL, auth, workspaces, очередь и production-формулы в P1a не входят.
+
 Каждый этап оформляется отдельным согласованным PR или небольшой серией PR.
 Production deploy выполняется отдельным действием после merge и явного
 подтверждения пользователя.

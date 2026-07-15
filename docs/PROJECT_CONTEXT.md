@@ -4,9 +4,13 @@ This document is written for a future AI agent that receives the repository with
 
 ## 1. Current project state
 
-MetaEngine is currently a **local file-based calculation lab** for validating strategy CSV import, presets, rebalancing, and basic time-series calculations before building the production backend.
+MetaEngine currently contains two parallel parts:
 
-The current implementation is intentionally small:
+- a **local file-based Node.js calculation lab** for validating formulas and UI;
+- an initial **.NET 10 production scaffold** with separate API, Worker, strategy
+  abstractions and descriptors for RSI and MDD Mean Reversion.
+
+The local lab implementation is intentionally small:
 
 - runtime: Node.js, no external npm dependencies;
 - UI: browser page served locally;
@@ -21,7 +25,7 @@ This is not the final production stack. The repository defaults still say produc
 - async calculations saved to database;
 - API responses suitable for frontend JSON contracts and later Plotly-compatible chart payloads.
 
-The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly.
+The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly. The .NET scaffold does not calculate strategies yet; descriptors explicitly report that production calculation is unavailable until formula parity is complete.
 
 ## Documentation map
 
@@ -36,6 +40,8 @@ docs/CALCULATION_CONTRACTS.md
                            Calculation contracts and shared golden fixtures
 docs/PRODUCTION_READINESS.md
                            Production architecture, migration and release gates
+docs/PRODUCTION_SCAFFOLD.md
+                           Current .NET scaffold, API, Worker and run guide
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -108,6 +114,11 @@ Do not use destructive git commands such as `git reset --hard` unless the user e
 
 ```text
 server.js                         Node HTTP server and API
+MetaEngine.slnx                   .NET 10 production solution
+src/MetaEngine.Api               ASP.NET Core API scaffold
+src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Strategies.*      Strategy contracts and module descriptors
+tests/MetaEngine.ContractTests   .NET architecture and fixture tests
 lib/calculations.js               Calculation and CSV normalization logic
 public/index.html                 Browser UI markup
 public/app.js                     Browser UI behavior
@@ -131,6 +142,17 @@ In GitHub Codespaces:
 cd /workspaces/metaEngine
 npm start
 ```
+
+Production scaffold commands:
+
+```bash
+dotnet build MetaEngine.slnx
+dotnet test MetaEngine.slnx
+dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
+```
+
+Port `5080` exposes health endpoints and `/api/v1/strategy-types`. It is not yet
+a replacement for the Node.js calculation API.
 
 The server prints:
 
@@ -158,6 +180,7 @@ Use:
 
 ```bash
 npm test
+dotnet test MetaEngine.slnx
 ```
 
 Use syntax checks:

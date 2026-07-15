@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/MetaEngine.Api/MetaEngine.Api.csproj" />
+    <Project Path="src/MetaEngine.Application/MetaEngine.Application.csproj" />
+    <Project Path="src/MetaEngine.Domain/MetaEngine.Domain.csproj" />
+    <Project Path="src/MetaEngine.Infrastructure/MetaEngine.Infrastructure.csproj" />
+    <Project Path="src/MetaEngine.Strategies.Abstractions/MetaEngine.Strategies.Abstractions.csproj" />
+    <Project Path="src/MetaEngine.Strategies.MddMeanReversion/MetaEngine.Strategies.MddMeanReversion.csproj" />
+    <Project Path="src/MetaEngine.Strategies.Rsi/MetaEngine.Strategies.Rsi.csproj" />
+    <Project Path="src/MetaEngine.Worker/MetaEngine.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/MetaEngine.ContractTests/MetaEngine.ContractTests.csproj" />
+  </Folder>
+</Solution>

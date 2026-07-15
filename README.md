@@ -22,6 +22,8 @@ docs/CALCULATION_CONTRACTS.md
                            расчетные контракты и общие golden fixtures
 docs/PRODUCTION_READINESS.md
                            архитектура, миграция и критерии допуска в production
+docs/PRODUCTION_SCAFFOLD.md
+                           текущий .NET-каркас, API, Worker и запуск
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
@@ -124,12 +126,14 @@ Cmd + Shift + R
 
 ## Требования
 
-Нужен Node.js версии 20 или выше.
+Для local lab нужен Node.js версии 20 или выше. Для production scaffold нужен
+.NET SDK 10.
 
 Проверить версию:
 
 ```bash
 node --version
+dotnet --version
 ```
 
 Устанавливать npm-пакеты сейчас не нужно: текущая версия сделана без внешних зависимостей.
@@ -155,6 +159,22 @@ Ctrl + C
 
 ```bash
 npm test
+dotnet test MetaEngine.slnx
+```
+
+### Проверить production scaffold
+
+```bash
+dotnet build MetaEngine.slnx
+dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
+```
+
+После запуска API доступны:
+
+```text
+http://localhost:5080/health/live
+http://localhost:5080/health/ready
+http://localhost:5080/api/v1/strategy-types
 ```
 
 ### Проверить синтаксис основных файлов
@@ -616,6 +636,11 @@ public/index.html         страница приложения
 public/app.js             логика интерфейса
 public/styles.css         стили интерфейса
 test/calculations.test.js тесты расчетов
+MetaEngine.slnx           solution production-версии
+src/MetaEngine.Api        ASP.NET Core API scaffold
+src/MetaEngine.Worker     отдельный Worker scaffold
+src/MetaEngine.Strategies.* модульные контракты и descriptors стратегий
+tests/MetaEngine.ContractTests .NET architecture и fixture tests
 samples/strategies        загруженные стратегии
 samples/presets           сохраненные пресеты
 samples/runs              результаты расчетов
@@ -626,7 +651,7 @@ samples/runs              результаты расчетов
 Эта версия — локальный файловый прототип. Пока нет:
 
 - PostgreSQL;
-- ASP.NET Core backend;
+- production-расчетов в ASP.NET Core backend;
 - пользователей и ролей;
 - авторизации;
 - защиты публичной ссылки;

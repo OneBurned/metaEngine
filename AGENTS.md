@@ -17,7 +17,8 @@
    - `docs/TIMEFRAMES.md` — конвертер таймфреймов и режим гистограммы;
    - `docs/CALCULATION_CONTRACTS.md` — расчетные контракты и golden fixtures;
    - `docs/PRODUCTION_READINESS.md` — архитектура, миграция и release gates
-     production-версии.
+     production-версии;
+   - `docs/PRODUCTION_SCAFFOLD.md` — текущий .NET-каркас, API и Worker.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

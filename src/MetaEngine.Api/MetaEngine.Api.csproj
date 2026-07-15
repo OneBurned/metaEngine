@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <ProjectReference Include="..\MetaEngine.Application\MetaEngine.Application.csproj" />
+    <ProjectReference Include="..\MetaEngine.Infrastructure\MetaEngine.Infrastructure.csproj" />
+    <ProjectReference Include="..\MetaEngine.Strategies.Abstractions\MetaEngine.Strategies.Abstractions.csproj" />
+    <ProjectReference Include="..\MetaEngine.Strategies.Rsi\MetaEngine.Strategies.Rsi.csproj" />
+    <ProjectReference Include="..\MetaEngine.Strategies.MddMeanReversion\MetaEngine.Strategies.MddMeanReversion.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+</Project>
