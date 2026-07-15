@@ -45,6 +45,7 @@ docs/PRODUCTION_SCAFFOLD.md
                            Current .NET scaffold, API, Worker and run guide
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
+docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -60,6 +61,15 @@ weighted `diff` rows, fills a missing native source point with zero, and then
 uses the shared base-metrics/timeframe engine. This is not yet a public
 calculation job or production UI. See `docs/PRESETS.md` for the current API and
 constraints.
+
+## Production P3: calculation runs
+
+The platform can now queue a base calculation for one immutable portfolio or
+preset version. API returns `queued` immediately; the separate Worker claims
+the run, calculates the canonical result, saves a `timestamp,diff` artifact and
+updates its summary/status. The API exposes list, details and paged canonical
+result rows. P3 does not include UI, cancel/retry, strategies or optimizer jobs.
+See `docs/CALCULATION_RUNS.md` for endpoints and operational behavior.
 
 ## 2. User communication rules
 

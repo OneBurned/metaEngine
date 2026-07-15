@@ -217,6 +217,7 @@ workspaces.MapGet("/{workspaceId:guid}", async (
 });
 workspaces.MapPortfolioEndpoints();
 workspaces.MapPresetEndpoints();
+workspaces.MapCalculationRunEndpoints();
 
 app.Run();
 

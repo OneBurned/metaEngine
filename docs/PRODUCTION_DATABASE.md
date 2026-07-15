@@ -102,6 +102,12 @@ HTTP `503` и `status = not_ready`. В ответ не попадают connecti
 ends_at)` и может быть открытым; периоды одной и той же portfolio version не
 пересекаются. Контракт API и расчета находится в `docs/PRESETS.md`.
 
+P3 использует существующие `calculation_runs`, `run_artifacts` и
+`run_artifact_points`: постановка задачи и обработка Worker не меняют схему и
+не требуют новой migration. Завершенный artifact содержит только
+`timestamp,diff` и SHA-256 checksum; summary и warnings хранятся в run.
+Подробный workflow: `docs/CALCULATION_RUNS.md`.
+
 После выбора результата оптимизации полный расчет создает `run_artifact` и его
 `run_artifact_points`. Сохраненная мета-стратегия ссылается на этот artifact.
 Элемент пресета ссылается на конкретную версию сохраненной мета-стратегии.
@@ -142,8 +148,8 @@ dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure
 
 ## Следующие шаги
 
-- добавить API workflows стратегий и расчетов с workspace-проверкой;
+- добавить API workflows стратегий и optimizer jobs с workspace-проверкой;
 - добавить управление участниками, восстановление пароля, 2FA/OIDC и rate limiting;
-- добавить Worker/job workflow для уже перенесенных импорта и расчетного ядра;
+- добавить cancel/retry и restart recovery для calculation/optimizer jobs;
 - расширять real-PostgreSQL integration tests вместе с новыми API workflows;
 - определить retention и backup/restore policy.

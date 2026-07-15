@@ -91,9 +91,10 @@ If leveraged aggregation produces a return below `-100%` on one timestamp, the
 calculation is rejected by the common `return_below_minus_one` guard. This
 prevents a non-finite equity curve from entering an artifact.
 
-The calculation core is a library only in P2c. A later job/worker workflow will
-load saved preset items and portfolio points, persist the canonical result as a
-`run_artifact`, and expose it through API/UI.
+P3 now loads a saved preset through an asynchronous job/Worker workflow and
+persists its canonical result as a `run_artifact`. The production UI and chart
+payloads remain future work; the current run API is documented in
+`docs/CALCULATION_RUNS.md`.
 
 ## Shared contract
 

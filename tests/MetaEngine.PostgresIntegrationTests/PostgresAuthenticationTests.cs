@@ -6,6 +6,8 @@ using System.Data.Common;
 using MetaEngine.Api.Contracts;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
+using MetaEngine.Application.Calculations;
+using MetaEngine.Domain.Model;
 using MetaEngine.Infrastructure.Identity;
 using MetaEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -64,6 +66,14 @@ public sealed class PostgresAuthenticationTests
         var foundPreset = await client.GetFromJsonAsync<PresetDetails>(
             $"/api/v1/workspaces/{workspaceId}/presets/{preset.Preset.Id}",
             JsonOptions);
+        var calculation = await QueueCalculationAsync(client, workspaceId, preset.Preset.Id);
+        await ProcessOneCalculationAsync(factory);
+        var calculationDetails = await client.GetFromJsonAsync<CalculationRunDetails>(
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{calculation.Id}",
+            JsonOptions);
+        var calculationResult = await client.GetFromJsonAsync<CalculationResultPage>(
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{calculation.Id}/result?limit=2",
+            JsonOptions);
 
         Assert.True(import.Created);
         Assert.False(duplicate.Created);
@@ -82,6 +92,12 @@ public sealed class PostgresAuthenticationTests
             item => item.GetProperty("id").GetGuid() == preset.Preset.Id);
         Assert.NotNull(foundPreset);
         Assert.Equal(preset.Preset.Id, foundPreset.Preset.Id);
+        Assert.NotNull(calculationDetails);
+        Assert.Equal(JobStatus.Completed, calculationDetails.Run.Status);
+        Assert.NotNull(calculationDetails.Artifact);
+        Assert.NotNull(calculationResult);
+        Assert.Equal(3, calculationResult.Total);
+        Assert.Equal(2, calculationResult.Items.Count);
 
         await using var auditScope = factory.Services.CreateAsyncScope();
         var auditDbContext = auditScope.ServiceProvider.GetRequiredService<MetaEngineDbContext>();
@@ -95,6 +111,16 @@ public sealed class PostgresAuthenticationTests
             await auditDbContext.AuditEvents.CountAsync(
                 auditEvent => auditEvent.Action == "preset_created" &&
                                auditEvent.EntityId == preset.Preset.Id));
+        Assert.Equal(
+            1,
+            await auditDbContext.AuditEvents.CountAsync(
+                auditEvent => auditEvent.Action == "calculation_queued" &&
+                               auditEvent.EntityId == calculation.Id));
+        Assert.Equal(
+            1,
+            await auditDbContext.AuditEvents.CountAsync(
+                auditEvent => auditEvent.Action == "calculation_completed" &&
+                               auditEvent.EntityId == calculation.Id));
     }
 
     private static async Task<PortfolioImportResult> ImportPortfolioAsync(HttpClient client, Guid workspaceId)
@@ -153,6 +179,41 @@ public sealed class PostgresAuthenticationTests
         return result;
     }
 
+    private static async Task<CalculationRunSummary> QueueCalculationAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid presetId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        var start = DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs")
+        {
+            Content = JsonContent.Create(new QueueCalculationRequest(
+                null,
+                presetId,
+                start,
+                start.AddHours(2),
+                "1h"))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static async Task ProcessOneCalculationAsync(PostgresApiFactory factory)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
+        Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+    }
+
     private static JsonSerializerOptions CreateJsonOptions()
     {
         var options = new JsonSerializerOptions(JsonSerializerDefaults.Web);
@@ -190,8 +251,12 @@ public sealed class PostgresAuthenticationTests
         await dbContext.AuditEvents
             .Where(auditEvent =>
                 auditEvent.Action == "portfolio_imported" ||
-                auditEvent.Action == "preset_created")
+                auditEvent.Action == "preset_created" ||
+                auditEvent.Action == "calculation_queued" ||
+                auditEvent.Action == "calculation_completed" ||
+                auditEvent.Action == "calculation_failed")
             .ExecuteDeleteAsync();
+        await dbContext.CalculationRuns.ExecuteDeleteAsync();
         await dbContext.Presets.ExecuteDeleteAsync();
         await dbContext.Portfolios.ExecuteDeleteAsync();
     }
