@@ -1,3 +1,9 @@
 node_modules/
 .DS_Store
 samples/runs/*.json
+bin/
+obj/
+.vs/
+TestResults/
+.env
+!.env.example

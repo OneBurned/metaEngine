@@ -14,7 +14,19 @@
 4. Тематические документы из `docs/`, если задача относится к конкретному модулю:
    - `docs/STRATEGIES.md` — торговые стратегии и модульная структура;
    - `docs/CSV_EXPORT.md` — экспорт CSV;
-   - `docs/TIMEFRAMES.md` — конвертер таймфреймов и режим гистограммы.
+   - `docs/TIMEFRAMES.md` — конвертер таймфреймов и режим гистограммы;
+   - `docs/CALCULATION_CONTRACTS.md` — расчетные контракты и golden fixtures;
+   - `docs/PRODUCTION_READINESS.md` — архитектура, миграция и release gates
+     production-версии;
+   - `docs/PRODUCTION_SCAFFOLD.md` — текущий .NET-каркас, API и Worker.
+   - `docs/PRODUCTION_DATABASE.md` — PostgreSQL, миграции, модель хранения и
+     локальный запуск базы.
+   - `docs/PRODUCTION_AUTH.md` — bootstrap владельца, cookie-auth, CSRF и
+     workspace isolation.
+   - `docs/PRODUCTION_CI.md` — GitHub Actions, PostgreSQL integration test и
+     обязательные проверки ветки.
+   - `docs/PORTFOLIO_IMPORT.md` — production CSV import, версии, checksum и
+     workspace API портфелей.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

@@ -18,11 +18,24 @@ docs/strategies/MDD_MEAN_REVERSION.md
                            подробное описание MDD Mean Reversion
 docs/CSV_EXPORT.md        экспорт CSV, popup, columns API и имена файлов
 docs/TIMEFRAMES.md        конвертер таймфреймов и режим гистограммы
+docs/CALCULATION_CONTRACTS.md
+                           расчетные контракты и общие golden fixtures
+docs/PRODUCTION_READINESS.md
+                           архитектура, миграция и критерии допуска в production
+docs/PRODUCTION_SCAFFOLD.md
+                           текущий .NET-каркас, API, Worker и запуск
+docs/PRODUCTION_DATABASE.md
+                           PostgreSQL, миграции и модель хранения production
+docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
+docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
+docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
 
-> Важно: это пока **файловый прототип** на Node.js для проверки логики. По ТЗ production-версия позже должна быть на ASP.NET Core / C# / PostgreSQL.
+> Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
+> Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
+> но расчетные формулы и пользовательский интерфейс на него еще не перенесены.
 
 ## Что уже умеет локальная версия
 
@@ -120,12 +133,14 @@ Cmd + Shift + R
 
 ## Требования
 
-Нужен Node.js версии 20 или выше.
+Для local lab нужен Node.js версии 20 или выше. Для production scaffold нужен
+.NET SDK 10.
 
 Проверить версию:
 
 ```bash
 node --version
+dotnet --version
 ```
 
 Устанавливать npm-пакеты сейчас не нужно: текущая версия сделана без внешних зависимостей.
@@ -151,7 +166,65 @@ Ctrl + C
 
 ```bash
 npm test
+dotnet test MetaEngine.slnx
 ```
+
+Без `METAENGINE_TEST_POSTGRES` тест с настоящей PostgreSQL будет помечен как
+пропущенный. В GitHub Actions переменная всегда задана, поэтому CI обязательно
+применяет migrations и выполняет real-database auth flow.
+
+### Проверить production scaffold
+
+```bash
+cp -n .env.example .env
+docker compose up -d postgres
+dotnet tool restore
+dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
+dotnet build MetaEngine.slnx
+dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
+```
+
+Перед первым запуском нужно один раз создать владельца. Пароль должен содержать
+минимум 12 символов, верхний и нижний регистр, цифру и специальный символ:
+
+```bash
+read -r -p "Admin email: " ADMIN_EMAIL
+read -r -s -p "Admin password: " ADMIN_PASSWORD; echo
+export MetaEngine__BootstrapAdmin__Email="$ADMIN_EMAIL"
+export MetaEngine__BootstrapAdmin__Password="$ADMIN_PASSWORD"
+export MetaEngine__BootstrapAdmin__DisplayName="Owner"
+export MetaEngine__BootstrapAdmin__WorkspaceName="Personal"
+dotnet run --project src/MetaEngine.Api -- --bootstrap-admin
+unset MetaEngine__BootstrapAdmin__Email MetaEngine__BootstrapAdmin__Password
+```
+
+После запуска API доступны:
+
+```text
+http://localhost:5080/health/live
+http://localhost:5080/health/ready
+http://localhost:5080/api/v1/strategy-types
+http://localhost:5080/api/v1/auth/bootstrap-status
+http://localhost:5080/api/v1/auth/csrf
+```
+
+`/health/live` проверяет процесс API. `/health/ready` возвращает `ready` только
+когда PostgreSQL доступен и все миграции применены. Команда
+`docker compose down` останавливает локальную базу без удаления данных.
+Не используй `docker compose down -v`, если данные нужно сохранить.
+
+Production API не имеет публичной регистрации. Вход использует HttpOnly cookie,
+а login/logout требуют CSRF-токен. Подробная проверка описана в
+`docs/PRODUCTION_AUTH.md`.
+
+GitHub Actions запускает build, migrations, .NET/Node.js tests и security audit
+на каждый push и pull request. Полный состав проверок и локальный запуск
+PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
+
+Production API уже принимает canonical portfolio CSV `timestamp,diff`, хранит
+неизменяемые версии и отдает metadata/points только внутри workspace. UI пока
+остается в Node.js local lab. Контракт импорта и примеры запросов находятся в
+`docs/PORTFOLIO_IMPORT.md`.
 
 ### Проверить синтаксис основных файлов
 
@@ -612,6 +685,11 @@ public/index.html         страница приложения
 public/app.js             логика интерфейса
 public/styles.css         стили интерфейса
 test/calculations.test.js тесты расчетов
+MetaEngine.slnx           solution production-версии
+src/MetaEngine.Api        ASP.NET Core API scaffold
+src/MetaEngine.Worker     отдельный Worker scaffold
+src/MetaEngine.Strategies.* модульные контракты и descriptors стратегий
+tests/MetaEngine.ContractTests .NET architecture и fixture tests
 samples/strategies        загруженные стратегии
 samples/presets           сохраненные пресеты
 samples/runs              результаты расчетов
@@ -622,7 +700,7 @@ samples/runs              результаты расчетов
 Эта версия — локальный файловый прототип. Пока нет:
 
 - PostgreSQL;
-- ASP.NET Core backend;
+- production-расчетов в ASP.NET Core backend;
 - пользователей и ролей;
 - авторизации;
 - защиты публичной ссылки;

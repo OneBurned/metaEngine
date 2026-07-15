@@ -4,9 +4,13 @@ This document is written for a future AI agent that receives the repository with
 
 ## 1. Current project state
 
-MetaEngine is currently a **local file-based calculation lab** for validating strategy CSV import, presets, rebalancing, and basic time-series calculations before building the production backend.
+MetaEngine currently contains two parallel parts:
 
-The current implementation is intentionally small:
+- a **local file-based Node.js calculation lab** for validating formulas and UI;
+- an initial **.NET 10 production scaffold** with separate API, Worker, strategy
+  abstractions and descriptors for RSI and MDD Mean Reversion.
+
+The local lab implementation is intentionally small:
 
 - runtime: Node.js, no external npm dependencies;
 - UI: browser page served locally;
@@ -21,7 +25,7 @@ This is not the final production stack. The repository defaults still say produc
 - async calculations saved to database;
 - API responses suitable for frontend JSON contracts and later Plotly-compatible chart payloads.
 
-The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly.
+The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly. The .NET scaffold does not calculate strategies yet; descriptors explicitly report that production calculation is unavailable until formula parity is complete.
 
 ## Documentation map
 
@@ -32,6 +36,13 @@ docs/PROJECT_CONTEXT.md   Full project context and product decisions
 docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
 docs/CSV_EXPORT.md        CSV export behavior and API
 docs/TIMEFRAMES.md        Timeframe conversion and histogram chart mode
+docs/CALCULATION_CONTRACTS.md
+                           Calculation contracts and shared golden fixtures
+docs/PRODUCTION_READINESS.md
+                           Production architecture, migration and release gates
+docs/PRODUCTION_SCAFFOLD.md
+                           Current .NET scaffold, API, Worker and run guide
+docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -104,6 +115,11 @@ Do not use destructive git commands such as `git reset --hard` unless the user e
 
 ```text
 server.js                         Node HTTP server and API
+MetaEngine.slnx                   .NET 10 production solution
+src/MetaEngine.Api               ASP.NET Core API scaffold
+src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Strategies.*      Strategy contracts and module descriptors
+tests/MetaEngine.ContractTests   .NET architecture and fixture tests
 lib/calculations.js               Calculation and CSV normalization logic
 public/index.html                 Browser UI markup
 public/app.js                     Browser UI behavior
@@ -127,6 +143,44 @@ In GitHub Codespaces:
 cd /workspaces/metaEngine
 npm start
 ```
+
+Production scaffold commands:
+
+```bash
+cp -n .env.example .env
+docker compose up -d postgres
+dotnet tool restore
+dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
+dotnet build MetaEngine.slnx
+dotnet test MetaEngine.slnx
+dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
+```
+
+Port `5080` exposes health endpoints and `/api/v1/strategy-types`.
+`/health/ready` requires PostgreSQL connectivity and an up-to-date migration
+history. The production scaffold is not yet a replacement for the Node.js
+calculation API.
+
+Production authentication has no public registration. The initial owner and
+personal workspace are created once through `--bootstrap-admin` with email and
+password supplied through environment variables. Auth uses an HttpOnly cookie,
+state-changing auth requests require a CSRF token, and workspace endpoints only
+return memberships of the authenticated active user. Roles are `Admin`,
+`Researcher` and `Viewer`; details are in `docs/PRODUCTION_AUTH.md`.
+
+The platform CI uses PostgreSQL 16 and runs migration parity/application,
+NuGet security audit, all .NET tests, the Node.js reference suite, and a real
+PostgreSQL bootstrap/login/workspace integration test. The integration test is
+conditionally skipped on developer machines without a dedicated test database,
+but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
+
+The first production calculation-engine slice is portfolio persistence. The API
+accepts only canonical UTF-8 `timestamp,diff` CSV at this stage, normalizes UTC
+ordering, rejects duplicate timestamps, reports gaps, and stores immutable
+versions with raw and normalized-series SHA-256 checksums. Re-importing the same
+file or semantic series returns the existing version. This intentionally does
+not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
+upload. See `docs/PORTFOLIO_IMPORT.md`.
 
 The server prints:
 
@@ -154,6 +208,7 @@ Use:
 
 ```bash
 npm test
+dotnet test MetaEngine.slnx
 ```
 
 Use syntax checks:

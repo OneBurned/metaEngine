@@ -1,0 +1,156 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0",
+  "id": "mdd_grid_recovery_take_profit",
+  "kind": "trading_strategy",
+  "description": "MDD Mean Reversion фиксирует набор целевого веса, восстановление и TP.",
+  "absoluteTolerance": 1e-12,
+  "input": {
+    "timestamps": [
+      1704067200000,
+      1704070800000,
+      1704074400000,
+      1704078000000,
+      1704081600000,
+      1704085200000,
+      1704088800000,
+      1704092400000
+    ],
+    "diffs": [
+      0,
+      -0.12,
+      -0.1,
+      0.1,
+      0.14784205693296615,
+      0.005,
+      0.004975124378109541,
+      0.01
+    ],
+    "step": "1h",
+    "config": {
+      "type": "mdd_mean_reversion",
+      "takeProfit": 0.01,
+      "levels": [
+        {
+          "drawdown": -0.1,
+          "weight": 0.1
+        },
+        {
+          "drawdown": -0.2,
+          "weight": 0.2
+        }
+      ]
+    }
+  },
+  "expected": {
+    "type": "mdd_mean_reversion",
+    "resultDiffs": [
+      0,
+      0,
+      -0.010000000000000002,
+      0.020000000000000004,
+      0.029568411386593232,
+      0.001,
+      0.0009950248756219083,
+      0
+    ],
+    "checkpoints": [
+      {
+        "index": 0,
+        "signal": "",
+        "execution": "",
+        "position": 0,
+        "base_dd": 0,
+        "local_mdd": 0,
+        "local_accum": null,
+        "tp_state": "",
+        "strategy_diff": 0
+      },
+      {
+        "index": 1,
+        "signal": "target_weight:0.1",
+        "execution": "",
+        "position": 0,
+        "base_dd": -0.12,
+        "local_mdd": -0.12,
+        "strategy_diff": 0
+      },
+      {
+        "index": 2,
+        "signal": "target_weight:0.2",
+        "execution": "weight:0.1",
+        "position": 0.1,
+        "base_dd": -0.20799999999999996,
+        "local_mdd": -0.20799999999999996,
+        "strategy_diff": -0.010000000000000002,
+        "strategy_accum": -0.010000000000000009,
+        "strategy_mdd": -0.010000000000000009
+      },
+      {
+        "index": 3,
+        "signal": "",
+        "execution": "weight:0.2",
+        "position": 0.2,
+        "base_dd": -0.12879999999999991,
+        "local_mdd": -0.20799999999999996,
+        "strategy_diff": 0.020000000000000004,
+        "strategy_accum": 0.009800000000000031
+      },
+      {
+        "index": 4,
+        "signal": "",
+        "execution": "",
+        "position": 0.2,
+        "base_dd": 0,
+        "local_mdd": 0,
+        "local_accum": 0,
+        "tp_state": "waiting",
+        "strategy_diff": 0.029568411386593232,
+        "strategy_accum": 0.039658181818181815
+      },
+      {
+        "index": 5,
+        "signal": "",
+        "execution": "",
+        "position": 0.2,
+        "local_accum": 0.004999999999999893,
+        "tp_state": "waiting",
+        "strategy_diff": 0.001,
+        "strategy_accum": 0.040697839999999985
+      },
+      {
+        "index": 6,
+        "signal": "take_profit_close",
+        "execution": "",
+        "position": 0.2,
+        "local_accum": 0.010000000000000009,
+        "tp_state": "hit",
+        "strategy_diff": 0.0009950248756219083,
+        "strategy_accum": 0.04173336023880592
+      },
+      {
+        "index": 7,
+        "signal": "",
+        "execution": "weight:0",
+        "position": 0,
+        "local_accum": null,
+        "tp_state": "",
+        "strategy_diff": 0,
+        "strategy_accum": 0.04173336023880592,
+        "strategy_hwm": 0.04173336023880592,
+        "strategy_dd": 0,
+        "strategy_mdd": -0.010000000000000009
+      }
+    ],
+    "summary": {
+      "start": "2024-01-01 00:00",
+      "end": "2024-01-01 07:00",
+      "points": 8,
+      "finalAccum": 0.04173336023880592,
+      "hwm": 0.04173336023880592,
+      "maxDrawdown": -0.010000000000000009,
+      "buyCount": 2,
+      "sellCount": 1
+    }
+  }
+}
