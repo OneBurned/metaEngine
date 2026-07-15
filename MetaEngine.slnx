@@ -12,6 +12,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/MetaEngine.ApiTests/MetaEngine.ApiTests.csproj" />
     <Project Path="tests/MetaEngine.ContractTests/MetaEngine.ContractTests.csproj" />
+    <Project Path="tests/MetaEngine.DomainTests/MetaEngine.DomainTests.csproj" />
     <Project Path="tests/MetaEngine.PostgresIntegrationTests/MetaEngine.PostgresIntegrationTests.csproj" />
   </Folder>
 </Solution>

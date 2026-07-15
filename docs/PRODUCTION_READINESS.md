@@ -491,8 +491,11 @@ golden fixtures.
 - P2a: добавлен workspace-scoped canonical `timestamp,diff` importer,
   неизменяемые версии, raw/series checksum-дедупликация, paginated points и
   PostgreSQL integration coverage;
+- P2b: добавлено чистое C#-ядро `diff/accum/hwm/dd/mdd`, source grid с правилом
+  `missing diff = 0`, укрупнение до UTC timeframe checkpoints и shared golden
+  parity; `diff < -100%` отклоняется, а полная потеря не создает `NaN`;
 - управление участниками, password recovery/2FA, остальные API workflows,
-  очередь и production-формулы еще не реализованы.
+  очередь, пресеты и production-формулы стратегий еще не реализованы.
 
 Каждый этап оформляется отдельным согласованным PR или небольшой серией PR.
 Production deploy выполняется отдельным действием после merge и явного

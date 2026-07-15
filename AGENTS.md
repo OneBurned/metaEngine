@@ -16,6 +16,8 @@
    - `docs/CSV_EXPORT.md` — экспорт CSV;
    - `docs/TIMEFRAMES.md` — конвертер таймфреймов и режим гистограммы;
    - `docs/CALCULATION_CONTRACTS.md` — расчетные контракты и golden fixtures;
+   - `docs/CALCULATION_ENGINE.md` — production-ядро базовых метрик, временная
+     сетка и правила таймфреймов;
    - `docs/PRODUCTION_READINESS.md` — архитектура, миграция и release gates
      production-версии;
    - `docs/PRODUCTION_SCAFFOLD.md` — текущий .NET-каркас, API и Worker.

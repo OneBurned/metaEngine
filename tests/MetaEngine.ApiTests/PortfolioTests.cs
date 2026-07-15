@@ -168,6 +168,24 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
         Assert.Equal("duplicate_timestamp", body.GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task Import_rejects_a_return_below_minus_one()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        const string invalidCsv =
+            "timestamp,diff\n" +
+            "1704499200000,0\n" +
+            "1704502800000,-1.0001\n";
+
+        var response = await ImportAsync(client, owner.WorkspaceId, invalidCsv, "Invalid return");
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("return_below_minus_one", body.GetProperty("code").GetString());
+    }
+
     private static async Task LoginAsync(HttpClient client, SeededUser user)
     {
         var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");

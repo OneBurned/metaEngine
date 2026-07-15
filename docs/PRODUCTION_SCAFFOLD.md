@@ -17,6 +17,7 @@ src/MetaEngine.Strategies.Abstractions
 src/MetaEngine.Strategies.Rsi
 src/MetaEngine.Strategies.MddMeanReversion
 tests/MetaEngine.ContractTests
+tests/MetaEngine.DomainTests
 tests/MetaEngine.ApiTests
 tests/MetaEngine.PostgresIntegrationTests
 ```
@@ -46,6 +47,22 @@ API не должен создавать впечатление, что неза
 - расчет одного кандидата;
 - поддержку cancellation token;
 - канонический результат `timestamp,diff` и summary.
+
+## Базовое расчетное ядро
+
+`MetaEngine.Domain.Calculations` уже содержит production-реализацию базовых
+метрик `diff/accum/hwm/dd/mdd`. Ядро строит исходную сетку периода, применяет
+правило `missing diff = 0`, возвращает ограниченный список warnings и умеет
+укрупнять результат с `1m/5m/15m/1h/1d` до равного или большего таймфрейма,
+включая календарные `1M/1Y` в UTC.
+
+Формулы проверяются тем же `base_metrics.json`, что Node.js reference. Значение
+`diff < -100%` отклоняется, а после `diff = -100%` equity остается нулевой без
+`NaN` при конвертации таймфрейма. Подробности находятся в
+`docs/CALCULATION_ENGINE.md`.
+
+Это пока библиотечное ядро: публичный endpoint, запись calculation run и
+выполнение через Worker появятся на следующих этапах.
 
 ## API
 
@@ -122,6 +139,9 @@ npm test
 - cookie-аутентификацию, блокировку отключенного пользователя и workspace
   isolation для ролей `Admin`, `Researcher`, `Viewer`.
 
+`MetaEngine.DomainTests` проверяет shared golden parity базовых метрик,
+таймфреймы, пропуски, ограничение warnings и границу полной потери капитала.
+
 `MetaEngine.PostgresIntegrationTests` применяет настоящие migrations, выполняет
 bootstrap владельца, CSRF-login, импорт/дедупликацию портфеля и чтение workspace
 через API. Локально тест
@@ -159,7 +179,7 @@ Migrations находятся в
 - UI входа и управления участниками workspace;
 - восстановление пароля, 2FA/OIDC и rate limiting;
 - API workflows для пресетов, стратегий, расчетов и jobs;
-- production calculation engine;
+- production-расчеты пресетов и модулей RSI/MDD Mean Reversion;
 - очередь заданий;
 - OpenAPI;
 - Plotly contracts;
