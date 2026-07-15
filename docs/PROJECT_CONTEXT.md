@@ -92,7 +92,9 @@ run references one completed immutable base run, is processed by the Worker,
 and saves a canonical `timestamp,diff` `StrategyResult` artifact. A completed
 run can be saved as a versioned strategy configuration. The UI exposes manual
 RSI/MDD calculation and saved configurations; optimization and use of saved
-strategies in presets remain P5b. See `docs/PRODUCTION_STRATEGIES.md`.
+strategies in presets remain P5b. Worker data access keeps strategy artifact
+points separate from portfolio/preset points, avoiding cross-product queries on
+long source series. See `docs/PRODUCTION_STRATEGIES.md`.
 
 ## 2. User communication rules
 

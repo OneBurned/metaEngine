@@ -21,6 +21,11 @@ run as an immutable input and produces a separate canonical artifact. RSI and
 MDD Mean Reversion are available; optimizer jobs, cancel/retry and saved
 strategy sources inside presets are later stages.
 
+For a strategy run, the Worker reads only the completed base artifact in a
+separate series query. It does not join the base artifact points to the
+portfolio or preset points, so a long source series remains practical to
+process.
+
 ## API
 
 All endpoints require workspace membership. `Admin` and `Researcher` can queue

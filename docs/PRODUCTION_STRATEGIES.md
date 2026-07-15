@@ -15,6 +15,10 @@ A strategy run stores `source_calculation_run_id`; it never re-reads a newer
 portfolio or a later base run. Its result artifact contains only canonical
 `timestamp,diff`; UI metrics and charts are rebuilt from that series.
 
+The Worker loads the source artifact separately from portfolio/preset metadata.
+This keeps a long strategy source from creating a cross-product database query
+with the original portfolio rows.
+
 ## API
 
 All endpoints are workspace-scoped. `Admin` and `Researcher` can create data;

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Data.Common;
@@ -19,6 +20,7 @@ public sealed class PostgresAuthenticationTests
 {
     private const string OwnerEmail = "integration-owner@metaengine.test";
     private const string OwnerPassword = "IntegrationOwner123!";
+    private const int LongStrategySourcePointCount = 4_000;
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     [PostgresFact]
@@ -66,7 +68,13 @@ public sealed class PostgresAuthenticationTests
         var foundPreset = await client.GetFromJsonAsync<PresetDetails>(
             $"/api/v1/workspaces/{workspaceId}/presets/{preset.Preset.Id}",
             JsonOptions);
-        var calculation = await QueueCalculationAsync(client, workspaceId, preset.Preset.Id);
+        var calculation = await QueueCalculationAsync(
+            client,
+            workspaceId,
+            null,
+            preset.Preset.Id,
+            DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+            DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L));
         await ProcessOneCalculationAsync(factory);
         var calculationDetails = await client.GetFromJsonAsync<CalculationRunDetails>(
             $"/api/v1/workspaces/{workspaceId}/calculation-runs/{calculation.Id}",
@@ -99,6 +107,34 @@ public sealed class PostgresAuthenticationTests
         Assert.Equal(3, calculationResult.Total);
         Assert.Equal(2, calculationResult.Items.Count);
 
+        var longSource = await ImportPortfolioAsync(
+            client,
+            workspaceId,
+            "Long strategy source",
+            CreateHourlyCsv(LongStrategySourcePointCount));
+        var longPeriodStart = DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L);
+        var longBaseRun = await QueueCalculationAsync(
+            client,
+            workspaceId,
+            longSource.Portfolio.Id,
+            null,
+            longPeriodStart,
+            longPeriodStart.AddHours(LongStrategySourcePointCount - 1));
+        await ProcessOneCalculationAsync(factory);
+
+        var longStrategyRun = await QueueStrategyCalculationAsync(
+            client,
+            workspaceId,
+            longBaseRun.Id);
+        await ProcessOneCalculationAsync(factory);
+        var longStrategyDetails = await client.GetFromJsonAsync<CalculationRunDetails>(
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{longStrategyRun.Id}",
+            JsonOptions);
+
+        Assert.NotNull(longStrategyDetails);
+        Assert.Equal(JobStatus.Completed, longStrategyDetails.Run.Status);
+        Assert.Equal(LongStrategySourcePointCount, longStrategyDetails.Run.PointCount);
+
         await using var auditScope = factory.Services.CreateAsyncScope();
         var auditDbContext = auditScope.ServiceProvider.GetRequiredService<MetaEngineDbContext>();
         Assert.Equal(
@@ -123,9 +159,13 @@ public sealed class PostgresAuthenticationTests
                                auditEvent.EntityId == calculation.Id));
     }
 
-    private static async Task<PortfolioImportResult> ImportPortfolioAsync(HttpClient client, Guid workspaceId)
+    private static async Task<PortfolioImportResult> ImportPortfolioAsync(
+        HttpClient client,
+        Guid workspaceId,
+        string name = "Integration portfolio",
+        string? csv = null)
     {
-        const string csv =
+        csv ??=
             "timestamp,diff\n" +
             "1704499200000,0.01\n" +
             "1704502800000,-0.02\n" +
@@ -134,7 +174,7 @@ public sealed class PostgresAuthenticationTests
         Assert.NotNull(csrf);
 
         using var form = new MultipartFormDataContent();
-        form.Add(new StringContent("Integration portfolio"), "name");
+        form.Add(new StringContent(name), "name");
         form.Add(new StringContent(csv), "file", "integration.csv");
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -182,21 +222,50 @@ public sealed class PostgresAuthenticationTests
     private static async Task<CalculationRunSummary> QueueCalculationAsync(
         HttpClient client,
         Guid workspaceId,
-        Guid presetId)
+        Guid? portfolioId,
+        Guid? presetId,
+        DateTimeOffset periodStart,
+        DateTimeOffset periodEnd)
     {
         var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
         Assert.NotNull(csrf);
-        var start = DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L);
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
             $"/api/v1/workspaces/{workspaceId}/calculation-runs")
         {
             Content = JsonContent.Create(new QueueCalculationRequest(
-                null,
+                portfolioId,
                 presetId,
-                start,
-                start.AddHours(2),
+                periodStart,
+                periodEnd,
                 "1h"))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static async Task<CalculationRunSummary> QueueStrategyCalculationAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid sourceRunId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{sourceRunId}/strategies")
+        {
+            Content = JsonContent.Create(new
+            {
+                strategyType = "rsi",
+                parameters = new { rsiPeriod = 14, buyLevel = 30, sellLevel = 70 }
+            })
         };
         request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
         var response = await client.SendAsync(request);
@@ -212,6 +281,22 @@ public sealed class PostgresAuthenticationTests
         await using var scope = factory.Services.CreateAsyncScope();
         var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
         Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+    }
+
+    private static string CreateHourlyCsv(int pointCount)
+    {
+        var builder = new StringBuilder("timestamp,diff\n");
+        const long firstTimestamp = 1_704_499_200_000L;
+        const long hourMilliseconds = 3_600_000L;
+        for (var index = 0; index < pointCount; index++)
+        {
+            builder.Append(firstTimestamp + (index * hourMilliseconds));
+            builder.Append(',');
+            builder.Append(index % 17 == 0 ? "-0.002" : "0.001");
+            builder.Append('\n');
+        }
+
+        return builder.ToString();
     }
 
     private static JsonSerializerOptions CreateJsonOptions()
@@ -254,7 +339,10 @@ public sealed class PostgresAuthenticationTests
                 auditEvent.Action == "preset_created" ||
                 auditEvent.Action == "calculation_queued" ||
                 auditEvent.Action == "calculation_completed" ||
-                auditEvent.Action == "calculation_failed")
+                auditEvent.Action == "calculation_failed" ||
+                auditEvent.Action == "strategy_calculation_queued" ||
+                auditEvent.Action == "strategy_calculation_completed" ||
+                auditEvent.Action == "strategy_calculation_failed")
             .ExecuteDeleteAsync();
         await dbContext.CalculationRuns.ExecuteDeleteAsync();
         await dbContext.Presets.ExecuteDeleteAsync();

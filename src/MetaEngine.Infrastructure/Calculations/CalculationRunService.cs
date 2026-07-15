@@ -346,19 +346,39 @@ internal sealed class CalculationRunService(
     private async Task<CalculationRun> LoadClaimedRunAsync(Guid runId, CancellationToken cancellationToken)
     {
         var run = await dbContext.CalculationRuns
-            .Include(candidate => candidate.Portfolio)
-            .ThenInclude(portfolio => portfolio!.Points)
-            .Include(candidate => candidate.Preset)
-            .ThenInclude(preset => preset!.Items)
-            .ThenInclude(item => item.Portfolio)
-            .ThenInclude(portfolio => portfolio!.Points)
-            .Include(candidate => candidate.SourceCalculationRun)
-            .ThenInclude(sourceRun => sourceRun!.Artifacts)
-            .ThenInclude(artifact => artifact.Points)
             .SingleOrDefaultAsync(
                 candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
                 cancellationToken);
-        return run ?? throw new InvalidOperationException("Claimed calculation run was not found.");
+        if (run is null)
+        {
+            throw new InvalidOperationException("Claimed calculation run was not found.");
+        }
+
+        if (run.Kind != CalculationRunKind.Base)
+        {
+            return run;
+        }
+
+        return run.InputType switch
+        {
+            CalculationInputType.Portfolio => await dbContext.CalculationRuns
+                .Include(candidate => candidate.Portfolio)
+                .ThenInclude(portfolio => portfolio!.Points)
+                .SingleAsync(
+                    candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
+                    cancellationToken),
+            CalculationInputType.Preset => await dbContext.CalculationRuns
+                .Include(candidate => candidate.Preset)
+                .ThenInclude(preset => preset!.Items)
+                .ThenInclude(item => item.Portfolio)
+                .ThenInclude(portfolio => portfolio!.Points)
+                .AsSplitQuery()
+                .SingleAsync(
+                    candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
+                    cancellationToken),
+            _ => throw new CalculationValidationException(
+                "unsupported_input_type", "Calculation input type is not supported.")
+        };
     }
 
     private async Task<CalculatedRunOutput> CalculateAsync(CalculationRun run, CancellationToken cancellationToken) => run.Kind switch
@@ -429,10 +449,11 @@ internal sealed class CalculationRunService(
 
     private async Task<CalculatedRunOutput> CalculateStrategyAsync(CalculationRun run, CancellationToken cancellationToken)
     {
-        var sourceRun = run.SourceCalculationRun ?? throw new CalculationValidationException(
-            "source_run_not_found", "Strategy source calculation is not available.");
-        var sourceArtifact = sourceRun.Artifacts.SingleOrDefault(artifact => artifact.Kind == RunArtifactKind.BaseResult)
-            ?? throw new CalculationValidationException("source_run_artifact_not_found", "Strategy source result is not available.");
+        if (run.SourceCalculationRunId is not Guid sourceRunId)
+        {
+            throw new CalculationValidationException(
+                "source_run_not_found", "Strategy source calculation is not available.");
+        }
         if (run.StrategyType is null || !strategyModules.TryGetValue(run.StrategyType, out var module))
         {
             throw new CalculationValidationException("strategy_type_not_found", "Strategy type is not registered.");
@@ -449,10 +470,7 @@ internal sealed class CalculationRunService(
             throw new CalculationValidationException("invalid_strategy_parameters", "Stored strategy parameters are invalid.");
         }
 
-        var source = sourceArtifact.Points
-            .OrderBy(point => point.Timestamp)
-            .Select(point => new StrategySourcePoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
-            .ToArray();
+        var source = await LoadStrategySourceAsync(sourceRunId, cancellationToken);
         var prepared = await module.PrepareAsync(source, cancellationToken);
         var result = await module.CalculateAsync(prepared, parametersDocument.RootElement, cancellationToken);
         var summary = new CalculationSummary(
@@ -467,6 +485,31 @@ internal sealed class CalculationRunService(
             summary,
             [],
             result.Summary.BuyCount + result.Summary.SellCount);
+    }
+
+    private async Task<IReadOnlyList<StrategySourcePoint>> LoadStrategySourceAsync(
+        Guid sourceRunId,
+        CancellationToken cancellationToken)
+    {
+        var artifactId = await dbContext.RunArtifacts
+            .AsNoTracking()
+            .Where(artifact =>
+                artifact.CalculationRunId == sourceRunId &&
+                artifact.Kind == RunArtifactKind.BaseResult)
+            .Select(artifact => (Guid?)artifact.Id)
+            .SingleOrDefaultAsync(cancellationToken);
+        if (artifactId is null)
+        {
+            throw new CalculationValidationException(
+                "source_run_artifact_not_found", "Strategy source result is not available.");
+        }
+
+        return await dbContext.RunArtifactPoints
+            .AsNoTracking()
+            .Where(point => point.RunArtifactId == artifactId.Value)
+            .OrderBy(point => point.Timestamp)
+            .Select(point => new StrategySourcePoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
+            .ToArrayAsync(cancellationToken);
     }
 
     private static IReadOnlyList<ReturnPoint> ToReturnPoints(PortfolioVersion portfolio) =>
