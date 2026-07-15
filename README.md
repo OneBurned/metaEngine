@@ -40,8 +40,8 @@ docs/PRODUCTION_UI.md      production React UI: вход, импорт и рас
 > Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
 > Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
 > Базовые формулы, versioned preset API, асинхронный базовый расчет через
-> Worker и первый production UI уже перенесены. В production UI пока нет
-> стратегий, оптимизатора и экранов пресетов.
+> Worker, production UI и ручные RSI/MDD strategy runs уже перенесены. В UI
+> пока нет оптимизатора и экранов пресетов.
 
 ## Что уже умеет локальная версия
 

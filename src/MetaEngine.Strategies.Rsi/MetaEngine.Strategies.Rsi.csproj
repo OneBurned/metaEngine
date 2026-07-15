@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\MetaEngine.Domain\MetaEngine.Domain.csproj" />
     <ProjectReference Include="..\MetaEngine.Strategies.Abstractions\MetaEngine.Strategies.Abstractions.csproj" />
   </ItemGroup>
 

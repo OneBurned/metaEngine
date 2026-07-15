@@ -47,6 +47,8 @@ docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
+docs/PRODUCTION_STRATEGIES.md
+                           Production RSI/MDD runs and saved strategy configs
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -82,6 +84,15 @@ cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio, queue and observe a base calculation, and inspect saved results with
 an interactive equity/drawdown chart. It does not yet expose presets,
 strategies, optimizer jobs or cancellation. See `docs/PRODUCTION_UI.md`.
+
+## Production P5a: strategy runs
+
+RSI and MDD Mean Reversion are now executable production modules. A strategy
+run references one completed immutable base run, is processed by the Worker,
+and saves a canonical `timestamp,diff` `StrategyResult` artifact. A completed
+run can be saved as a versioned strategy configuration. The UI exposes manual
+RSI/MDD calculation and saved configurations; optimization and use of saved
+strategies in presets remain P5b. See `docs/PRODUCTION_STRATEGIES.md`.
 
 ## 2. User communication rules
 

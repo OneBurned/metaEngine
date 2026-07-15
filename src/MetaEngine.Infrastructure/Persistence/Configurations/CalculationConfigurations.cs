@@ -75,8 +75,8 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
                 "(input_type = 'Preset' AND preset_id IS NOT NULL AND portfolio_id IS NULL)");
             table.HasCheckConstraint(
                 "ck_calculation_runs_strategy",
-                "(kind = 'Base' AND strategy_type IS NULL AND strategy_schema_version IS NULL AND strategy_parameters_json IS NULL) OR " +
-                "(kind = 'Strategy' AND strategy_type IS NOT NULL AND strategy_schema_version IS NOT NULL AND strategy_parameters_json IS NOT NULL)");
+                "(kind = 'Base' AND source_calculation_run_id IS NULL AND strategy_type IS NULL AND strategy_schema_version IS NULL AND strategy_parameters_json IS NULL) OR " +
+                "(kind = 'Strategy' AND source_calculation_run_id IS NOT NULL AND strategy_type IS NOT NULL AND strategy_schema_version IS NOT NULL AND strategy_parameters_json IS NOT NULL)");
             table.HasCheckConstraint("ck_calculation_runs_period", "period_end >= period_start");
             table.HasCheckConstraint("ck_calculation_runs_counts", "point_count >= 0 AND trade_count >= 0");
         });
@@ -96,6 +96,7 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
         builder.Property(run => run.ErrorCode).HasMaxLength(100);
         builder.HasIndex(run => new { run.WorkspaceId, run.CreatedAt });
         builder.HasIndex(run => new { run.Status, run.CreatedAt });
+        builder.HasIndex(run => run.SourceCalculationRunId);
 
         builder
             .HasOne(run => run.Workspace)
@@ -113,6 +114,12 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
             .HasOne(run => run.Preset)
             .WithMany()
             .HasForeignKey(run => run.PresetId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(run => run.SourceCalculationRun)
+            .WithMany()
+            .HasForeignKey(run => run.SourceCalculationRunId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder

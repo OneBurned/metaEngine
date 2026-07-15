@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MetaEngine.Api.Contracts;
 using MetaEngine.Api.Security;
 using MetaEngine.Application.Calculations;
@@ -11,6 +12,8 @@ public static class CalculationRunEndpoints
     public static RouteGroupBuilder MapCalculationRunEndpoints(this RouteGroupBuilder workspaces)
     {
         workspaces.MapPost("/{workspaceId:guid}/calculation-runs", QueueAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/calculation-runs/{sourceRunId:guid}/strategies", QueueStrategyAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs", ListAsync);
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs/{runId:guid}", FindAsync);
@@ -84,6 +87,54 @@ public static class CalculationRunEndpoints
 
         var items = await calculationRunService.ListAsync(workspaceId, cancellationToken);
         return Results.Ok(new { items });
+    }
+
+    private static async Task<IResult> QueueStrategyAsync(
+        Guid workspaceId,
+        Guid sourceRunId,
+        QueueStrategyCalculationRequest request,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        ICalculationRunService calculationRunService,
+        CancellationToken cancellationToken)
+    {
+        if (!httpContext.User.TryGetUserId(out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var access = await workspaceAccessService.FindForUserAsync(userId, workspaceId, cancellationToken);
+        if (access is null)
+        {
+            return Results.NotFound();
+        }
+        if (!access.CanWrite)
+        {
+            return Results.Forbid();
+        }
+        if (request.Parameters.ValueKind is JsonValueKind.Undefined or JsonValueKind.Null)
+        {
+            return ValidationError("invalid_strategy_parameters", "Strategy parameters are required.");
+        }
+
+        try
+        {
+            var run = await calculationRunService.QueueStrategyAsync(
+                new QueueStrategyCalculationCommand(
+                    workspaceId,
+                    userId,
+                    sourceRunId,
+                    request.StrategyType,
+                    request.Parameters.GetRawText()),
+                cancellationToken);
+            return Results.Accepted(
+                $"/api/v1/workspaces/{workspaceId}/calculation-runs/{run.Id}",
+                run);
+        }
+        catch (CalculationRunValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
     }
 
     private static async Task<IResult> FindAsync(

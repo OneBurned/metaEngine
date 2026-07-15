@@ -2,9 +2,11 @@ using MetaEngine.Application.Security;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Strategies;
 using MetaEngine.Infrastructure.Calculations;
 using MetaEngine.Infrastructure.Portfolios;
 using MetaEngine.Infrastructure.Presets;
+using MetaEngine.Infrastructure.Strategies;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -27,6 +29,7 @@ public static class MetaEnginePersistenceExtensions
         services.AddScoped<PortfolioCsvNormalizer>();
         services.AddScoped<IPortfolioService, PortfolioService>();
         services.AddScoped<IPresetService, PresetService>();
+        services.AddScoped<ISavedStrategyService, SavedStrategyService>();
         services.AddScoped<CalculationRunService>();
         services.AddScoped<ICalculationRunService>(serviceProvider =>
             serviceProvider.GetRequiredService<CalculationRunService>());

@@ -7,6 +7,7 @@ using MetaEngine.Domain;
 using MetaEngine.Domain.Calculations;
 using MetaEngine.Domain.Model;
 using MetaEngine.Infrastructure.Persistence;
+using MetaEngine.Strategies.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,10 +15,13 @@ namespace MetaEngine.Infrastructure.Calculations;
 
 internal sealed class CalculationRunService(
     MetaEngineDbContext dbContext,
-    ILogger<CalculationRunService> logger) : ICalculationRunService, ICalculationRunProcessor
+    ILogger<CalculationRunService> logger,
+    IEnumerable<IStrategyModule> strategyModules) : ICalculationRunService, ICalculationRunProcessor
 {
     private const string EngineVersion = "base-calculation-v1";
     private const string MissingDataRule = "zero_diff";
+    private readonly IReadOnlyDictionary<string, IStrategyModule> strategyModules = strategyModules
+        .ToDictionary(module => module.Descriptor.StrategyType, StringComparer.Ordinal);
 
     public async Task<CalculationRunSummary> QueueAsync(
         QueueBaseCalculationCommand command,
@@ -66,6 +70,78 @@ internal sealed class CalculationRunService(
         return ToSummary(run);
     }
 
+    public async Task<CalculationRunSummary> QueueStrategyAsync(
+        QueueStrategyCalculationCommand command,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        if (string.IsNullOrWhiteSpace(command.StrategyType) || !strategyModules.TryGetValue(command.StrategyType, out var module))
+        {
+            throw new CalculationRunValidationException("strategy_type_not_found", "Strategy type is not registered.");
+        }
+
+        using var parametersDocument = JsonDocument.Parse(command.ParametersJson);
+        var validation = module.ValidateParameters(parametersDocument.RootElement);
+        if (!validation.IsValid)
+        {
+            throw new CalculationRunValidationException(
+                "invalid_strategy_parameters",
+                string.Join(" ", validation.Errors.Select(error => $"{error.Path}: {error.Message}")));
+        }
+
+        var sourceRun = await dbContext.CalculationRuns
+            .AsNoTracking()
+            .SingleOrDefaultAsync(run =>
+                run.Id == command.SourceCalculationRunId &&
+                run.WorkspaceId == command.WorkspaceId,
+                cancellationToken)
+            ?? throw new CalculationRunValidationException("source_run_not_found", "Base calculation run does not exist in this workspace.");
+        if (sourceRun.Kind != CalculationRunKind.Base || sourceRun.Status != JobStatus.Completed)
+        {
+            throw new CalculationRunValidationException(
+                "source_run_not_completed",
+                "A completed base calculation run is required for a strategy.");
+        }
+
+        var run = new CalculationRun
+        {
+            WorkspaceId = command.WorkspaceId,
+            Kind = CalculationRunKind.Strategy,
+            InputType = sourceRun.InputType,
+            PortfolioId = sourceRun.PortfolioId,
+            PresetId = sourceRun.PresetId,
+            SourceCalculationRunId = sourceRun.Id,
+            StrategyType = module.Descriptor.StrategyType,
+            StrategySchemaVersion = module.Descriptor.SchemaVersion,
+            StrategyParametersJson = command.ParametersJson,
+            PeriodStart = sourceRun.PeriodStart,
+            PeriodEnd = sourceRun.PeriodEnd,
+            Timeframe = sourceRun.Timeframe,
+            MissingDataRule = MissingDataRule,
+            EngineVersion = $"strategy-{module.Descriptor.StrategyType}-v1",
+            Status = JobStatus.Queued,
+            CreatedByUserId = command.UserId
+        };
+        dbContext.CalculationRuns.Add(run);
+        dbContext.AuditEvents.Add(new AuditEvent
+        {
+            WorkspaceId = command.WorkspaceId,
+            UserId = command.UserId,
+            Action = "strategy_calculation_queued",
+            EntityType = "calculation_run",
+            EntityId = run.Id,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                run.SourceCalculationRunId,
+                run.StrategyType,
+                run.StrategySchemaVersion,
+                run.EngineVersion
+            })
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToSummary(run);
+    }
+
     public async Task<IReadOnlyList<CalculationRunSummary>> ListAsync(
         Guid workspaceId,
         CancellationToken cancellationToken) =>
@@ -79,6 +155,7 @@ internal sealed class CalculationRunService(
                 run.InputType,
                 run.PortfolioId,
                 run.PresetId,
+                run.SourceCalculationRunId,
                 run.PeriodStart,
                 run.PeriodEnd,
                 run.Timeframe,
@@ -111,7 +188,8 @@ internal sealed class CalculationRunService(
             return null;
         }
 
-        var artifact = run.Artifacts.SingleOrDefault(candidate => candidate.Kind == RunArtifactKind.BaseResult);
+        var artifactKind = run.Kind == CalculationRunKind.Base ? RunArtifactKind.BaseResult : RunArtifactKind.StrategyResult;
+        var artifact = run.Artifacts.SingleOrDefault(candidate => candidate.Kind == artifactKind);
         return new CalculationRunDetails(
             ToSummary(run),
             artifact is null
@@ -135,7 +213,6 @@ internal sealed class CalculationRunService(
             .AsNoTracking()
             .Where(artifact =>
                 artifact.CalculationRunId == runId &&
-                artifact.Kind == RunArtifactKind.BaseResult &&
                 artifact.CalculationRun.WorkspaceId == workspaceId)
             .Select(artifact => new { artifact.Id, artifact.PointCount })
             .SingleOrDefaultAsync(cancellationToken);
@@ -166,11 +243,11 @@ internal sealed class CalculationRunService(
         try
         {
             var run = await LoadClaimedRunAsync(runId.Value, cancellationToken);
-            var result = Calculate(run);
+            var result = await CalculateAsync(run, cancellationToken);
             var artifact = new RunArtifact
             {
                 CalculationRunId = run.Id,
-                Kind = RunArtifactKind.BaseResult,
+                Kind = run.Kind == CalculationRunKind.Base ? RunArtifactKind.BaseResult : RunArtifactKind.StrategyResult,
                 PointCount = result.Rows.Count,
                 SeriesChecksum = CalculateSeriesChecksum(result.Rows)
             };
@@ -186,7 +263,7 @@ internal sealed class CalculationRunService(
             dbContext.RunArtifacts.Add(artifact);
             run.Status = JobStatus.Completed;
             run.PointCount = result.Rows.Count;
-            run.TradeCount = 0;
+            run.TradeCount = result.TradeCount;
             run.FinalAccum = result.Summary.FinalAccum;
             run.HighWaterMark = result.Summary.HighWaterMark;
             run.MaxDrawdown = result.Summary.MaxDrawdown;
@@ -197,7 +274,7 @@ internal sealed class CalculationRunService(
             {
                 WorkspaceId = run.WorkspaceId,
                 UserId = run.CreatedByUserId,
-                Action = "calculation_completed",
+                Action = run.Kind == CalculationRunKind.Base ? "calculation_completed" : "strategy_calculation_completed",
                 EntityType = "calculation_run",
                 EntityId = run.Id,
                 DetailsJson = JsonSerializer.Serialize(new
@@ -229,7 +306,7 @@ internal sealed class CalculationRunService(
     {
         var candidateId = await dbContext.CalculationRuns
             .AsNoTracking()
-            .Where(run => run.Status == JobStatus.Queued && run.Kind == CalculationRunKind.Base)
+            .Where(run => run.Status == JobStatus.Queued)
             .OrderBy(run => run.CreatedAt)
             .Select(run => (Guid?)run.Id)
             .FirstOrDefaultAsync(cancellationToken);
@@ -275,17 +352,25 @@ internal sealed class CalculationRunService(
             .ThenInclude(preset => preset!.Items)
             .ThenInclude(item => item.Portfolio)
             .ThenInclude(portfolio => portfolio!.Points)
+            .Include(candidate => candidate.SourceCalculationRun)
+            .ThenInclude(sourceRun => sourceRun!.Artifacts)
+            .ThenInclude(artifact => artifact.Points)
             .SingleOrDefaultAsync(
                 candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
                 cancellationToken);
         return run ?? throw new InvalidOperationException("Claimed calculation run was not found.");
     }
 
-    private static CalculatedRunOutput Calculate(CalculationRun run) => run.InputType switch
+    private async Task<CalculatedRunOutput> CalculateAsync(CalculationRun run, CancellationToken cancellationToken) => run.Kind switch
     {
-        CalculationInputType.Portfolio => CalculatePortfolio(run),
-        CalculationInputType.Preset => CalculatePreset(run),
-        _ => throw new CalculationValidationException("unsupported_input_type", "Calculation input type is not supported.")
+        CalculationRunKind.Base => run.InputType switch
+        {
+            CalculationInputType.Portfolio => CalculatePortfolio(run),
+            CalculationInputType.Preset => CalculatePreset(run),
+            _ => throw new CalculationValidationException("unsupported_input_type", "Calculation input type is not supported.")
+        },
+        CalculationRunKind.Strategy => await CalculateStrategyAsync(run, cancellationToken),
+        _ => throw new CalculationValidationException("unsupported_calculation_kind", "Calculation kind is not supported.")
     };
 
     private static CalculatedRunOutput CalculatePortfolio(CalculationRun run)
@@ -299,7 +384,11 @@ internal sealed class CalculationRunService(
             run.PeriodEnd.ToUnixTimeMilliseconds(),
             portfolio.Timeframe,
             run.Timeframe));
-        return new CalculatedRunOutput(result.Rows, result.Summary, result.Warnings);
+        return new CalculatedRunOutput(
+            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            result.Summary,
+            result.Warnings,
+            0);
     }
 
     private static CalculatedRunOutput CalculatePreset(CalculationRun run)
@@ -331,7 +420,53 @@ internal sealed class CalculationRunService(
             run.PeriodStart.ToUnixTimeMilliseconds(),
             run.PeriodEnd.ToUnixTimeMilliseconds(),
             run.Timeframe));
-        return new CalculatedRunOutput(result.Rows, result.Summary, result.Warnings);
+        return new CalculatedRunOutput(
+            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            result.Summary,
+            result.Warnings,
+            0);
+    }
+
+    private async Task<CalculatedRunOutput> CalculateStrategyAsync(CalculationRun run, CancellationToken cancellationToken)
+    {
+        var sourceRun = run.SourceCalculationRun ?? throw new CalculationValidationException(
+            "source_run_not_found", "Strategy source calculation is not available.");
+        var sourceArtifact = sourceRun.Artifacts.SingleOrDefault(artifact => artifact.Kind == RunArtifactKind.BaseResult)
+            ?? throw new CalculationValidationException("source_run_artifact_not_found", "Strategy source result is not available.");
+        if (run.StrategyType is null || !strategyModules.TryGetValue(run.StrategyType, out var module))
+        {
+            throw new CalculationValidationException("strategy_type_not_found", "Strategy type is not registered.");
+        }
+        if (run.StrategyParametersJson is null)
+        {
+            throw new CalculationValidationException("invalid_strategy_parameters", "Strategy parameters are missing.");
+        }
+
+        using var parametersDocument = JsonDocument.Parse(run.StrategyParametersJson);
+        var validation = module.ValidateParameters(parametersDocument.RootElement);
+        if (!validation.IsValid)
+        {
+            throw new CalculationValidationException("invalid_strategy_parameters", "Stored strategy parameters are invalid.");
+        }
+
+        var source = sourceArtifact.Points
+            .OrderBy(point => point.Timestamp)
+            .Select(point => new StrategySourcePoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
+            .ToArray();
+        var prepared = await module.PrepareAsync(source, cancellationToken);
+        var result = await module.CalculateAsync(prepared, parametersDocument.RootElement, cancellationToken);
+        var summary = new CalculationSummary(
+            result.Rows.Count == 0 ? null : result.Rows[0].Timestamp,
+            result.Rows.Count == 0 ? null : result.Rows[^1].Timestamp,
+            result.Rows.Count,
+            result.Summary.FinalAccum,
+            result.Summary.HighWaterMark,
+            result.Summary.MaxDrawdown);
+        return new CalculatedRunOutput(
+            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            summary,
+            [],
+            result.Summary.BuyCount + result.Summary.SellCount);
     }
 
     private static IReadOnlyList<ReturnPoint> ToReturnPoints(PortfolioVersion portfolio) =>
@@ -358,7 +493,7 @@ internal sealed class CalculationRunService(
         {
             WorkspaceId = run.WorkspaceId,
             UserId = run.CreatedByUserId,
-            Action = "calculation_failed",
+                Action = run.Kind == CalculationRunKind.Base ? "calculation_failed" : "strategy_calculation_failed",
             EntityType = "calculation_run",
             EntityId = run.Id,
             DetailsJson = JsonSerializer.Serialize(new { errorCode })
@@ -412,6 +547,7 @@ internal sealed class CalculationRunService(
             run.InputType,
             run.PortfolioId,
             run.PresetId,
+            run.SourceCalculationRunId,
             run.PeriodStart,
             run.PeriodEnd,
             run.Timeframe,
@@ -444,7 +580,7 @@ internal sealed class CalculationRunService(
         }
     }
 
-    private static string CalculateSeriesChecksum(IReadOnlyList<CalculationPoint> rows)
+    private static string CalculateSeriesChecksum(IReadOnlyList<ReturnPoint> rows)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var row in rows)
@@ -457,7 +593,8 @@ internal sealed class CalculationRunService(
     }
 
     private sealed record CalculatedRunOutput(
-        IReadOnlyList<CalculationPoint> Rows,
+        IReadOnlyList<ReturnPoint> Rows,
         CalculationSummary Summary,
-        IReadOnlyList<CalculationWarning> Warnings);
+        IReadOnlyList<CalculationWarning> Warnings,
+        int TradeCount);
 }

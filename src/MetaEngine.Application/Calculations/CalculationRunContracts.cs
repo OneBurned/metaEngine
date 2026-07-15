@@ -16,12 +16,20 @@ public sealed record QueueBaseCalculationCommand(
     DateTimeOffset PeriodEnd,
     string Timeframe);
 
+public sealed record QueueStrategyCalculationCommand(
+    Guid WorkspaceId,
+    Guid UserId,
+    Guid SourceCalculationRunId,
+    string StrategyType,
+    string ParametersJson);
+
 public sealed record CalculationRunSummary(
     Guid Id,
     CalculationRunKind Kind,
     CalculationInputType InputType,
     Guid? PortfolioId,
     Guid? PresetId,
+    Guid? SourceCalculationRunId,
     DateTimeOffset PeriodStart,
     DateTimeOffset PeriodEnd,
     string Timeframe,
@@ -67,6 +75,10 @@ public interface ICalculationRunService
 {
     Task<CalculationRunSummary> QueueAsync(
         QueueBaseCalculationCommand command,
+        CancellationToken cancellationToken);
+
+    Task<CalculationRunSummary> QueueStrategyAsync(
+        QueueStrategyCalculationCommand command,
         CancellationToken cancellationToken);
 
     Task<IReadOnlyList<CalculationRunSummary>> ListAsync(

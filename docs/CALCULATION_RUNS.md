@@ -16,8 +16,10 @@ The selected source, period and timeframe are captured in a `calculation_run`.
 Changing a portfolio or creating a newer preset later never changes an already
 queued or completed run.
 
-P3 is limited to **base calculation**. Production RSI, MDD Mean Reversion,
-optimizer jobs, cancel/retry and saved strategy sources are later stages.
+P5a adds **strategy calculations**. A strategy always takes one completed base
+run as an immutable input and produces a separate canonical artifact. RSI and
+MDD Mean Reversion are available; optimizer jobs, cancel/retry and saved
+strategy sources inside presets are later stages.
 
 ## API
 
@@ -27,6 +29,7 @@ The `POST` request requires the normal CSRF header.
 
 ```text
 POST /api/v1/workspaces/{workspaceId}/calculation-runs
+POST /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/result
@@ -55,9 +58,9 @@ The result endpoint returns a paged canonical series of `timestamp,diff`.
 ## Worker and statuses
 
 The Worker polls PostgreSQL every second. It atomically claims one `queued`
-base run, marks it `running`, then records one of:
+base or strategy run, marks it `running`, then records one of:
 
-- `completed`: summary, warnings and a `BaseResult` artifact are saved;
+- `completed`: summary, warnings and a `BaseResult` or `StrategyResult` artifact are saved;
 - `failed`: a stable error code is recorded, for example an unsupported source
   or a leveraged return below `-100%`.
 

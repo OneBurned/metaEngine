@@ -10,7 +10,7 @@ public sealed class RsiStrategyModuleDescriptor : IStrategyModuleDescriptorProvi
         StrategyType,
         "RSI",
         SchemaVersion: 1,
-        IsProductionCalculationAvailable: false,
+        IsProductionCalculationAvailable: true,
         Parameters:
         [
             new("rsiPeriod", "RSI период", StrategyParameterKind.Integer, 14, 1, 1000, 1, Unit: "periods"),

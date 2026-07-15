@@ -3,6 +3,7 @@ using System;
 using MetaEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MetaEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MetaEngineDbContext))]
-    partial class MetaEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260715141607_AddStrategyRunSource")]
+    partial class AddStrategyRunSource
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

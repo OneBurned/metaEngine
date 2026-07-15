@@ -42,6 +42,9 @@ export type CalculationRun = {
   inputType: "portfolio" | "preset"
   portfolioId: string | null
   presetId: string | null
+  sourceCalculationRunId: string | null
+  strategyType: string | null
+  strategySchemaVersion: number | null
   periodStart: string
   periodEnd: string
   timeframe: Timeframe
@@ -56,6 +59,28 @@ export type CalculationRun = {
   startedAt: string | null
   completedAt: string | null
   createdByUserId: string | null
+}
+
+export type StrategyType = {
+  strategyType: "rsi" | "mdd_mean_reversion"
+  displayName: string
+  schemaVersion: number
+  isProductionCalculationAvailable: boolean
+}
+
+export type SavedStrategy = {
+  id: string
+  strategyKey: string
+  version: number
+  name: string
+  strategyType: string
+  schemaVersion: number
+  parametersJson: string
+  sourceType: "portfolio" | "preset"
+  sourcePortfolioId: string | null
+  sourcePresetId: string | null
+  resultArtifactId: string
+  createdAt: string
 }
 
 export type CalculationRunDetails = {
@@ -142,6 +167,11 @@ export async function getCurrentUser() {
   return request<CurrentUser>("/api/v1/auth/me")
 }
 
+export async function listStrategyTypes() {
+  const response = await request<{ items: StrategyType[] }>("/api/v1/strategy-types")
+  return response.items.filter((item) => item.isProductionCalculationAvailable)
+}
+
 export async function login(email: string, password: string) {
   return request<CurrentUser>(
     "/api/v1/auth/login",
@@ -213,6 +243,23 @@ export async function queueCalculation(
   )
 }
 
+export async function queueStrategyCalculation(
+  workspaceId: string,
+  sourceRunId: string,
+  strategyType: string,
+  parameters: unknown,
+) {
+  return request<CalculationRun>(
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${sourceRunId}/strategies`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ strategyType, parameters }),
+    },
+    true,
+  )
+}
+
 export async function listCalculationRuns(workspaceId: string) {
   const response = await request<{ items: CalculationRun[] }>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs`,
@@ -242,6 +289,23 @@ export async function getAllCalculationResult(workspaceId: string, runId: string
   } while (offset < total)
 
   return items
+}
+
+export async function listSavedStrategies(workspaceId: string) {
+  const response = await request<{ items: SavedStrategy[] }>(`/api/v1/workspaces/${workspaceId}/strategies`)
+  return response.items
+}
+
+export async function saveStrategy(workspaceId: string, name: string, strategyRunId: string, strategyKey?: string) {
+  return request<SavedStrategy>(
+    `/api/v1/workspaces/${workspaceId}/strategies`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, strategyRunId, strategyKey: strategyKey ?? null }),
+    },
+    true,
+  )
 }
 
 export const timeframeOptions: Timeframe[] = ["1m", "5m", "15m", "1h", "1d"]

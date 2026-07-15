@@ -14,10 +14,12 @@ import {
 } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
 import { BarChart3, Database, LogOut, Workflow } from "lucide-react"
+import { Link, useRouterState } from "@tanstack/react-router"
 import type { PropsWithChildren } from "react"
 
 export function AppShell({ children, onSignOut }: PropsWithChildren<{ onSignOut: () => void }>) {
   const { user, workspace, selectWorkspace } = useSession()
+  const pathname = useRouterState({ select: (state) => state.location.pathname })
 
   return (
     <div className="min-h-dvh bg-[#f5f7f9] text-slate-950">
@@ -36,14 +38,14 @@ export function AppShell({ children, onSignOut }: PropsWithChildren<{ onSignOut:
           <Separator className="my-6" />
 
           <nav className="space-y-1" aria-label="Разделы приложения">
-            <div className="flex items-center gap-3 rounded-md bg-teal-50 px-3 py-2 text-sm font-medium text-teal-800">
+            <Link to="/" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <BarChart3 className="size-4" aria-hidden="true" />
               Расчеты
-            </div>
-            <div className="flex items-center gap-3 px-3 py-2 text-sm text-slate-500">
+            </Link>
+            <Link to="/strategies" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/strategies" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <Database className="size-4" aria-hidden="true" />
-              Портфолио
-            </div>
+              Стратегии
+            </Link>
           </nav>
         </aside>
 

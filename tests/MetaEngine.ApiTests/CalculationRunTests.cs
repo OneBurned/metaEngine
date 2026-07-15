@@ -7,6 +7,7 @@ using MetaEngine.Api.Contracts;
 using MetaEngine.Application.Calculations;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
+using MetaEngine.Application.Strategies;
 using MetaEngine.Domain.Model;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -133,6 +134,56 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
                 "1h"));
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Admin_can_queue_process_and_save_a_strategy_calculation()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Strategy source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var strategyResponse = await SendStrategyQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueStrategyCalculationRequest(
+                "rsi",
+                JsonSerializer.SerializeToElement(new { rsiPeriod = 1, buyLevel = 30, sellLevel = 70 })));
+        var strategyRun = await strategyResponse.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, strategyResponse.StatusCode);
+        Assert.NotNull(strategyRun);
+        Assert.Equal(CalculationRunKind.Strategy, strategyRun.Kind);
+        Assert.Equal(baseRun.Run.Id, strategyRun.SourceCalculationRunId);
+        await ProcessOneAsync();
+
+        var result = await client.GetFromJsonAsync<CalculationResultPage>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/calculation-runs/{strategyRun.Id}/result",
+            JsonOptions);
+        Assert.NotNull(result);
+        Assert.Equal(3, result.Items.Count);
+
+        var saved = await SaveStrategyAsync(
+            client,
+            owner.WorkspaceId,
+            new SaveStrategyRequest("RSI 1", strategyRun.Id, null));
+        var savedStrategies = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/strategies");
+        Assert.Equal("rsi", saved.StrategyType);
+        Assert.Equal(1, saved.Version);
+        Assert.Equal(1, savedStrategies.GetProperty("items").GetArrayLength());
     }
 
     [Fact]
@@ -263,6 +314,43 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         };
         request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
         return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendStrategyQueueAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid sourceRunId,
+        QueueStrategyCalculationRequest requestBody)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{sourceRunId}/strategies")
+        {
+            Content = JsonContent.Create(requestBody)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<SavedStrategySummary> SaveStrategyAsync(
+        HttpClient client,
+        Guid workspaceId,
+        SaveStrategyRequest requestBody)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/workspaces/{workspaceId}/strategies")
+        {
+            Content = JsonContent.Create(requestBody)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        var saved = await response.Content.ReadFromJsonAsync<SavedStrategySummary>(JsonOptions);
+        Assert.NotNull(saved);
+        return saved;
     }
 
     private static void AssertClose(double expected, double actual) =>

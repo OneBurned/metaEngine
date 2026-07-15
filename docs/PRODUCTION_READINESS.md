@@ -491,7 +491,8 @@ golden fixtures.
 | P2. Calculation engine | Импорт, базовые ряды, пресеты, RSI и MDD с parity tests |
 | P3. Async jobs | Queue, worker, status and immutable artifacts |
 | P4. Production UI | React/TanStack Router, вход, импорт, базовые расчеты и chart brush |
-| P5. Strategies and optimizer | Стратегии, потоковый перебор, кэш семплов, top-N и resource quotas |
+| P5a. Strategy runs | RSI/MDD runs, saved strategy versions and production UI |
+| P5b. Optimizer | Потоковый перебор, кэш семплов, top-N и resource quotas |
 | P6. Staging | Миграция данных, load/security/restore tests и приемка |
 | P7. Production | Backup, monitoring, runbook, release и rollback check |
 

@@ -22,8 +22,12 @@ var connectionString = builder.Configuration.GetConnectionString("MetaEngine")
 
 builder.Services.AddMetaEnginePersistence(connectionString);
 builder.Services.AddMetaEngineAuthentication(builder.Environment, builder.Configuration);
-builder.Services.AddSingleton<IStrategyModuleDescriptorProvider, RsiStrategyModuleDescriptor>();
-builder.Services.AddSingleton<IStrategyModuleDescriptorProvider, MddMeanReversionStrategyModuleDescriptor>();
+builder.Services.AddSingleton<RsiStrategyModule>();
+builder.Services.AddSingleton<MddMeanReversionStrategyModule>();
+builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
+builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
 builder.Services.AddSingleton<StrategyModuleCatalog>();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
@@ -218,6 +222,7 @@ workspaces.MapGet("/{workspaceId:guid}", async (
 workspaces.MapPortfolioEndpoints();
 workspaces.MapPresetEndpoints();
 workspaces.MapCalculationRunEndpoints();
+workspaces.MapStrategyEndpoints();
 
 app.Run();
 

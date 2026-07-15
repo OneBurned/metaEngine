@@ -33,6 +33,8 @@
    - `docs/CALCULATION_RUNS.md` — production-очередь базовых расчетов, Worker,
      статусы и сохраненные артефакты.
    - `docs/PRODUCTION_UI.md` — React-клиент production workflow и его запуск.
+   - `docs/PRODUCTION_STRATEGIES.md` — production RSI/MDD runs и сохраненные
+     конфигурации стратегий.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

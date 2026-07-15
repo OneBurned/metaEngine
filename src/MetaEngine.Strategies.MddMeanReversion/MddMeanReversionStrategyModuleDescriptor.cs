@@ -10,7 +10,7 @@ public sealed class MddMeanReversionStrategyModuleDescriptor : IStrategyModuleDe
         StrategyType,
         "MDD Mean Reversion",
         SchemaVersion: 1,
-        IsProductionCalculationAvailable: false,
+        IsProductionCalculationAvailable: true,
         Parameters:
         [
             new(

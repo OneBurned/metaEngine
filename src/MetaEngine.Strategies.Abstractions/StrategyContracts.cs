@@ -73,6 +73,12 @@ public sealed record StrategyValidationResult(IReadOnlyList<StrategyValidationEr
     public static StrategyValidationResult Valid { get; } = new([]);
 }
 
+public sealed class StrategyParameterException(IReadOnlyList<StrategyValidationError> errors)
+    : Exception("Strategy parameters are invalid.")
+{
+    public IReadOnlyList<StrategyValidationError> Errors { get; } = errors;
+}
+
 public sealed record StrategyResultPoint(
     long Timestamp,
     double Diff,

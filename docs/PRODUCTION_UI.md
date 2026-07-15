@@ -17,6 +17,8 @@ After signing in, the user can:
 6. follow `queued`, `running`, `completed` or `failed` status;
 7. open a completed result, inspect summary metrics and rows, and explore the
    equity/drawdown chart with the mouse range brush.
+8. select a completed base run, calculate RSI or MDD Mean Reversion, and save
+   the resulting strategy configuration.
 
 The first accessible workspace is selected automatically. The production API
 uses `workspaces[].id` and `workspaces[].name`; all portfolio and calculation
@@ -29,10 +31,9 @@ active import or calculation controls.
 
 ## Client boundaries
 
-This is the first production UI slice. It intentionally does not yet create or
-run presets in the UI, expose strategy calculations, optimization, cancellation,
-retry, user management or CSV export. Those behaviours are still governed by
-their API and domain contracts.
+The UI does not yet create or run presets, optimize strategies, cancel/retry
+jobs, manage users or export CSV. Those behaviours remain future work or are
+governed by their API and domain contracts.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only

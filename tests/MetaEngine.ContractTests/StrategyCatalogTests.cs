@@ -25,7 +25,7 @@ public sealed class StrategyCatalogTests
         Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.Optimization.Supported));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Optimization.Controls));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Outputs));
-        Assert.All(catalog.Descriptors, descriptor => Assert.False(descriptor.IsProductionCalculationAvailable));
+        Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.IsProductionCalculationAvailable));
     }
 
     [Fact]

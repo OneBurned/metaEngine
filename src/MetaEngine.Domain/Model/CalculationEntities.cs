@@ -65,6 +65,10 @@ public sealed class CalculationRun
 
     public PresetVersion? Preset { get; set; }
 
+    public Guid? SourceCalculationRunId { get; set; }
+
+    public CalculationRun? SourceCalculationRun { get; set; }
+
     public string? StrategyType { get; set; }
 
     public int? StrategySchemaVersion { get; set; }
