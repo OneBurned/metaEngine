@@ -46,6 +46,7 @@ docs/PRODUCTION_SCAFFOLD.md
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
+docs/PRODUCTION_UI.md      Production React UI and local run workflow
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -58,9 +59,9 @@ portfolio version; its decimal weight may create leverage and its time range is
 `[start, end)` with `null` as open end. The same portfolio version may be used
 for rebalancing only when its ranges do not overlap. The engine combines active
 weighted `diff` rows, fills a missing native source point with zero, and then
-uses the shared base-metrics/timeframe engine. This is not yet a public
-calculation job or production UI. See `docs/PRESETS.md` for the current API and
-constraints.
+uses the shared base-metrics/timeframe engine. P3 can calculate a saved preset
+through a job; P4 UI does not yet expose preset creation or execution. See
+`docs/PRESETS.md` for the current API and constraints.
 
 ## Production P3: calculation runs
 
@@ -68,8 +69,19 @@ The platform can now queue a base calculation for one immutable portfolio or
 preset version. API returns `queued` immediately; the separate Worker claims
 the run, calculates the canonical result, saves a `timestamp,diff` artifact and
 updates its summary/status. The API exposes list, details and paged canonical
-result rows. P3 does not include UI, cancel/retry, strategies or optimizer jobs.
+result rows. P3 itself did not include a UI, cancel/retry, strategies or
+optimizer jobs; the browser UI for portfolio imports and calculation runs is
+added in P4.
 See `docs/CALCULATION_RUNS.md` for endpoints and operational behavior.
+
+## Production P4: working UI
+
+`src/MetaEngine.Web` is a separate React/TypeScript client built with TanStack
+Router and shadcn/ui. It uses a same-origin development proxy to the API so
+cookie/CSRF protections remain unchanged. The user can sign in, import a
+portfolio, queue and observe a base calculation, and inspect saved results with
+an interactive equity/drawdown chart. It does not yet expose presets,
+strategies, optimizer jobs or cancellation. See `docs/PRODUCTION_UI.md`.
 
 ## 2. User communication rules
 
@@ -142,6 +154,7 @@ server.js                         Node HTTP server and API
 MetaEngine.slnx                   .NET 10 production solution
 src/MetaEngine.Api               ASP.NET Core API scaffold
 src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Web               React/TanStack Router production client
 src/MetaEngine.Domain/Calculations
                                  Production base calculation engine
 src/MetaEngine.Strategies.*      Strategy contracts and module descriptors

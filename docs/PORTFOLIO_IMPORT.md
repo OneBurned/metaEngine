@@ -2,8 +2,8 @@
 
 Этап P2a добавляет первый production workflow данных: авторизованный пользователь
 загружает canonical CSV, API нормализует его и сохраняет неизменяемую версию
-портфеля в PostgreSQL. Пользовательского production UI для этого workflow пока
-нет; Node.js local lab продолжает работать по прежним правилам.
+портфеля в PostgreSQL. P4 production UI позволяет выполнить этот сценарий в
+браузере; Node.js local lab продолжает работать по прежним правилам.
 
 ## Формат CSV
 
@@ -86,7 +86,6 @@ curl -s -b /tmp/metaengine-cookies.txt \
 
 ## Еще не реализовано
 
-- production UI загрузки и просмотра;
 - import `accum` и явный выбор decimal/percent;
 - удаление/архивация портфеля;
 - импорт исторических файлов из `samples/portfolios`;

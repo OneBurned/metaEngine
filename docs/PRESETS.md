@@ -1,9 +1,10 @@
 # Production presets
 
 P2c adds the first production workflow for a preset. A preset is an immutable,
-versioned recipe that combines exact imported portfolio versions. Production UI
-and a public calculation-run endpoint are still future work; this document
-describes the database API and the domain calculation core already available.
+versioned recipe that combines exact imported portfolio versions. The
+calculation-run endpoint is now available; P4 adds UI for portfolio calculations
+only, while preset UI remains future work. This document describes the database
+API and the domain calculation core.
 
 ## What a preset stores
 
@@ -92,9 +93,9 @@ calculation is rejected by the common `return_below_minus_one` guard. This
 prevents a non-finite equity curve from entering an artifact.
 
 P3 now loads a saved preset through an asynchronous job/Worker workflow and
-persists its canonical result as a `run_artifact`. The production UI and chart
-payloads remain future work; the current run API is documented in
-`docs/CALCULATION_RUNS.md`.
+persists its canonical result as a `run_artifact`. The production UI can render
+portfolio-run metrics and charts; preset creation and execution are the next UI
+slice. The current run API is documented in `docs/CALCULATION_RUNS.md`.
 
 ## Shared contract
 

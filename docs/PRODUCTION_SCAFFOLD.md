@@ -113,6 +113,10 @@ GET /api/v1/workspaces/{id}/calculation-runs/{runId}  статус, summary и a
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}/result  paged timestamp,diff
 ```
 
+`src/MetaEngine.Web` is the first production UI over these endpoints. Its Vite
+dev server runs on port `3000` and proxies `/api` to this API on `5080`; see
+`docs/PRODUCTION_UI.md` for the three-process local workflow.
+
 API не применяет migrations автоматически. Это отдельный управляемый шаг перед
 запуском новой версии приложения.
 
