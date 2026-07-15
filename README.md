@@ -18,6 +18,8 @@ docs/strategies/MDD_MEAN_REVERSION.md
                            подробное описание MDD Mean Reversion
 docs/CSV_EXPORT.md        экспорт CSV, popup, columns API и имена файлов
 docs/TIMEFRAMES.md        конвертер таймфреймов и режим гистограммы
+docs/PRODUCTION_READINESS.md
+                           архитектура, миграция и критерии допуска в production
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
