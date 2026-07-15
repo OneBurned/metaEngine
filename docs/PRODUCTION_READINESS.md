@@ -486,6 +486,8 @@ golden fixtures.
   `timestamp,diff` artifacts; readiness проверяет БД и migrations;
 - P1c: добавлены ASP.NET Core Identity, одноразовый bootstrap владельца,
   HttpOnly cookie + CSRF, роли workspace, изоляция чтения workspace и API tests;
+- P1d: PostgreSQL закреплен на major 16, добавлен GitHub Actions CI с migration
+  gate, NuGet audit и real-PostgreSQL bootstrap/login/workspace integration test;
 - управление участниками, password recovery/2FA, остальные API workflows,
   очередь и production-формулы еще не реализованы.
 

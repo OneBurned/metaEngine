@@ -2,7 +2,7 @@ name: metaengine
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-metaengine}
       POSTGRES_USER: ${POSTGRES_USER:-metaengine}

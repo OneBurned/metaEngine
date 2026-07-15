@@ -27,6 +27,7 @@ docs/PRODUCTION_SCAFFOLD.md
 docs/PRODUCTION_DATABASE.md
                            PostgreSQL, миграции и модель хранения production
 docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
+docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
@@ -167,6 +168,10 @@ npm test
 dotnet test MetaEngine.slnx
 ```
 
+Без `METAENGINE_TEST_POSTGRES` тест с настоящей PostgreSQL будет помечен как
+пропущенный. В GitHub Actions переменная всегда задана, поэтому CI обязательно
+применяет migrations и выполняет real-database auth flow.
+
 ### Проверить production scaffold
 
 ```bash
@@ -210,6 +215,10 @@ http://localhost:5080/api/v1/auth/csrf
 Production API не имеет публичной регистрации. Вход использует HttpOnly cookie,
 а login/logout требуют CSRF-токен. Подробная проверка описана в
 `docs/PRODUCTION_AUTH.md`.
+
+GitHub Actions запускает build, migrations, .NET/Node.js tests и security audit
+на каждый push и pull request. Полный состав проверок и локальный запуск
+PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
 
 ### Проверить синтаксис основных файлов
 

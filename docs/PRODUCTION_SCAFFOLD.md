@@ -18,6 +18,7 @@ src/MetaEngine.Strategies.Rsi
 src/MetaEngine.Strategies.MddMeanReversion
 tests/MetaEngine.ContractTests
 tests/MetaEngine.ApiTests
+tests/MetaEngine.PostgresIntegrationTests
 ```
 
 API и Worker являются отдельными процессами. Оба используют общий каталог
@@ -117,6 +118,11 @@ npm test
 - cookie-аутентификацию, блокировку отключенного пользователя и workspace
   isolation для ролей `Admin`, `Researcher`, `Viewer`.
 
+`MetaEngine.PostgresIntegrationTests` применяет настоящие migrations, выполняет
+bootstrap владельца, CSRF-login и чтение workspace через API. Локально тест
+пропускается без отдельной test connection string; в GitHub Actions PostgreSQL
+service и переменная окружения обязательны.
+
 ## PostgreSQL
 
 Migrations находятся в
@@ -152,4 +158,8 @@ Migrations находятся в
 - очередь заданий;
 - OpenAPI;
 - Plotly contracts;
-- Docker images и CI/CD.
+- production Docker images и CD.
+
+CI уже находится в `.github/workflows/ci.yml`; он проверяет compose, собирает
+solution, применяет migrations к PostgreSQL 16, запускает все тесты и NuGet
+security audit. Подробности находятся в `docs/PRODUCTION_CI.md`.

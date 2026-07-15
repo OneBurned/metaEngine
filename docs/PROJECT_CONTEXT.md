@@ -167,6 +167,12 @@ state-changing auth requests require a CSRF token, and workspace endpoints only
 return memberships of the authenticated active user. Roles are `Admin`,
 `Researcher` and `Viewer`; details are in `docs/PRODUCTION_AUTH.md`.
 
+The platform CI uses PostgreSQL 16 and runs migration parity/application,
+NuGet security audit, all .NET tests, the Node.js reference suite, and a real
+PostgreSQL bootstrap/login/workspace integration test. The integration test is
+conditionally skipped on developer machines without a dedicated test database,
+but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
+
 The server prints:
 
 ```text

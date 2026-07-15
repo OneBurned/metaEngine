@@ -23,6 +23,8 @@
      локальный запуск базы.
    - `docs/PRODUCTION_AUTH.md` — bootstrap владельца, cookie-auth, CSRF и
      workspace isolation.
+   - `docs/PRODUCTION_CI.md` — GitHub Actions, PostgreSQL integration test и
+     обязательные проверки ветки.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

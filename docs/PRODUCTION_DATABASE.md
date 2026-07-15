@@ -16,6 +16,10 @@ dotnet ef database update --project src/MetaEngine.Infrastructure --startup-proj
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
 
+Локальный и CI baseline — PostgreSQL `16-alpine`. Major version закреплена,
+чтобы локальная volume layout и CI service использовали одинаковую схему
+запуска; patch-обновления образа остаются доступными внутри ветки 16.
+
 Локальные значения из `.env.example` предназначены только для разработки.
 Production connection string передается секретом окружения:
 
@@ -128,5 +132,5 @@ dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure
 - добавить API workflows с обязательной workspace-проверкой;
 - добавить управление участниками, восстановление пароля, 2FA/OIDC и rate limiting;
 - перенести импорт и расчетный движок;
-- добавить integration tests с реальным PostgreSQL в CI;
+- расширять real-PostgreSQL integration tests вместе с новыми API workflows;
 - определить retention и backup/restore policy.
