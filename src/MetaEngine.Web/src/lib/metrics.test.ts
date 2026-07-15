@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { deriveMetricSeries, downsampleForChart } from "./metrics"
+import { deriveMetricSeries, downsampleForChart, formatPercent } from "./metrics"
 
 describe("deriveMetricSeries", () => {
   it("builds accum, high water mark and drawdown from canonical diffs", () => {
@@ -22,5 +22,12 @@ describe("downsampleForChart", () => {
 
     expect(rows.at(-1)).toBe(5)
     expect(rows.length).toBeLessThanOrEqual(4)
+  })
+})
+
+describe("formatPercent", () => {
+  it("formats decimal coefficients for chart axes as percentages", () => {
+    expect(formatPercent(7.4, 0).replace(/\s/g, "")).toBe("740%")
+    expect(formatPercent(-0.316, 1).replace(/\s/g, "")).toBe("-31,6%")
   })
 })

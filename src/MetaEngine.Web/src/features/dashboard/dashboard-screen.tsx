@@ -640,16 +640,18 @@ function ResultPanel({
             <YAxis
               yAxisId="drawdown"
               orientation="left"
+              width={72}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => `${Number(value).toFixed(0)}%`}
+              tickFormatter={(value) => formatPercent(Number(value), 1)}
             />
             <YAxis
               yAxisId="accum"
               orientation="right"
+              width={76}
               tickLine={false}
               axisLine={false}
-              tickFormatter={(value) => `${Number(value).toFixed(0)}%`}
+              tickFormatter={(value) => formatPercent(Number(value), 0)}
             />
             <ChartTooltip content={<ChartTooltipContent formatter={(value) => `${(Number(value) * 100).toFixed(2)}%`} />} />
             {showAccum ? <Line yAxisId="accum" type="monotone" dataKey="accum" stroke="var(--color-accum)" strokeWidth={1.75} dot={false} /> : null}

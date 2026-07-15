@@ -37,7 +37,8 @@ their API and domain contracts.
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only
 the rendered chart to at most 3,000 points so a long series remains responsive;
-the summary always comes from the saved calculation run.
+the summary always comes from the saved calculation run. The chart has
+independent drawdown and accumulated-return axes, both displayed as percentages.
 
 ## Authentication and local development
 
