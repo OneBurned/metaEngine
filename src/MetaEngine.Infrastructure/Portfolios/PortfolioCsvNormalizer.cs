@@ -229,6 +229,13 @@ internal sealed class PortfolioCsvNormalizer
             throw InvalidRow(row, $"diff must be a finite decimal number: {raw}");
         }
 
+        if (diff < -1)
+        {
+            throw new PortfolioImportValidationException(
+                "return_below_minus_one",
+                $"Row {row}: diff cannot be less than -100%.");
+        }
+
         return diff;
     }
 

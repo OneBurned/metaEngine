@@ -54,6 +54,17 @@ test('calculates accum, hwm, dd and mdd series', () => {
   assert.equal(result.summary.hwm, 0);
 });
 
+test('rejects returns below -100% and keeps equity at zero after a total loss', () => {
+  assert.throws(
+    () => calculateFromDiffs([0, 1], [0, -1.0001]),
+    /не может быть меньше -100%/
+  );
+
+  const result = calculateFromDiffs([0, 1, 2], [0, -1, 0.5]);
+  assert.deepEqual(result.rows.map((row) => row.accum), [0, -1, -1]);
+  assert.equal(result.summary.finalAccum, -1);
+});
+
 test('expands optimizer numeric ranges inclusively without floating point drift', () => {
   assert.deepEqual(expandNumericRange('x', { from: 0, to: 0.3, step: 0.1 }), [0, 0.1, 0.2, 0.3]);
   assert.deepEqual(expandNumericRange('x', { from: 1, to: 3, step: 1 }, { integer: true }), [1, 2, 3]);
@@ -228,6 +239,20 @@ test('converts hourly rows to daily rows through accum checkpoints', () => {
   assert.equal(daily.rows[0].diff, 0);
   assert.equal(Number(daily.rows[1].diff.toFixed(12)), Number((Math.pow(1.01, 24) - 1).toFixed(12)));
   assert.equal(Number(daily.rows[2].diff.toFixed(12)), Number((Math.pow(1.01, 24) - 1).toFixed(12)));
+});
+
+test('converts a bankrupt hourly series without non-finite daily returns', () => {
+  const { convertRowsToTimeframe, HOUR_MS } = require('../lib/calculations');
+  const from = parseTimestamp('2024-01-01 00:00');
+  const to = parseTimestamp('2024-01-03 00:00');
+  const grid = Array.from({ length: 49 }, (_, index) => from + index * HOUR_MS);
+  const diffs = grid.map((_, index) => index === 1 ? -1 : index > 1 ? 0.5 : 0);
+  const hourly = calculateFromDiffs(grid, diffs);
+  const daily = convertRowsToTimeframe(hourly.rows, from, to, HOUR_MS, '1d');
+
+  assert.deepEqual(daily.rows.map((row) => row.diff), [0, -1, 0]);
+  assert.deepEqual(daily.rows.map((row) => row.accum), [0, -1, -1]);
+  assert.equal(daily.rows.every((row) => Number.isFinite(row.diff)), true);
 });
 
 test('rejects conversion from hourly rows to a smaller timeframe', () => {

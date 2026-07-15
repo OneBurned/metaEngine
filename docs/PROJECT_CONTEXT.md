@@ -38,6 +38,7 @@ docs/CSV_EXPORT.md        CSV export behavior and API
 docs/TIMEFRAMES.md        Timeframe conversion and histogram chart mode
 docs/CALCULATION_CONTRACTS.md
                            Calculation contracts and shared golden fixtures
+docs/CALCULATION_ENGINE.md Production base metrics and timeframe engine
 docs/PRODUCTION_READINESS.md
                            Production architecture, migration and release gates
 docs/PRODUCTION_SCAFFOLD.md
@@ -118,8 +119,11 @@ server.js                         Node HTTP server and API
 MetaEngine.slnx                   .NET 10 production solution
 src/MetaEngine.Api               ASP.NET Core API scaffold
 src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Domain/Calculations
+                                 Production base calculation engine
 src/MetaEngine.Strategies.*      Strategy contracts and module descriptors
 tests/MetaEngine.ContractTests   .NET architecture and fixture tests
+tests/MetaEngine.DomainTests     .NET base calculation unit/golden tests
 lib/calculations.js               Calculation and CSV normalization logic
 public/index.html                 Browser UI markup
 public/app.js                     Browser UI behavior
@@ -181,6 +185,14 @@ versions with raw and normalized-series SHA-256 checksums. Re-importing the same
 file or semantic series returns the existing version. This intentionally does
 not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
 upload. See `docs/PORTFOLIO_IMPORT.md`.
+
+The second calculation-engine slice is the pure C# base calculation core. It
+builds the selected source grid, applies `missing diff = 0`, calculates
+`accum/hwm/dd/mdd`, and converts only to the same or a larger timeframe through
+UTC checkpoints. It reads the same base golden fixture as the Node.js reference.
+Returns below `-100%` are rejected; exactly `-100%` leaves equity at zero and is
+handled without non-finite values during timeframe conversion. The core has no
+HTTP endpoint or persistence workflow yet. See `docs/CALCULATION_ENGINE.md`.
 
 The server prints:
 
