@@ -26,6 +26,7 @@ docs/PRODUCTION_SCAFFOLD.md
                            текущий .NET-каркас, API, Worker и запуск
 docs/PRODUCTION_DATABASE.md
                            PostgreSQL, миграции и модель хранения production
+docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
@@ -177,18 +178,38 @@ dotnet build MetaEngine.slnx
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
 
+Перед первым запуском нужно один раз создать владельца. Пароль должен содержать
+минимум 12 символов, верхний и нижний регистр, цифру и специальный символ:
+
+```bash
+read -r -p "Admin email: " ADMIN_EMAIL
+read -r -s -p "Admin password: " ADMIN_PASSWORD; echo
+export MetaEngine__BootstrapAdmin__Email="$ADMIN_EMAIL"
+export MetaEngine__BootstrapAdmin__Password="$ADMIN_PASSWORD"
+export MetaEngine__BootstrapAdmin__DisplayName="Owner"
+export MetaEngine__BootstrapAdmin__WorkspaceName="Personal"
+dotnet run --project src/MetaEngine.Api -- --bootstrap-admin
+unset MetaEngine__BootstrapAdmin__Email MetaEngine__BootstrapAdmin__Password
+```
+
 После запуска API доступны:
 
 ```text
 http://localhost:5080/health/live
 http://localhost:5080/health/ready
 http://localhost:5080/api/v1/strategy-types
+http://localhost:5080/api/v1/auth/bootstrap-status
+http://localhost:5080/api/v1/auth/csrf
 ```
 
 `/health/live` проверяет процесс API. `/health/ready` возвращает `ready` только
 когда PostgreSQL доступен и все миграции применены. Команда
 `docker compose down` останавливает локальную базу без удаления данных.
 Не используй `docker compose down -v`, если данные нужно сохранить.
+
+Production API не имеет публичной регистрации. Вход использует HttpOnly cookie,
+а login/logout требуют CSRF-токен. Подробная проверка описана в
+`docs/PRODUCTION_AUTH.md`.
 
 ### Проверить синтаксис основных файлов
 

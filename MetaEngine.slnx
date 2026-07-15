@@ -10,6 +10,7 @@
     <Project Path="src/MetaEngine.Worker/MetaEngine.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/MetaEngine.ApiTests/MetaEngine.ApiTests.csproj" />
     <Project Path="tests/MetaEngine.ContractTests/MetaEngine.ContractTests.csproj" />
   </Folder>
 </Solution>

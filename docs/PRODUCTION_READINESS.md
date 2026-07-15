@@ -484,7 +484,10 @@ golden fixtures.
 - P1b: добавлены PostgreSQL/EF Core, первая migration, модель users/workspaces,
   версионных портфелей, пресетов и мета-стратегий, jobs и канонических
   `timestamp,diff` artifacts; readiness проверяет БД и migrations;
-- auth, API workflows, очередь и production-формулы еще не реализованы.
+- P1c: добавлены ASP.NET Core Identity, одноразовый bootstrap владельца,
+  HttpOnly cookie + CSRF, роли workspace, изоляция чтения workspace и API tests;
+- управление участниками, password recovery/2FA, остальные API workflows,
+  очередь и production-формулы еще не реализованы.
 
 Каждый этап оформляется отдельным согласованным PR или небольшой серией PR.
 Production deploy выполняется отдельным действием после merge и явного

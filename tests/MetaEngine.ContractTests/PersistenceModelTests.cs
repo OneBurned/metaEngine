@@ -35,6 +35,7 @@ public sealed class PersistenceModelTests
         [
             "audit_events",
             "calculation_runs",
+            "data_protection_keys",
             "optimization_jobs",
             "optimization_results",
             "portfolio_points",
@@ -44,6 +45,10 @@ public sealed class PersistenceModelTests
             "run_artifact_points",
             "run_artifacts",
             "strategies",
+            "user_claims",
+            "user_credentials",
+            "user_logins",
+            "user_tokens",
             "users",
             "workspace_members",
             "workspaces"
@@ -91,10 +96,14 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
-    public void Initial_migration_is_registered_for_the_current_context()
+    public void Platform_migrations_are_registered_for_the_current_context()
     {
         using var dbContext = CreateDbContext();
 
-        Assert.Single(dbContext.Database.GetMigrations(), migration => migration.EndsWith("_InitialProductionSchema"));
+        var migrations = dbContext.Database.GetMigrations().ToArray();
+
+        Assert.Equal(2, migrations.Length);
+        Assert.Contains(migrations, migration => migration.EndsWith("_InitialProductionSchema"));
+        Assert.Contains(migrations, migration => migration.EndsWith("_AddIdentityAndWorkspaceSecurity"));
     }
 }

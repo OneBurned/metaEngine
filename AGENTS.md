@@ -21,6 +21,8 @@
    - `docs/PRODUCTION_SCAFFOLD.md` — текущий .NET-каркас, API и Worker.
    - `docs/PRODUCTION_DATABASE.md` — PostgreSQL, миграции, модель хранения и
      локальный запуск базы.
+   - `docs/PRODUCTION_AUTH.md` — bootstrap владельца, cookie-auth, CSRF и
+     workspace isolation.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

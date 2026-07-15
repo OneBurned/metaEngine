@@ -1,3 +1,4 @@
+using MetaEngine.Application.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,6 +17,7 @@ public static class MetaEnginePersistenceExtensions
                 .UseNpgsql(connectionString, npgsql =>
                     npgsql.MigrationsAssembly(typeof(MetaEngineDbContext).Assembly.FullName))
                 .UseSnakeCaseNamingConvention());
+        services.AddScoped<IWorkspaceAccessService, WorkspaceAccessService>();
 
         return services;
     }

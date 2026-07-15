@@ -1,11 +1,17 @@
 using MetaEngine.Domain.Model;
+using MetaEngine.Infrastructure.Identity;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace MetaEngine.Infrastructure.Persistence;
 
-public sealed class MetaEngineDbContext(DbContextOptions<MetaEngineDbContext> options) : DbContext(options)
+public sealed class MetaEngineDbContext(DbContextOptions<MetaEngineDbContext> options)
+    : IdentityUserContext<IdentityAccount, Guid>(options), IDataProtectionKeyContext
 {
-    public DbSet<UserAccount> Users => Set<UserAccount>();
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
+    public DbSet<UserAccount> UserAccounts => Set<UserAccount>();
 
     public DbSet<Workspace> Workspaces => Set<Workspace>();
 
@@ -35,6 +41,7 @@ public sealed class MetaEngineDbContext(DbContextOptions<MetaEngineDbContext> op
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        base.OnModelCreating(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(MetaEngineDbContext).Assembly);
     }
 }

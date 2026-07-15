@@ -17,6 +17,7 @@ src/MetaEngine.Strategies.Abstractions
 src/MetaEngine.Strategies.Rsi
 src/MetaEngine.Strategies.MddMeanReversion
 tests/MetaEngine.ContractTests
+tests/MetaEngine.ApiTests
 ```
 
 API и Worker являются отдельными процессами. Оба используют общий каталог
@@ -64,10 +65,23 @@ GET /                         информация о сервисе
 GET /health/live              процесс API работает
 GET /health/ready             PostgreSQL доступен, migrations применены
 GET /api/v1/strategy-types    descriptors зарегистрированных стратегий
+GET /api/v1/auth/bootstrap-status  создан ли первый пользователь
+GET /api/v1/auth/csrf         CSRF-токен и cookie для login/logout
+POST /api/v1/auth/login       вход по email/password
+POST /api/v1/auth/logout      завершение сессии
+GET /api/v1/auth/me           текущий пользователь и его workspace
+GET /api/v1/workspaces/       доступные текущему пользователю workspace
+GET /api/v1/workspaces/{id}   workspace только при наличии membership
 ```
 
 API не применяет migrations автоматически. Это отдельный управляемый шаг перед
 запуском новой версии приложения.
+
+Публичной регистрации нет. Первый владелец создается отдельной командой
+`--bootstrap-admin`, после чего повторный запуск с другим email запрещен.
+Cookie сессии имеет флаги `HttpOnly` и `SameSite=Strict`; login/logout требуют
+CSRF-токен. В production ключи Data Protection защищаются сертификатом.
+Настройка и ручная проверка описаны в `docs/PRODUCTION_AUTH.md`.
 
 ## Worker
 
@@ -97,15 +111,20 @@ npm test
 - отсутствие legacy `baseline/upperLevel/lowerLevel` в RSI descriptor;
 - доступность общих Node.js/C# golden fixtures;
 - состав production-таблиц, версионность мета-стратегии и канонический формат
-  result artifact `timestamp,diff`.
+  result artifact `timestamp,diff`;
+- одноразовый bootstrap первого владельца;
+- обязательный CSRF для login;
+- cookie-аутентификацию, блокировку отключенного пользователя и workspace
+  isolation для ролей `Admin`, `Researcher`, `Viewer`.
 
 ## PostgreSQL
 
-Первая migration находится в
+Migrations находятся в
 `src/MetaEngine.Infrastructure/Persistence/Migrations`. Схема хранит
 пользователей, workspace membership, версии портфелей и пресетов,
 мета-стратегии, calculation runs, optimization jobs/top-N, audit events и
-неизменяемые result artifacts.
+неизменяемые result artifacts. Учетные данные ASP.NET Core Identity отделены
+от доменного профиля пользователя, а ключи Data Protection сохраняются в БД.
 
 Полное описание схемы и безопасной работы с migrations находится в
 `docs/PRODUCTION_DATABASE.md`.
@@ -126,7 +145,8 @@ npm test
 
 ## Что еще не реализовано
 
-- авторизация и проверка workspace на API endpoint;
+- UI входа и управления участниками workspace;
+- восстановление пароля, 2FA/OIDC и rate limiting;
 - CRUD/API workflows для production-сущностей;
 - production calculation engine;
 - очередь заданий;

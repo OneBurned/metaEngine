@@ -160,6 +160,13 @@ Port `5080` exposes health endpoints and `/api/v1/strategy-types`.
 history. The production scaffold is not yet a replacement for the Node.js
 calculation API.
 
+Production authentication has no public registration. The initial owner and
+personal workspace are created once through `--bootstrap-admin` with email and
+password supplied through environment variables. Auth uses an HttpOnly cookie,
+state-changing auth requests require a CSRF token, and workspace endpoints only
+return memberships of the authenticated active user. Roles are `Admin`,
+`Researcher` and `Viewer`; details are in `docs/PRODUCTION_AUTH.md`.
+
 The server prints:
 
 ```text
