@@ -30,14 +30,16 @@ docs/PRODUCTION_DATABASE.md
 docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
 docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
 docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
+docs/PRESETS.md            production-пресеты: версии, API и расчетное ядро
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
 
 > Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
 > Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
-> Базовые формулы уже перенесены и сверены с golden fixture; стратегии,
-> асинхронный запуск расчетов и пользовательский интерфейс еще не перенесены.
+> Базовые формулы, доменный расчет пресетов и versioned preset API уже
+> перенесены и сверены с golden fixtures; стратегии, асинхронный запуск
+> расчетов и пользовательский интерфейс еще не перенесены.
 
 ## Что уже умеет локальная версия
 

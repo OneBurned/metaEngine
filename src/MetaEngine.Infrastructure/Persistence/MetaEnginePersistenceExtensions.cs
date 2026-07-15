@@ -1,6 +1,8 @@
 using MetaEngine.Application.Security;
 using MetaEngine.Application.Portfolios;
+using MetaEngine.Application.Presets;
 using MetaEngine.Infrastructure.Portfolios;
+using MetaEngine.Infrastructure.Presets;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,6 +24,7 @@ public static class MetaEnginePersistenceExtensions
         services.AddScoped<IWorkspaceAccessService, WorkspaceAccessService>();
         services.AddScoped<PortfolioCsvNormalizer>();
         services.AddScoped<IPortfolioService, PortfolioService>();
+        services.AddScoped<IPresetService, PresetService>();
 
         return services;
     }

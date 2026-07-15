@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Data.Common;
 using MetaEngine.Api.Contracts;
 using MetaEngine.Application.Portfolios;
+using MetaEngine.Application.Presets;
 using MetaEngine.Infrastructure.Identity;
 using MetaEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -57,6 +58,12 @@ public sealed class PostgresAuthenticationTests
             $"/api/v1/workspaces/{workspaceId}/portfolios");
         var page = await client.GetFromJsonAsync<PortfolioPointPage>(
             $"/api/v1/workspaces/{workspaceId}/portfolios/{import.Portfolio.Id}/points?limit=2");
+        var preset = await CreatePresetAsync(client, workspaceId, import.Portfolio.Id);
+        var presets = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/workspaces/{workspaceId}/presets");
+        var foundPreset = await client.GetFromJsonAsync<PresetDetails>(
+            $"/api/v1/workspaces/{workspaceId}/presets/{preset.Preset.Id}",
+            JsonOptions);
 
         Assert.True(import.Created);
         Assert.False(duplicate.Created);
@@ -67,6 +74,14 @@ public sealed class PostgresAuthenticationTests
         Assert.NotNull(page);
         Assert.Equal(3, page.Total);
         Assert.Equal(2, page.Items.Count);
+        Assert.Equal(1, preset.Preset.Version);
+        Assert.Single(preset.Items);
+        Assert.Equal(import.Portfolio.Id, preset.Items[0].PortfolioId);
+        Assert.Contains(
+            presets.GetProperty("items").EnumerateArray(),
+            item => item.GetProperty("id").GetGuid() == preset.Preset.Id);
+        Assert.NotNull(foundPreset);
+        Assert.Equal(preset.Preset.Id, foundPreset.Preset.Id);
 
         await using var auditScope = factory.Services.CreateAsyncScope();
         var auditDbContext = auditScope.ServiceProvider.GetRequiredService<MetaEngineDbContext>();
@@ -74,7 +89,12 @@ public sealed class PostgresAuthenticationTests
             1,
             await auditDbContext.AuditEvents.CountAsync(
                 auditEvent => auditEvent.Action == "portfolio_imported" &&
-                              auditEvent.EntityId == import.Portfolio.Id));
+                               auditEvent.EntityId == import.Portfolio.Id));
+        Assert.Equal(
+            1,
+            await auditDbContext.AuditEvents.CountAsync(
+                auditEvent => auditEvent.Action == "preset_created" &&
+                               auditEvent.EntityId == preset.Preset.Id));
     }
 
     private static async Task<PortfolioImportResult> ImportPortfolioAsync(HttpClient client, Guid workspaceId)
@@ -103,6 +123,32 @@ public sealed class PostgresAuthenticationTests
             await response.Content.ReadAsStringAsync());
 
         var result = await response.Content.ReadFromJsonAsync<PortfolioImportResult>(JsonOptions);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static async Task<PresetDetails> CreatePresetAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid portfolioId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        var start = DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/presets")
+        {
+            Content = JsonContent.Create(new CreatePresetRequest(
+                "Integration preset",
+                null,
+                [new CreatePresetItemRequest(portfolioId, 1.25, start, null)]))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<PresetDetails>(JsonOptions);
         Assert.NotNull(result);
         return result;
     }
@@ -142,8 +188,11 @@ public sealed class PostgresAuthenticationTests
         Assert.False(second.Created);
 
         await dbContext.AuditEvents
-            .Where(auditEvent => auditEvent.Action == "portfolio_imported")
+            .Where(auditEvent =>
+                auditEvent.Action == "portfolio_imported" ||
+                auditEvent.Action == "preset_created")
             .ExecuteDeleteAsync();
+        await dbContext.Presets.ExecuteDeleteAsync();
         await dbContext.Portfolios.ExecuteDeleteAsync();
     }
 

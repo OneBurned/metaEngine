@@ -23,8 +23,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\test\fixtures\golden\base_metrics.json"
-          Link="Fixtures\Golden\base_metrics.json"
+    <None Include="..\..\test\fixtures\golden\*.json"
+          Link="Fixtures\Golden\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

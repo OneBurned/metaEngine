@@ -44,9 +44,22 @@ docs/PRODUCTION_READINESS.md
 docs/PRODUCTION_SCAFFOLD.md
                            Current .NET scaffold, API, Worker and run guide
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
+docs/PRESETS.md            Production presets, versions, API and calculation core
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
+
+## Production P2c: presets
+
+The production platform now has a versioned preset API and a domain-level
+preset calculation engine. Each preset item references an exact immutable
+portfolio version; its decimal weight may create leverage and its time range is
+`[start, end)` with `null` as open end. The same portfolio version may be used
+for rebalancing only when its ranges do not overlap. The engine combines active
+weighted `diff` rows, fills a missing native source point with zero, and then
+uses the shared base-metrics/timeframe engine. This is not yet a public
+calculation job or production UI. See `docs/PRESETS.md` for the current API and
+constraints.
 
 ## 2. User communication rules
 

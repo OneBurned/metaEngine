@@ -42,6 +42,30 @@ public sealed record PortfolioCalculationResult(
     IReadOnlyList<CalculationWarning> Warnings,
     bool WarningsTruncated);
 
+public sealed record PresetCalculationItem(
+    Guid PortfolioId,
+    IReadOnlyList<ReturnPoint> Points,
+    string SourceTimeframe,
+    double Weight,
+    long StartsAt,
+    long? EndsAt);
+
+public sealed record PresetCalculationRequest(
+    IReadOnlyList<PresetCalculationItem> Items,
+    long PeriodStart,
+    long PeriodEnd,
+    string TargetTimeframe);
+
+public sealed record PresetCalculationResult(
+    IReadOnlyList<CalculationPoint> Rows,
+    CalculationSummary Summary,
+    string SourceTimeframe,
+    string Timeframe,
+    long SourceStepMilliseconds,
+    long MissingPointCount,
+    IReadOnlyList<CalculationWarning> Warnings,
+    bool WarningsTruncated);
+
 public sealed class CalculationValidationException(string code, string message)
     : Exception(message)
 {

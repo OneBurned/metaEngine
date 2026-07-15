@@ -10,7 +10,7 @@ public sealed class GoldenFixtureShapeTests
         var fixturesDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Golden");
         var files = Directory.GetFiles(fixturesDirectory, "*.json").Order(StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(3, files.Length);
+        Assert.Equal(4, files.Length);
 
         foreach (var file in files)
         {
@@ -21,9 +21,24 @@ public sealed class GoldenFixtureShapeTests
             Assert.Equal("1.0", root.GetProperty("contractVersion").GetString());
             Assert.False(string.IsNullOrWhiteSpace(root.GetProperty("id").GetString()));
             Assert.True(root.GetProperty("absoluteTolerance").GetDouble() > 0);
-            Assert.Equal(
-                root.GetProperty("input").GetProperty("timestamps").GetArrayLength(),
-                root.GetProperty("input").GetProperty("diffs").GetArrayLength());
+            var input = root.GetProperty("input");
+            if (root.GetProperty("kind").GetString() == "preset_calculation")
+            {
+                var items = input.GetProperty("items");
+                Assert.True(items.GetArrayLength() > 0);
+                foreach (var item in items.EnumerateArray())
+                {
+                    Assert.Equal(
+                        item.GetProperty("timestamps").GetArrayLength(),
+                        item.GetProperty("diffs").GetArrayLength());
+                }
+            }
+            else
+            {
+                Assert.Equal(
+                    input.GetProperty("timestamps").GetArrayLength(),
+                    input.GetProperty("diffs").GetArrayLength());
+            }
             Assert.Equal(JsonValueKind.Object, root.GetProperty("expected").ValueKind);
         }
     }
