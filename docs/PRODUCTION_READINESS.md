@@ -220,6 +220,9 @@ timestamp,diff
 входах Node.js reference и C# engine должны выдавать одинаковые результаты в
 пределах согласованной точности.
 
+Формат, числовая точность и текущие машиночитаемые эталоны зафиксированы в
+`docs/CALCULATION_CONTRACTS.md` и `test/fixtures/golden`.
+
 Golden tests должны покрывать:
 
 - `diff -> accum -> hwm -> dd -> mdd`;

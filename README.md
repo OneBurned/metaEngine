@@ -18,6 +18,8 @@ docs/strategies/MDD_MEAN_REVERSION.md
                            подробное описание MDD Mean Reversion
 docs/CSV_EXPORT.md        экспорт CSV, popup, columns API и имена файлов
 docs/TIMEFRAMES.md        конвертер таймфреймов и режим гистограммы
+docs/CALCULATION_CONTRACTS.md
+                           расчетные контракты и общие golden fixtures
 docs/PRODUCTION_READINESS.md
                            архитектура, миграция и критерии допуска в production
 ```

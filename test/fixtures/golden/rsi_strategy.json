@@ -1,0 +1,179 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0",
+  "id": "rsi_next_point_execution",
+  "kind": "trading_strategy",
+  "description": "RSI фиксирует расчет по equity, сигналы и исполнение со следующей точки.",
+  "absoluteTolerance": 1e-12,
+  "input": {
+    "timestamps": [
+      1704067200000,
+      1704070800000,
+      1704074400000,
+      1704078000000,
+      1704081600000,
+      1704085200000,
+      1704088800000,
+      1704092400000,
+      1704096000000,
+      1704099600000,
+      1704103200000,
+      1704106800000,
+      1704110400000,
+      1704114000000,
+      1704117600000,
+      1704121200000,
+      1704124800000,
+      1704128400000,
+      1704132000000,
+      1704135600000
+    ],
+    "diffs": [
+      0,
+      -0.02,
+      -0.02,
+      -0.02,
+      -0.02,
+      -0.02,
+      0.03,
+      0.03,
+      0.03,
+      0.03,
+      0.03,
+      0.03,
+      -0.02,
+      -0.02,
+      -0.02,
+      0.03,
+      0.03,
+      0.03,
+      -0.01,
+      -0.01
+    ],
+    "step": "1h",
+    "config": {
+      "type": "rsi",
+      "rsiPeriod": 3,
+      "buyLevel": 40,
+      "sellLevel": 60,
+      "upperLevel": 60,
+      "lowerLevel": 40,
+      "baseline": 50
+    }
+  },
+  "expected": {
+    "type": "rsi",
+    "resultDiffs": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0.03,
+      0,
+      0,
+      0,
+      0
+    ],
+    "checkpoints": [
+      {
+        "index": 0,
+        "rsi": null,
+        "signal": "",
+        "execution": "",
+        "position": 0,
+        "strategy_diff": 0,
+        "strategy_accum": 0
+      },
+      {
+        "index": 3,
+        "rsi": 0,
+        "signal": "",
+        "position": 0
+      },
+      {
+        "index": 6,
+        "rsi": 41.587231741836405,
+        "signal": "",
+        "position": 0
+      },
+      {
+        "index": 7,
+        "rsi": 64.43716292222392,
+        "signal": "",
+        "position": 0
+      },
+      {
+        "index": 12,
+        "rsi": 68.82710220549404,
+        "signal": "",
+        "position": 0
+      },
+      {
+        "index": 13,
+        "rsi": 49.27561041021896,
+        "signal": "",
+        "position": 0
+      },
+      {
+        "index": 14,
+        "rsi": 34.76041934654447,
+        "signal": "buy",
+        "execution": "",
+        "position": 0,
+        "source_diff": -0.02,
+        "strategy_diff": 0
+      },
+      {
+        "index": 15,
+        "rsi": 60.449598748108855,
+        "signal": "sell",
+        "execution": "buy",
+        "position": 1,
+        "source_diff": 0.03,
+        "strategy_diff": 0.03,
+        "strategy_accum": 0.030000000000000027,
+        "strategy_hwm": 0.030000000000000027,
+        "strategy_dd": 0,
+        "strategy_mdd": 0
+      },
+      {
+        "index": 16,
+        "rsi": 75.4096325109934,
+        "signal": "",
+        "execution": "sell",
+        "position": 0,
+        "strategy_diff": 0,
+        "strategy_accum": 0.030000000000000027
+      },
+      {
+        "index": 19,
+        "rsi": 57.389531817220025,
+        "signal": "",
+        "execution": "",
+        "position": 0,
+        "strategy_accum": 0.030000000000000027
+      }
+    ],
+    "summary": {
+      "start": "2024-01-01 00:00",
+      "end": "2024-01-01 19:00",
+      "points": 20,
+      "finalAccum": 0.030000000000000027,
+      "hwm": 0.030000000000000027,
+      "maxDrawdown": 0,
+      "buyCount": 1,
+      "sellCount": 1
+    }
+  }
+}

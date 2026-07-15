@@ -32,6 +32,8 @@ docs/PROJECT_CONTEXT.md   Full project context and product decisions
 docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
 docs/CSV_EXPORT.md        CSV export behavior and API
 docs/TIMEFRAMES.md        Timeframe conversion and histogram chart mode
+docs/CALCULATION_CONTRACTS.md
+                           Calculation contracts and shared golden fixtures
 docs/PRODUCTION_READINESS.md
                            Production architecture, migration and release gates
 ```
