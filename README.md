@@ -28,6 +28,7 @@ docs/PRODUCTION_DATABASE.md
                            PostgreSQL, миграции и модель хранения production
 docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
 docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
+docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
@@ -219,6 +220,11 @@ Production API не имеет публичной регистрации. Вхо
 GitHub Actions запускает build, migrations, .NET/Node.js tests и security audit
 на каждый push и pull request. Полный состав проверок и локальный запуск
 PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
+
+Production API уже принимает canonical portfolio CSV `timestamp,diff`, хранит
+неизменяемые версии и отдает metadata/points только внутри workspace. UI пока
+остается в Node.js local lab. Контракт импорта и примеры запросов находятся в
+`docs/PORTFOLIO_IMPORT.md`.
 
 ### Проверить синтаксис основных файлов
 

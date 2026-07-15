@@ -1,4 +1,6 @@
 using MetaEngine.Application.Security;
+using MetaEngine.Application.Portfolios;
+using MetaEngine.Infrastructure.Portfolios;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -18,6 +20,8 @@ public static class MetaEnginePersistenceExtensions
                     npgsql.MigrationsAssembly(typeof(MetaEngineDbContext).Assembly.FullName))
                 .UseSnakeCaseNamingConvention());
         services.AddScoped<IWorkspaceAccessService, WorkspaceAccessService>();
+        services.AddScoped<PortfolioCsvNormalizer>();
+        services.AddScoped<IPortfolioService, PortfolioService>();
 
         return services;
     }

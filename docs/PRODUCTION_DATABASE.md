@@ -62,7 +62,7 @@ HTTP `503` и `status = not_ready`. В ответ не попадают connecti
 | `data_protection_keys` | Ключи для защиты auth-cookie между рестартами и экземплярами API |
 | `workspaces` | Граница владения данными |
 | `workspace_members` | Роль пользователя в workspace |
-| `portfolios` | Неизменяемая версия метаданных портфеля |
+| `portfolios` | Неизменяемая версия метаданных, raw/series checksum и источник портфеля |
 | `portfolio_points` | Нормализованный исходный ряд `timestamp,diff` |
 | `presets` | Неизменяемая версия пресета |
 | `preset_items` | Конкретная версия портфеля или сохраненной мета-стратегии |
@@ -76,6 +76,12 @@ HTTP `503` и `status = not_ready`. В ответ не попадают connecti
 
 `accum`, `hwm`, `dd` и `mdd` не являются источником истины. Они строятся из
 `diff`; позднее их можно кэшировать без изменения канонического результата.
+
+Для `portfolios` уникальны `(workspace_id, source_checksum)` и
+`(workspace_id, series_checksum)`. Поэтому повтор одного файла или того же
+нормализованного ряда не создает новую запись. Новая версия имеет тот же
+`portfolio_key`, увеличенный `version` и новый checksum. Полный контракт описан
+в `docs/PORTFOLIO_IMPORT.md`.
 
 Доменный профиль `users` не зависит от ASP.NET Core Identity. Таблица
 `user_credentials` имеет тот же первичный ключ и one-to-one FK на `users`.
@@ -129,7 +135,7 @@ dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure
 
 ## Следующие шаги
 
-- добавить API workflows с обязательной workspace-проверкой;
+- добавить API workflows пресетов, стратегий и расчетов с workspace-проверкой;
 - добавить управление участниками, восстановление пароля, 2FA/OIDC и rate limiting;
 - перенести импорт и расчетный движок;
 - расширять real-PostgreSQL integration tests вместе с новыми API workflows;

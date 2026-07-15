@@ -1,7 +1,9 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using MetaEngine.Api.Contracts;
+using MetaEngine.Api.Endpoints;
 using MetaEngine.Api.Security;
+using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Security;
 using MetaEngine.Domain.Model;
 using MetaEngine.Infrastructure.Identity;
@@ -12,6 +14,7 @@ using MetaEngine.Strategies.Rsi;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Http.Features;
 
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("MetaEngine")
@@ -24,6 +27,8 @@ builder.Services.AddSingleton<IStrategyModuleDescriptorProvider, MddMeanReversio
 builder.Services.AddSingleton<StrategyModuleCatalog>();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+builder.Services.Configure<FormOptions>(options =>
+    options.MultipartBodyLengthLimit = PortfolioImportLimits.MaxSourceBytes + 1024 * 1024);
 
 var app = builder.Build();
 
@@ -210,6 +215,7 @@ workspaces.MapGet("/{workspaceId:guid}", async (
         ? Results.NotFound()
         : Results.Ok(ToResponse(access));
 });
+workspaces.MapPortfolioEndpoints();
 
 app.Run();
 

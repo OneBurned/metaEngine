@@ -25,6 +25,8 @@
      workspace isolation.
    - `docs/PRODUCTION_CI.md` — GitHub Actions, PostgreSQL integration test и
      обязательные проверки ветки.
+   - `docs/PORTFOLIO_IMPORT.md` — production CSV import, версии, checksum и
+     workspace API портфелей.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

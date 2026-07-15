@@ -73,6 +73,10 @@ POST /api/v1/auth/logout      завершение сессии
 GET /api/v1/auth/me           текущий пользователь и его workspace
 GET /api/v1/workspaces/       доступные текущему пользователю workspace
 GET /api/v1/workspaces/{id}   workspace только при наличии membership
+POST /api/v1/workspaces/{id}/portfolios/import  импорт canonical CSV
+GET /api/v1/workspaces/{id}/portfolios          список всех версий
+GET /api/v1/workspaces/{id}/portfolios/{portfolioId}  metadata версии
+GET /api/v1/workspaces/{id}/portfolios/{portfolioId}/points  точки с pagination
 ```
 
 API не применяет migrations автоматически. Это отдельный управляемый шаг перед
@@ -119,7 +123,8 @@ npm test
   isolation для ролей `Admin`, `Researcher`, `Viewer`.
 
 `MetaEngine.PostgresIntegrationTests` применяет настоящие migrations, выполняет
-bootstrap владельца, CSRF-login и чтение workspace через API. Локально тест
+bootstrap владельца, CSRF-login, импорт/дедупликацию портфеля и чтение workspace
+через API. Локально тест
 пропускается без отдельной test connection string; в GitHub Actions PostgreSQL
 service и переменная окружения обязательны.
 
@@ -153,7 +158,7 @@ Migrations находятся в
 
 - UI входа и управления участниками workspace;
 - восстановление пароля, 2FA/OIDC и rate limiting;
-- CRUD/API workflows для production-сущностей;
+- API workflows для пресетов, стратегий, расчетов и jobs;
 - production calculation engine;
 - очередь заданий;
 - OpenAPI;

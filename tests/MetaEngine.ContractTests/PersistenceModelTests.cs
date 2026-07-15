@@ -96,14 +96,34 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
+    public void Portfolio_checksums_are_unique_inside_a_workspace()
+    {
+        using var dbContext = CreateDbContext();
+        var portfolio = dbContext.Model.FindEntityType(typeof(PortfolioVersion));
+
+        Assert.NotNull(portfolio);
+        Assert.Contains(
+            portfolio.GetIndexes(),
+            index => index.IsUnique &&
+                index.Properties.Select(property => property.Name).SequenceEqual(
+                    [nameof(PortfolioVersion.WorkspaceId), nameof(PortfolioVersion.SourceChecksum)]));
+        Assert.Contains(
+            portfolio.GetIndexes(),
+            index => index.IsUnique &&
+                index.Properties.Select(property => property.Name).SequenceEqual(
+                    [nameof(PortfolioVersion.WorkspaceId), nameof(PortfolioVersion.SeriesChecksum)]));
+    }
+
+    [Fact]
     public void Platform_migrations_are_registered_for_the_current_context()
     {
         using var dbContext = CreateDbContext();
 
         var migrations = dbContext.Database.GetMigrations().ToArray();
 
-        Assert.Equal(2, migrations.Length);
+        Assert.Equal(3, migrations.Length);
         Assert.Contains(migrations, migration => migration.EndsWith("_InitialProductionSchema"));
         Assert.Contains(migrations, migration => migration.EndsWith("_AddIdentityAndWorkspaceSecurity"));
+        Assert.Contains(migrations, migration => migration.EndsWith("_AddPortfolioImportChecksums"));
     }
 }

@@ -488,6 +488,9 @@ golden fixtures.
   HttpOnly cookie + CSRF, роли workspace, изоляция чтения workspace и API tests;
 - P1d: PostgreSQL закреплен на major 16, добавлен GitHub Actions CI с migration
   gate, NuGet audit и real-PostgreSQL bootstrap/login/workspace integration test;
+- P2a: добавлен workspace-scoped canonical `timestamp,diff` importer,
+  неизменяемые версии, raw/series checksum-дедупликация, paginated points и
+  PostgreSQL integration coverage;
 - управление участниками, password recovery/2FA, остальные API workflows,
   очередь и production-формулы еще не реализованы.
 

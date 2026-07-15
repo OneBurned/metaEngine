@@ -42,6 +42,7 @@ docs/PRODUCTION_READINESS.md
                            Production architecture, migration and release gates
 docs/PRODUCTION_SCAFFOLD.md
                            Current .NET scaffold, API, Worker and run guide
+docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -172,6 +173,14 @@ NuGet security audit, all .NET tests, the Node.js reference suite, and a real
 PostgreSQL bootstrap/login/workspace integration test. The integration test is
 conditionally skipped on developer machines without a dedicated test database,
 but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
+
+The first production calculation-engine slice is portfolio persistence. The API
+accepts only canonical UTF-8 `timestamp,diff` CSV at this stage, normalizes UTC
+ordering, rejects duplicate timestamps, reports gaps, and stores immutable
+versions with raw and normalized-series SHA-256 checksums. Re-importing the same
+file or semantic series returns the existing version. This intentionally does
+not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
+upload. See `docs/PORTFOLIO_IMPORT.md`.
 
 The server prints:
 
