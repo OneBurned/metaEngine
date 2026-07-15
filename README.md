@@ -24,11 +24,15 @@ docs/PRODUCTION_READINESS.md
                            архитектура, миграция и критерии допуска в production
 docs/PRODUCTION_SCAFFOLD.md
                            текущий .NET-каркас, API, Worker и запуск
+docs/PRODUCTION_DATABASE.md
+                           PostgreSQL, миграции и модель хранения production
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
 
-> Важно: это пока **файловый прототип** на Node.js для проверки логики. По ТЗ production-версия позже должна быть на ASP.NET Core / C# / PostgreSQL.
+> Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
+> Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
+> но расчетные формулы и пользовательский интерфейс на него еще не перенесены.
 
 ## Что уже умеет локальная версия
 
@@ -165,6 +169,10 @@ dotnet test MetaEngine.slnx
 ### Проверить production scaffold
 
 ```bash
+cp -n .env.example .env
+docker compose up -d postgres
+dotnet tool restore
+dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
 dotnet build MetaEngine.slnx
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
@@ -176,6 +184,11 @@ http://localhost:5080/health/live
 http://localhost:5080/health/ready
 http://localhost:5080/api/v1/strategy-types
 ```
+
+`/health/live` проверяет процесс API. `/health/ready` возвращает `ready` только
+когда PostgreSQL доступен и все миграции применены. Команда
+`docker compose down` останавливает локальную базу без удаления данных.
+Не используй `docker compose down -v`, если данные нужно сохранить.
 
 ### Проверить синтаксис основных файлов
 

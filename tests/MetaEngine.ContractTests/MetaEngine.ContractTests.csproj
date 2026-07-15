@@ -22,6 +22,8 @@
     <ProjectReference Include="..\..\src\MetaEngine.Strategies.Abstractions\MetaEngine.Strategies.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\MetaEngine.Strategies.Rsi\MetaEngine.Strategies.Rsi.csproj" />
     <ProjectReference Include="..\..\src\MetaEngine.Strategies.MddMeanReversion\MetaEngine.Strategies.MddMeanReversion.csproj" />
+    <ProjectReference Include="..\..\src\MetaEngine.Domain\MetaEngine.Domain.csproj" />
+    <ProjectReference Include="..\..\src\MetaEngine.Infrastructure\MetaEngine.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

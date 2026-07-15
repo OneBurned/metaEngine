@@ -1,6 +1,6 @@
 # Production scaffold
 
-Этот документ описывает первый .NET 10 каркас production-версии MetaEngine.
+Этот документ описывает .NET 10 каркас production-версии MetaEngine.
 Node.js local lab остается reference-реализацией формул и продолжает запускаться
 через `npm start`.
 
@@ -20,7 +20,7 @@ tests/MetaEngine.ContractTests
 ```
 
 API и Worker являются отдельными процессами. Оба используют общий каталог
-модулей стратегий.
+модулей стратегий и общую PostgreSQL persistence infrastructure.
 
 ## Статус стратегий
 
@@ -50,6 +50,10 @@ API не должен создавать впечатление, что неза
 Локальный запуск production scaffold:
 
 ```bash
+cp -n .env.example .env
+docker compose up -d postgres
+dotnet tool restore
+dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
 
@@ -58,12 +62,12 @@ Endpoints:
 ```text
 GET /                         информация о сервисе
 GET /health/live              процесс API работает
-GET /health/ready             каркас готов; зависимости пока отсутствуют
+GET /health/ready             PostgreSQL доступен, migrations применены
 GET /api/v1/strategy-types    descriptors зарегистрированных стратегий
 ```
 
-После подключения PostgreSQL readiness должен проверять базу и migrations, а не
-возвращать готовность без проверки зависимостей.
+API не применяет migrations автоматически. Это отдельный управляемый шаг перед
+запуском новой версии приложения.
 
 ## Worker
 
@@ -91,7 +95,20 @@ npm test
 - стабильный порядок каталога;
 - наличие параметров и выходов каждого descriptor;
 - отсутствие legacy `baseline/upperLevel/lowerLevel` в RSI descriptor;
-- доступность общих Node.js/C# golden fixtures.
+- доступность общих Node.js/C# golden fixtures;
+- состав production-таблиц, версионность мета-стратегии и канонический формат
+  result artifact `timestamp,diff`.
+
+## PostgreSQL
+
+Первая migration находится в
+`src/MetaEngine.Infrastructure/Persistence/Migrations`. Схема хранит
+пользователей, workspace membership, версии портфелей и пресетов,
+мета-стратегии, calculation runs, optimization jobs/top-N, audit events и
+неизменяемые result artifacts.
+
+Полное описание схемы и безопасной работы с migrations находится в
+`docs/PRODUCTION_DATABASE.md`.
 
 ## Добавление новой стратегии
 
@@ -109,11 +126,10 @@ npm test
 
 ## Что еще не реализовано
 
-- PostgreSQL и migrations;
-- пользователи, workspaces и авторизация;
+- авторизация и проверка workspace на API endpoint;
+- CRUD/API workflows для production-сущностей;
 - production calculation engine;
 - очередь заданий;
-- сохранение результатов;
 - OpenAPI;
 - Plotly contracts;
 - Docker images и CI/CD.

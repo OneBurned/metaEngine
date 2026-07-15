@@ -5,3 +5,5 @@ bin/
 obj/
 .vs/
 TestResults/
+.env
+!.env.example

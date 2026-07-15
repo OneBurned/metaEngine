@@ -146,13 +146,19 @@ npm start
 Production scaffold commands:
 
 ```bash
+cp -n .env.example .env
+docker compose up -d postgres
+dotnet tool restore
+dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
 dotnet build MetaEngine.slnx
 dotnet test MetaEngine.slnx
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
 
-Port `5080` exposes health endpoints and `/api/v1/strategy-types`. It is not yet
-a replacement for the Node.js calculation API.
+Port `5080` exposes health endpoints and `/api/v1/strategy-types`.
+`/health/ready` requires PostgreSQL connectivity and an up-to-date migration
+history. The production scaffold is not yet a replacement for the Node.js
+calculation API.
 
 The server prints:
 

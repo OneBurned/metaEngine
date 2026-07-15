@@ -19,6 +19,8 @@
    - `docs/PRODUCTION_READINESS.md` — архитектура, миграция и release gates
      production-версии;
    - `docs/PRODUCTION_SCAFFOLD.md` — текущий .NET-каркас, API и Worker.
+   - `docs/PRODUCTION_DATABASE.md` — PostgreSQL, миграции, модель хранения и
+     локальный запуск базы.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
 обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,

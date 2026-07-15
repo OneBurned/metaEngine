@@ -481,7 +481,10 @@ golden fixtures.
 - P0: созданы общие golden fixtures и Node.js contract tests;
 - P1a: создан .NET 10 solution, отдельные API/Worker, общий контракт модулей,
   descriptors RSI/MDD и первые .NET contract tests;
-- PostgreSQL, auth, workspaces, очередь и production-формулы в P1a не входят.
+- P1b: добавлены PostgreSQL/EF Core, первая migration, модель users/workspaces,
+  версионных портфелей, пресетов и мета-стратегий, jobs и канонических
+  `timestamp,diff` artifacts; readiness проверяет БД и migrations;
+- auth, API workflows, очередь и production-формулы еще не реализованы.
 
 Каждый этап оформляется отдельным согласованным PR или небольшой серией PR.
 Production deploy выполняется отдельным действием после merge и явного
