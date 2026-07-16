@@ -165,6 +165,77 @@ actual capacity. Worker logs include a container-derived worker ID. The current
 web client remains a separate deployment concern. See
 `docs/PRODUCTION_DEPLOYMENT.md`.
 
+## 1a. User-facing project model and ports
+
+The user thinks of MetaEngine as one current project: “how it looks and works
+now”. Do not frame the local lab and production UI as two different products
+unless that distinction is necessary for a specific check. The useful framing is:
+
+```text
+MetaEngine = one project
+3000       = main current user interface
+5080       = backend API/health, not a page the user normally opens
+5173       = old technical lab/reference inside the same project
+```
+
+Default rule: when the user asks to check the project, inspect a feature, or
+review a PR visually, send them to the production React UI on port `3000` unless
+the task explicitly concerns the old Node.js local lab. The production UI is the
+path for sign-in, workspaces, imported production data, PostgreSQL persistence,
+Worker-backed calculations, RSI/MDD strategy runs, optimization jobs, saved
+strategies and production presets.
+
+The local lab on `5173` remains useful, but it is not the main user-facing
+development target. Use it when:
+
+- a task explicitly changes the old file-based prototype;
+- a formula/reference behavior must be checked quickly;
+- Node.js reference and C# production results need to be compared;
+- old CSV/preset/strategy behavior is being migrated or preserved;
+- a regression only exists in the legacy local workflow.
+
+If `5173` is needed, explain the reason in product terms before giving commands.
+Do not make the user choose between ports. The agent chooses the correct check
+path and writes concrete commands.
+
+For production UI checks, the user usually needs two terminals:
+
+```bash
+# Terminal 1: branch, tests, backend/API/Worker/PostgreSQL
+cd /workspaces/metaEngine
+git fetch
+gh pr checkout <PR_NUMBER>
+git status
+git log --oneline --decorate -5
+dotnet test MetaEngine.slnx
+npm test
+docker compose up -d --build
+curl -s http://localhost:5080/health/ready
+
+# Terminal 2: frontend
+cd /workspaces/metaEngine/src/MetaEngine.Web
+npm install
+VITE_API_TARGET=http://localhost:5080 npm run dev
+```
+
+Then open Codespaces port `3000`. Port `5080` is checked with `curl`; port
+`5173` is not opened unless the task explicitly says the old local lab must be
+checked.
+
+For local-lab-only checks, use the shorter legacy flow:
+
+```bash
+cd /workspaces/metaEngine
+git fetch
+gh pr checkout <PR_NUMBER>
+git status
+git log --oneline --decorate -5
+npm test
+npm start
+```
+
+Then open Codespaces port `5173`.
+
 ## 2. User communication rules
 
 The user is not a coder. Communicate simply. Do not explain implementation details with variable names, object fields, or code-like assignments unless the user explicitly asks for code-level detail. Explain behavior in product/UI terms instead.
