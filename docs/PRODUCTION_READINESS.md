@@ -15,7 +15,7 @@ Production MVP должен позволять пользователю:
 - загружать ряды доходностей портфолио;
 - создавать пресеты с весами и периодами;
 - рассчитывать `diff`, `accum`, `hwm`, `dd`, `mdd`;
-- применять RSI и MDD Mean Reversion;
+- применять RSI, MDD Mean Reversion и MDDGrid;
 - запускать оптимизацию на нескольких последовательных семплах;
 - останавливать оптимизацию после завершения текущего кандидата;
 - сохранять выбранный результат оптимизации как версионируемую мета-стратегию;
@@ -51,8 +51,8 @@ foundation. TLS, backups, monitoring and release operations remain later work.
 
 ### Реализовано в P5a/P5b
 
-RSI и MDD Mean Reversion выполняются отдельными Worker-запусками и сохраняются
-как неизменяемые strategy results. Сохранённый результат стратегии можно
+RSI, MDD Mean Reversion и MDDGrid выполняются отдельными Worker-запусками и
+сохраняются как неизменяемые strategy results. Сохранённый результат стратегии можно
 добавить в новый пресет рядом с портфелями, задать ему вес и период, а затем
 поставить этот пресет в очередь через production UI. Production UI для
 RSI- и MDD-оптимизаций уже доступен: пользователь задает ranges, samples и
@@ -102,6 +102,7 @@ MetaEngine.Worker        расчеты и оптимизации вне HTTP-п
 MetaEngine.Strategies.Abstractions общий контракт модулей мета-стратегий
 MetaEngine.Strategies.Rsi           модуль RSI
 MetaEngine.Strategies.MddMeanReversion модуль MDD Mean Reversion
+MetaEngine.Strategies.MddGrid       модуль MDDGrid
 MetaEngine.Tests         unit, golden, integration и API tests
 ```
 
@@ -125,7 +126,7 @@ API и worker должны запускаться как отдельные пр
 
 ### Модульный контракт мета-стратегий
 
-RSI и MDD Mean Reversion являются первыми реализациями общего контракта, а не
+RSI, MDD Mean Reversion и MDDGrid являются реализациями общего контракта, а не
 особыми режимами ядра. Новые стратегии должны подключаться отдельными модулями
 без изменения общего API, очереди заданий, хранения результатов и механизма
 семплирования.
@@ -265,6 +266,7 @@ Golden tests должны покрывать:
 - границы `1m`, `5m`, `15m`, `1h`, `1d`, `1M`, `1Y`;
 - RSI, исполнение сигнала со следующей точки и отсутствие lookahead;
 - MDD Mean Reversion, локальный MDD, целевые веса и TP;
+- MDDGrid, добавочные лоты, индивидуальные TP и повторный вход по новому DD-cross;
 - разделение на семплы;
 - Recovery score, сцепленную доходность и фильтры оптимизатора;
 - остановку после текущего кандидата;
@@ -506,7 +508,7 @@ golden fixtures.
 | P2. Calculation engine | Импорт, базовые ряды, пресеты, RSI и MDD с parity tests |
 | P3. Async jobs | Queue, worker, status and immutable artifacts |
 | P4. Production UI | React/TanStack Router, вход, импорт, базовые расчеты и chart brush |
-| P5a. Strategy runs | RSI/MDD runs, saved strategy versions and production UI |
+| P5a. Strategy runs | RSI/MDD/MDDGrid runs, saved strategy versions and production UI |
 | P5b. Strategy presets | Пресеты из портфелей и сохранённых результатов стратегий |
 | P6. Optimizer | Потоковый перебор, кэш семплов, top-N и resource quotas |
 | P7. Staging | Миграция данных, load/security/restore tests и приемка |
@@ -535,7 +537,7 @@ golden fixtures.
 - P2c/P3/P4: добавлены versioned presets, asynchronous base calculations,
   immutable artifacts, React UI для import/calculation/result/comparison и
   запуск пресетов через очередь;
-- P5a/P5b: добавлены RSI/MDD strategy runs, versioned saved strategies и
+- P5a/P5b/P5c: добавлены RSI/MDD/MDDGrid strategy runs, versioned saved strategies и
   пресеты, которые используют сохраненную стратегию как источник;
 - P6: добавлены streamed RSI/MDD optimizations с samples, top-N, filters,
   stop, retry и передачей выбранного candidate в strategy run;
@@ -562,9 +564,9 @@ Production разрешен только если выполнены все ус
 - [ ] Нет данных и секретов в Git или container image.
 - [ ] Все endpoint требуют корректные права workspace.
 - [ ] API и worker работают раздельно.
-- [ ] RSI и MDD Mean Reversion реализуют общий модульный контракт.
-- [ ] Третья тестовая стратегия подключается модулем без изменения общего API,
-      очереди и optimizer engine.
+- [x] RSI, MDD Mean Reversion и MDDGrid реализуют общий модульный контракт.
+- [x] MDDGrid подключена модулем без изменения общего API и очереди; ее
+      optimizer остается отдельным следующим этапом.
 - [ ] Большой optimizer job не создает всю сетку в памяти.
 - [ ] Stop завершает текущего кандидата и сохраняет top-N.
 - [ ] Restart API/worker не теряет состояние jobs.

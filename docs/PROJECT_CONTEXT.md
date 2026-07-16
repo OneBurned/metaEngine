@@ -8,7 +8,7 @@ MetaEngine currently contains two parallel parts:
 
 - a **local file-based Node.js calculation lab** for validating formulas and UI;
 - a working **.NET 10 production platform** with separate API, PostgreSQL,
-  Worker replicas, React UI and modular RSI/MDD strategies.
+  Worker replicas, React UI and modular RSI/MDD/MDDGrid strategies.
 
 The local lab implementation is intentionally small:
 
@@ -27,9 +27,9 @@ The local lab is not the final production stack. The working production path is:
 
 The Node.js local lab remains useful for manual formula and CSV validation. The
 production platform handles canonical `timestamp,diff` imports, immutable
-versions, base/strategy calculations, RSI/MDD optimizations and saved strategy
-results. `docs/ARCHITECTURE.md` is the concise source of truth for its current
-component and data flow.
+versions, base/strategy calculations, manual RSI/MDD/MDDGrid runs, RSI/MDD
+optimizations and saved strategy results. `docs/ARCHITECTURE.md` is the concise
+source of truth for its current component and data flow.
 
 ## Documentation map
 
@@ -39,6 +39,8 @@ AGENTS.md                 Required workflow rules for AI agents
 docs/ARCHITECTURE.md      Current production architecture and local lab boundary
 docs/PROJECT_CONTEXT.md   Full project context and product decisions
 docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
+docs/strategies/MDD_GRID.md
+                           Production MDDGrid calculation and TP contract
 docs/CSV_EXPORT.md        CSV export behavior and API
 docs/TIMEFRAMES.md        Timeframe conversion and histogram chart mode
 docs/CALCULATION_CONTRACTS.md
@@ -93,20 +95,32 @@ Router and shadcn/ui. It uses a same-origin development proxy to the API so
 cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
 queue and observe base calculations, and inspect saved results with interactive
-result and comparison charts. The UI also exposes manual RSI/MDD calculations,
-strategy presets and production RSI/MDD optimization with progress, stop and
-result selection.
+result and comparison charts. The UI also exposes manual RSI/MDD/MDDGrid
+calculations, strategy presets and production RSI/MDD optimization with
+progress, stop and result selection.
 See `docs/PRODUCTION_UI.md`.
 
 ## Production P5a: strategy runs
 
-RSI and MDD Mean Reversion are now executable production modules. A strategy
-run references one completed immutable base run, is processed by the Worker,
-and saves a canonical `timestamp,diff` `StrategyResult` artifact. A completed
-run can be saved as a versioned strategy configuration. The UI exposes manual
-RSI/MDD calculation and saved configurations; optimization and use of saved
-strategy artifact points separate from portfolio/preset points, avoiding
-cross-product queries on long source series. See `docs/PRODUCTION_STRATEGIES.md`.
+RSI, MDD Mean Reversion and MDDGrid are executable production modules. A
+strategy run references one completed immutable base run, is processed by the
+Worker, and saves a canonical `timestamp,diff` `StrategyResult` artifact. A
+completed run can be saved as a versioned strategy configuration. The UI
+exposes manual RSI/MDD/MDDGrid calculation and saved configurations;
+optimization and use of saved strategy artifact points separate from
+portfolio/preset points, avoiding cross-product queries on long source series.
+See `docs/PRODUCTION_STRATEGIES.md`.
+
+## Production P5c: MDDGrid
+
+`MDDGrid` adds independent incremental lots to the production strategy module
+catalog. Every lot has a source DD entry level, additional weight and its own
+TP metric: source DD/HWM or MDDGrid DD/HWM. The total configured entry weight
+is capped by `maxTotalWeight`. A lot that closes by TP is immediately armed for
+the next cycle, but it can re-enter only after source DD first moves above that
+lot's level and then crosses it again. MDDGrid is available for manual runs,
+charts and saved strategy versions; its optimizer remains intentionally out of
+scope until those TP variants are validated. See `docs/strategies/MDD_GRID.md`.
 
 ## Production P5b: presets with strategy sources
 
@@ -926,6 +940,17 @@ MDD Mean Reversion:
 - the MDD result table includes `Local Accum`, which starts at `0%` on DD recovery and makes the TP trigger visible when it reaches the configured TP;
 - `TP 0%` closes after recovery from the next point;
 - if DD returns below `0` before TP, TP waiting is cancelled and grid logic resumes.
+
+Production MDDGrid:
+
+- type: `mdd_grid`;
+- uses incremental weights, so simultaneous open lots form the sum of their
+  configured weights;
+- gives every entry its own TP metric and TP value;
+- supports source DD/HWM and MDDGrid DD/HWM as the TP metric;
+- arms a closed lot immediately, but requires a fresh source DD crossing before
+  it opens again;
+- is manually calculated and saved in production; it is not optimized yet.
 
 Strategy tables and current-strategy CSV export follow the IN/OUT table convention: `IN ...` columns are input values from the base calculation, while `OUT ...` columns are the strategy result. Saved strategy configs can be applied back into block 5 with **Применить**; CSV exports the current calculated strategy result table, not saved JSON configs.
 

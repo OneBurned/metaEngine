@@ -67,6 +67,9 @@ rsi_strategy.json
 mdd_mean_reversion_strategy.json
   уровни DD, целевые веса, восстановление, Local Accum и TP
 
+mdd_grid_strategy.json
+  добавочные лоты, независимый TP и повторный вход после нового DD-cross
+
 preset_calculation.json
   взвешенные portfolio diff, исключающая верхняя граница периода и пропуск = 0
 ```

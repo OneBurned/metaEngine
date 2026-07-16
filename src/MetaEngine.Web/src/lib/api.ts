@@ -98,7 +98,7 @@ export type CalculationRun = {
 }
 
 export type StrategyType = {
-  strategyType: "rsi" | "mdd_mean_reversion"
+  strategyType: string
   displayName: string
   schemaVersion: number
   isProductionCalculationAvailable: boolean

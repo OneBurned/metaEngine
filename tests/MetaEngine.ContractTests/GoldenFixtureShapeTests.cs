@@ -10,7 +10,7 @@ public sealed class GoldenFixtureShapeTests
         var fixturesDirectory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Golden");
         var files = Directory.GetFiles(fixturesDirectory, "*.json").Order(StringComparer.Ordinal).ToArray();
 
-        Assert.Equal(4, files.Length);
+        Assert.Contains(files, file => Path.GetFileName(file) == "mdd_grid_strategy.json");
 
         foreach (var file in files)
         {

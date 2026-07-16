@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "contractVersion": "1.0",
+  "id": "mdd_grid_reentry_after_take_profit",
+  "kind": "trading_strategy",
+  "description": "MDDGrid uses incremental weights and reopens a closed lot only after a fresh source DD cross.",
+  "absoluteTolerance": 1e-12,
+  "input": {
+    "timestamps": [1704067200000, 1704070800000, 1704074400000, 1704078000000, 1704081600000, 1704085200000, 1704088800000],
+    "diffs": [0, -0.2, 0.1, -0.1, 0.15, -0.05, 0.01],
+    "step": "1h",
+    "config": {
+      "type": "mdd_grid",
+      "maxTotalWeight": 0.2,
+      "levels": [
+        {
+          "drawdown": -0.1,
+          "weight": 0.2,
+          "exitMetric": "source_dd",
+          "takeProfit": 0.05
+        }
+      ]
+    }
+  },
+  "expected": {
+    "type": "mdd_grid",
+    "resultDiffs": [0, 0, 0.02, 0, 0, 0, 0.002],
+    "summary": {
+      "points": 7,
+      "finalAccum": 0.02204,
+      "hwm": 0.02204,
+      "maxDrawdown": 0,
+      "buyCount": 2,
+      "sellCount": 1
+    }
+  }
+}

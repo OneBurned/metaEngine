@@ -1,13 +1,14 @@
 # Production strategies
 
-P5a makes RSI and MDD Mean Reversion executable in the production runtime.
-Both strategies validate parameters, prepare one immutable source series and
-calculate canonical `timestamp,diff` results.
+RSI, MDD Mean Reversion and MDDGrid are executable in the production runtime.
+Every strategy validates parameters, prepares one immutable source series and
+calculates canonical `timestamp,diff` results.
 
 ## Workflow
 
 1. Complete a base calculation for a portfolio or preset.
-2. Queue RSI or MDD Mean Reversion against that exact completed base run.
+2. Queue RSI, MDD Mean Reversion or MDDGrid against that exact completed base
+   run.
 3. The Worker stores a `StrategyResult` artifact and summary metrics.
 4. Optionally save the completed run as a versioned strategy configuration.
 
@@ -47,6 +48,12 @@ MDD parameters use decimal values: `drawdown: -0.1` is -10%, `weight: 0.1`
 is 10%, and `takeProfit: 0.01` is 1%. Target weights must be nondecreasing;
 equal weights are allowed.
 
+MDDGrid parameters use the same decimal scale. Each `levels` item has its own
+incremental `weight`, `exitMetric` and `takeProfit`; `maxTotalWeight` caps the
+sum of configured entry weights. Available exit metrics are `source_dd`,
+`strategy_dd`, `source_hwm` and `strategy_hwm`. See
+`docs/strategies/MDD_GRID.md` for the TP and re-entry rules.
+
 Save body example:
 
 ```json
@@ -74,8 +81,10 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 
 ## UI
 
-The **Strategies** page selects only completed base runs, exposes manual RSI
-and MDD parameters, follows queued/running status, displays the saved strategy
-result and saves its configuration. Its **Optimization** tab provides the full
-production RSI/MDD workflow: queue, progress, stop, sort and apply. The
-**Presets** page can use that saved result alongside portfolio sources.
+The **Strategies** page selects only completed base runs, exposes manual RSI,
+MDD and MDDGrid parameters, follows queued/running status, displays the saved
+strategy result and saves its configuration. Its **Optimization** tab provides
+the full production RSI/MDD workflow: queue, progress, stop, sort and apply.
+MDDGrid optimization is intentionally deferred until its manual TP rules have
+been validated. The **Presets** page can use any saved strategy result alongside
+portfolio sources.

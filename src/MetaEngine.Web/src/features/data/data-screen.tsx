@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell"
+import { strategyTypeLabel } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -156,7 +157,7 @@ function PortfolioLibrary({ items, isLoading }: { items: Portfolio[]; isLoading:
 }
 
 function StrategyLibrary({ items, isLoading }: { items: SavedStrategy[]; isLoading: boolean }) {
-  return <LibraryTable><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden sm:table-cell">Источник</TableHead><TableHead className="hidden lg:table-cell">Сохранена</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={4} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={4} text="Сохранённых стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">v{item.version}</div></TableCell><TableCell><Badge variant="outline">{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</Badge></TableCell><TableCell className="hidden sm:table-cell">{item.sourceType === "portfolio" ? "Портфолио" : "Пресет"}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(item.createdAt)}</TableCell></TableRow>)}</TableBody></LibraryTable>
+  return <LibraryTable><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden sm:table-cell">Источник</TableHead><TableHead className="hidden lg:table-cell">Сохранена</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={4} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={4} text="Сохранённых стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">v{item.version}</div></TableCell><TableCell><Badge variant="outline">{strategyTypeLabel(item.strategyType)}</Badge></TableCell><TableCell className="hidden sm:table-cell">{item.sourceType === "portfolio" ? "Портфолио" : "Пресет"}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(item.createdAt)}</TableCell></TableRow>)}</TableBody></LibraryTable>
 }
 
 function PresetLibrary({ items, isLoading }: { items: Preset[]; isLoading: boolean }) {

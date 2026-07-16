@@ -4,6 +4,10 @@ P6 adds production optimizers for RSI and MDD Mean Reversion: the
 PostgreSQL/Worker workflow and their screens in the React client. They are
 separate from the local Node.js optimizer.
 
+MDDGrid is intentionally excluded from P6 for now. Its independent per-level
+TP rules are available in manual strategy runs first and need product
+validation before defining an optimizer search space.
+
 ## Current scope
 
 - An optimization starts from a completed **base calculation**. Its immutable

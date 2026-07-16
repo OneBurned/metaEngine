@@ -1,4 +1,5 @@
 using MetaEngine.Strategies.Abstractions;
+using MetaEngine.Strategies.MddGrid;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
 
@@ -9,6 +10,7 @@ public sealed class StrategyCatalogTests
     private static StrategyModuleCatalog CreateCatalog() => new(
     [
         new RsiStrategyModuleDescriptor(),
+        new MddGridStrategyModuleDescriptor(),
         new MddMeanReversionStrategyModuleDescriptor()
     ]);
 
@@ -18,14 +20,17 @@ public sealed class StrategyCatalogTests
         var catalog = CreateCatalog();
 
         Assert.Equal(
-            ["mdd_mean_reversion", "rsi"],
+            ["mdd_grid", "mdd_mean_reversion", "rsi"],
             catalog.Descriptors.Select(descriptor => descriptor.StrategyType));
         Assert.All(catalog.Descriptors, descriptor => Assert.Equal(1, descriptor.SchemaVersion));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Parameters));
-        Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.Optimization.Supported));
-        Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Optimization.Controls));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Outputs));
         Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.IsProductionCalculationAvailable));
+        Assert.All(catalog.Descriptors.Where(descriptor => descriptor.StrategyType != "mdd_grid"), descriptor =>
+        {
+            Assert.True(descriptor.Optimization.Supported);
+            Assert.NotEmpty(descriptor.Optimization.Controls);
+        });
     }
 
     [Fact]
@@ -59,5 +64,16 @@ public sealed class StrategyCatalogTests
         Assert.Equal(
             "percent_points",
             descriptor.Optimization.Controls.Single(control => control.Key == "takeProfit").Unit);
+    }
+
+    [Fact]
+    public void Mdd_grid_descriptor_exposes_independent_lot_configuration_without_an_optimizer()
+    {
+        var descriptor = CreateCatalog().GetRequired("mdd_grid");
+
+        Assert.False(descriptor.Optimization.Supported);
+        Assert.Empty(descriptor.Optimization.Controls);
+        Assert.Contains(descriptor.Parameters, parameter => parameter.Key == "maxTotalWeight");
+        Assert.Contains(descriptor.Outputs, output => output.Key == "strategy_hwm");
     }
 }

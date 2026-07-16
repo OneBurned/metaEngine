@@ -25,6 +25,22 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     [Fact]
+    public async Task Strategy_catalog_exposes_manual_mdd_grid_without_optimization()
+    {
+        using var client = factory.CreateClient();
+        var response = await client.GetFromJsonAsync<JsonElement>("/api/v1/strategy-types");
+
+        var item = response.GetProperty("items")
+            .EnumerateArray()
+            .Single(candidate => candidate.GetProperty("strategyType").GetString() == "mdd_grid");
+
+        Assert.Equal("MDDGrid", item.GetProperty("displayName").GetString());
+        Assert.True(item.GetProperty("isProductionCalculationAvailable").GetBoolean());
+        Assert.False(item.GetProperty("isProductionOptimizationAvailable").GetBoolean());
+        Assert.False(item.GetProperty("optimization").GetProperty("supported").GetBoolean());
+    }
+
+    [Fact]
     public async Task Admin_can_queue_process_and_read_a_portfolio_calculation()
     {
         var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);

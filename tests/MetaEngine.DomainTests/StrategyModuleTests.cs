@@ -1,5 +1,6 @@
 using System.Text.Json;
 using MetaEngine.Strategies.Abstractions;
+using MetaEngine.Strategies.MddGrid;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
 
@@ -129,6 +130,152 @@ public sealed class StrategyModuleTests
         var fullResult = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
 
         AssertSummaryEqual(summary, fullResult.Summary);
+    }
+
+    [Fact]
+    public async Task Mdd_grid_opens_every_level_crossed_by_a_gap_and_uses_incremental_weights()
+    {
+        var module = new MddGridStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.3),
+            new StrategySourcePoint(3, 0.1)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {
+              "maxTotalWeight": 0.3,
+              "levels": [
+                { "drawdown": -0.1, "weight": 0.1, "exitMetric": "source_dd", "takeProfit": 1 },
+                { "drawdown": -0.2, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 1 }
+              ]
+            }
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        Assert.Equal(0, result.Rows[1].Diff);
+        AssertClose(0.03, result.Rows[2].Diff);
+        Assert.Equal(2, result.Summary.BuyCount);
+    }
+
+    [Fact]
+    public async Task Mdd_grid_rearms_a_closed_lot_for_a_fresh_source_drawdown_cross()
+    {
+        var module = new MddGridStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.2),
+            new StrategySourcePoint(3, 0.1),
+            new StrategySourcePoint(4, -0.1),
+            new StrategySourcePoint(5, 0.15),
+            new StrategySourcePoint(6, -0.05),
+            new StrategySourcePoint(7, 0.01)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {
+              "maxTotalWeight": 0.2,
+              "levels": [
+                { "drawdown": -0.1, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 0.05 }
+              ]
+            }
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        AssertClose(0.02, result.Rows[2].Diff);
+        Assert.Equal(0, result.Rows[3].Diff);
+        AssertClose(0.002, result.Rows[6].Diff);
+        Assert.Equal(2, result.Summary.BuyCount);
+        Assert.Equal(1, result.Summary.SellCount);
+    }
+
+    [Fact]
+    public async Task Mdd_grid_matches_the_shared_golden_contract()
+    {
+        var fixturePath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Fixtures",
+            "Golden",
+            "mdd_grid_strategy.json");
+        using var fixture = JsonDocument.Parse(File.ReadAllText(fixturePath));
+        var root = fixture.RootElement;
+        var input = root.GetProperty("input");
+        var timestamps = input.GetProperty("timestamps").EnumerateArray().Select(value => value.GetInt64()).ToArray();
+        var diffs = input.GetProperty("diffs").EnumerateArray().Select(value => value.GetDouble()).ToArray();
+        var source = timestamps.Select((timestamp, index) => new StrategySourcePoint(timestamp, diffs[index])).ToArray();
+
+        var module = new MddGridStrategyModule();
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, input.GetProperty("config"), CancellationToken.None);
+        var expected = root.GetProperty("expected");
+        var expectedDiffs = expected.GetProperty("resultDiffs").EnumerateArray().Select(value => value.GetDouble()).ToArray();
+        var tolerance = root.GetProperty("absoluteTolerance").GetDouble();
+
+        Assert.Equal(expectedDiffs.Length, result.Rows.Count);
+        for (var index = 0; index < expectedDiffs.Length; index++)
+        {
+            Assert.InRange(result.Rows[index].Diff, expectedDiffs[index] - tolerance, expectedDiffs[index] + tolerance);
+        }
+
+        var expectedSummary = expected.GetProperty("summary");
+        Assert.Equal(expectedSummary.GetProperty("points").GetInt32(), result.Rows.Count);
+        AssertClose(expectedSummary.GetProperty("finalAccum").GetDouble(), result.Summary.FinalAccum);
+        AssertClose(expectedSummary.GetProperty("hwm").GetDouble(), result.Summary.HighWaterMark);
+        AssertClose(expectedSummary.GetProperty("maxDrawdown").GetDouble(), result.Summary.MaxDrawdown);
+        Assert.Equal(expectedSummary.GetProperty("buyCount").GetInt32(), result.Summary.BuyCount);
+        Assert.Equal(expectedSummary.GetProperty("sellCount").GetInt32(), result.Summary.SellCount);
+    }
+
+    [Fact]
+    public async Task Mdd_grid_can_close_a_lot_by_the_meta_strategy_high_water_mark()
+    {
+        var module = new MddGridStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.2),
+            new StrategySourcePoint(3, 0.1),
+            new StrategySourcePoint(4, -0.1)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {
+              "maxTotalWeight": 0.2,
+              "levels": [
+                { "drawdown": -0.1, "weight": 0.2, "exitMetric": "strategy_hwm", "takeProfit": 0.01 }
+              ]
+            }
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        AssertClose(0.02, result.Rows[2].Diff);
+        Assert.Equal(1, result.Summary.SellCount);
+        Assert.Equal(0, result.Rows[3].Diff);
+    }
+
+    [Fact]
+    public void Mdd_grid_rejects_entry_weights_above_the_total_weight_cap()
+    {
+        var module = new MddGridStrategyModule();
+        using var parameters = JsonDocument.Parse("""
+            {
+              "maxTotalWeight": 1,
+              "levels": [
+                { "drawdown": -0.1, "weight": 0.6, "exitMetric": "source_dd", "takeProfit": 0.01 },
+                { "drawdown": -0.2, "weight": 0.6, "exitMetric": "source_dd", "takeProfit": 0.01 }
+              ]
+            }
+            """);
+
+        var validation = module.ValidateParameters(parameters.RootElement);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Errors, error => error.Path == "levels.weight");
     }
 
     [Fact]

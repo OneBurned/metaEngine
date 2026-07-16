@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell"
-import { calculationDisplayName } from "@/features/calculations/run-presentation"
+import { calculationDisplayName, strategyTypeLabel } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,6 +38,8 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { toast } from "sonner"
 
 type MddLevel = { drawdown: number; weight: number }
+type MddGridExitMetric = "source_dd" | "strategy_dd" | "source_hwm" | "strategy_hwm"
+type MddGridLevel = MddLevel & { exitMetric: MddGridExitMetric; takeProfit: number }
 
 const defaultLevels: MddLevel[] = [
   { drawdown: 10, weight: 10 },
@@ -46,6 +48,21 @@ const defaultLevels: MddLevel[] = [
   { drawdown: 40, weight: 40 },
   { drawdown: 50, weight: 50 },
 ]
+
+const defaultMddGridLevels: MddGridLevel[] = [
+  { drawdown: 10, weight: 10, exitMetric: "source_dd", takeProfit: 5 },
+  { drawdown: 20, weight: 15, exitMetric: "source_dd", takeProfit: 5 },
+  { drawdown: 30, weight: 20, exitMetric: "source_dd", takeProfit: 5 },
+  { drawdown: 40, weight: 25, exitMetric: "source_dd", takeProfit: 5 },
+  { drawdown: 50, weight: 30, exitMetric: "source_dd", takeProfit: 5 },
+]
+
+const exitMetricLabels: Record<MddGridExitMetric, string> = {
+  source_dd: "DD источника",
+  strategy_dd: "DD MDDGrid",
+  source_hwm: "HWM источника",
+  strategy_hwm: "HWM MDDGrid",
+}
 
 const chartConfig = {
   accum: { label: "Доходность", color: "#2563eb" },
@@ -70,6 +87,8 @@ export function StrategyScreen() {
   const [sellLevel, setSellLevel] = useState(70)
   const [takeProfit, setTakeProfit] = useState(1)
   const [levels, setLevels] = useState<MddLevel[]>(defaultLevels)
+  const [mddGridLevels, setMddGridLevels] = useState<MddGridLevel[]>(defaultMddGridLevels)
+  const [mddGridMaxTotalWeight, setMddGridMaxTotalWeight] = useState(100)
   const [selectedRunId, setSelectedRunId] = useState("")
   const [selectedRun, setSelectedRun] = useState<CalculationRunDetails | null>(null)
   const [points, setPoints] = useState<PortfolioPoint[]>([])
@@ -142,7 +161,17 @@ export function StrategyScreen() {
     try {
       const parameters = strategyType === "rsi"
         ? { rsiPeriod, buyLevel, sellLevel }
-        : { levels: levels.map((level) => ({ drawdown: -Math.abs(level.drawdown) / 100, weight: level.weight / 100 })), takeProfit: takeProfit / 100 }
+        : strategyType === "mdd_mean_reversion"
+          ? { levels: levels.map((level) => ({ drawdown: -Math.abs(level.drawdown) / 100, weight: level.weight / 100 })), takeProfit: takeProfit / 100 }
+          : {
+              maxTotalWeight: mddGridMaxTotalWeight / 100,
+              levels: mddGridLevels.map((level) => ({
+                drawdown: -Math.abs(level.drawdown) / 100,
+                weight: level.weight / 100,
+                exitMetric: level.exitMetric,
+                takeProfit: level.takeProfit / 100,
+              })),
+            }
       const queued = await queueStrategyCalculation(workspace.id, sourceRunId, strategyType, parameters)
       setSelectedRunId(queued.id)
       setSaveName("")
@@ -179,7 +208,19 @@ export function StrategyScreen() {
         setRsiPeriod(numberValue(parameters.rsiPeriod, 14))
         setBuyLevel(numberValue(parameters.buyLevel, 30))
         setSellLevel(numberValue(parameters.sellLevel, 70))
-      } else if (Array.isArray(parameters.levels)) {
+      } else if (saved.strategyType === "mdd_grid" && Array.isArray(parameters.levels)) {
+        setMddGridLevels(parameters.levels.map((level) => {
+          const item = level as Record<string, unknown>
+          const exitMetric = item.exitMetric
+          return {
+            drawdown: Math.abs(numberValue(item.drawdown, -0.1) * 100),
+            weight: numberValue(item.weight, 0.1) * 100,
+            exitMetric: exitMetric === "strategy_dd" || exitMetric === "source_hwm" || exitMetric === "strategy_hwm" ? exitMetric : "source_dd",
+            takeProfit: numberValue(item.takeProfit, 0.05) * 100,
+          }
+        }))
+        setMddGridMaxTotalWeight(numberValue(parameters.maxTotalWeight, 1) * 100)
+      } else if (saved.strategyType === "mdd_mean_reversion" && Array.isArray(parameters.levels)) {
         setLevels(parameters.levels.map((level) => {
           const item = level as Record<string, unknown>
           return { drawdown: Math.abs(numberValue(item.drawdown, -0.1) * 100), weight: numberValue(item.weight, 0.1) * 100 }
@@ -237,13 +278,13 @@ export function StrategyScreen() {
               <TabsContent value="manual" className="mt-5">
                 <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
                   <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
-                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field>
                   <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
-                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
+                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : strategyType === "mdd_mean_reversion" ? <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} /> : <MddGridFields levels={mddGridLevels} maxTotalWeight={mddGridMaxTotalWeight} onLevels={setMddGridLevels} onMaxTotalWeight={setMddGridMaxTotalWeight} />}
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
-              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : strategyType === "rsi" ? <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} /> : <Alert className="max-w-2xl rounded-md"><AlertTitle>Оптимизация MDDGrid будет следующим этапом</AlertTitle><AlertDescription>Сначала проверьте ручные расчеты и выберите правила TP, которые дают осмысленные сделки.</AlertDescription></Alert>}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>
@@ -265,6 +306,16 @@ function MddFields({ levels, takeProfit, onLevels, onTakeProfit }: { levels: Mdd
   return <div className="md:col-span-3"><div className="mb-2 flex items-center justify-between"><Label>Уровни входа MDD</Label><Button type="button" variant="outline" size="sm" onClick={() => onLevels([...levels, { drawdown: (levels.at(-1)?.drawdown ?? 0) + 5, weight: levels.at(-1)?.weight ?? 0 }])}><Plus />Уровень</Button></div><div className="grid gap-3 md:grid-cols-3">{levels.map((level, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-md border border-slate-200 p-3"><NumberField label={`DD ${index + 1}, %`} value={level.drawdown} onChange={(value) => update(index, "drawdown", value)} min={0.01} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить уровень"><Trash2 /></Button></div>)}</div><div className="mt-3 max-w-xs"><NumberField label="Выход TP, %" value={takeProfit} onChange={onTakeProfit} min={0} /></div></div>
 }
 
+function MddGridFields({ levels, maxTotalWeight, onLevels, onMaxTotalWeight }: { levels: MddGridLevel[]; maxTotalWeight: number; onLevels: (items: MddGridLevel[]) => void; onMaxTotalWeight: (value: number) => void }) {
+  function update(index: number, patch: Partial<MddGridLevel>) { onLevels(levels.map((level, itemIndex) => itemIndex === index ? { ...level, ...patch } : level)) }
+  function appendLevel() {
+    const previous = levels.at(-1)
+    onLevels([...levels, { drawdown: (previous?.drawdown ?? 0) + 5, weight: previous?.weight ?? 0, exitMetric: previous?.exitMetric ?? "source_dd", takeProfit: previous?.takeProfit ?? 5 }])
+  }
+
+  return <div className="md:col-span-3"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><Label>Независимые лоты MDDGrid</Label><p className="mt-1 text-sm text-slate-500">Каждый вход добавляет вес отдельно и закрывается по своему TP.</p></div><Button type="button" variant="outline" size="sm" onClick={appendLevel}><Plus />Уровень</Button></div><div className="mb-4 max-w-xs"><NumberField label="Макс. общий вес, %" value={maxTotalWeight} onChange={onMaxTotalWeight} min={0.01} /></div><div className="space-y-3">{levels.map((level, index) => <section key={index} className="grid items-end gap-3 rounded-md border border-slate-200 p-4 md:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(180px,1.35fr)_minmax(120px,1fr)_auto]"><NumberField label={`Вход ${index + 1}, DD %`} value={level.drawdown} onChange={(value) => update(index, { drawdown: value })} min={0.01} max={100} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, { weight: value })} min={0} /><Field label="TP считается по"><Select value={level.exitMetric} onValueChange={(value) => update(index, { exitMetric: value as MddGridExitMetric })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(exitMetricLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field><NumberField label="TP, %" value={level.takeProfit} onChange={(value) => update(index, { takeProfit: value })} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Удалить вход ${index + 1}`}><Trash2 /></Button></section>)}</div></div>
+}
+
 function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
   return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Доходность</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{formatDateTime(run.createdAt)}</div></TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
 }
@@ -277,7 +328,7 @@ function StrategyResult({ details, title, points, saveName, onSaveName, onSave, 
   return <div className="space-y-5"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · {details.run.timeframe}</p></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto"><LineChart data={chartPoints}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="dd" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><Line yAxisId="accum" dataKey="accum" stroke="var(--color-accum)" dot={false} strokeWidth={1.75} /><Line yAxisId="dd" dataKey="drawdown" stroke="var(--color-drawdown)" dot={false} strokeWidth={1.5} /></LineChart></ChartContainer></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
 }
 
-function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
+function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{strategyTypeLabel(item.strategyType)}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
 
 function NumberField({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number }) { return <Field label={label}><Input type="number" value={value} min={min} max={max} step="any" onChange={(event) => onChange(Number(event.target.value))} /></Field> }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div> }

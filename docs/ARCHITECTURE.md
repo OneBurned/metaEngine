@@ -13,7 +13,8 @@
 | Node.js local lab | Быстрая ручная проверка формул, CSV и старого интерфейса | Файлы `samples/`, `npm start`, порт `5173` |
 | Production platform | Версионированные данные, асинхронные расчеты, стратегии и оптимизация | ASP.NET Core, PostgreSQL, Worker, React UI |
 
-Production platform уже выполняет расчеты и оптимизацию RSI/MDD. Она пока не
+Production platform уже выполняет расчеты и оптимизацию RSI/MDD, а также
+ручные расчеты MDDGrid. Она пока не
 является публичным интернет-сервисом: UI развертывается отдельно, а TLS,
 reverse proxy, backups, metrics, alerts и release runbook еще не готовы.
 
@@ -31,7 +32,8 @@ flowchart LR
 ```
 
 - **React UI**: вход, импорт данных, пресеты, постановка расчетов, RSI/MDD
-  calculations и optimizations, просмотр результатов и сравнение рядов.
+  calculations и optimizations, ручные MDDGrid calculations, просмотр
+  результатов и сравнение рядов.
 - **API**: workspace authorization, cookie authentication, CSRF, валидация
   запросов и запись неизменяемых версий и задач. API не выполняет тяжелый
   расчет внутри HTTP-запроса.
@@ -56,7 +58,7 @@ flowchart TD
     SS["Saved strategy version"] --> PR
     PV --> BR["Completed base calculation"]
     PR --> BR
-    BR --> SR["RSI or MDD strategy run"]
+    BR --> SR["RSI, MDD Mean Reversion or MDDGrid run"]
     BR --> OJ["RSI or MDD optimization job"]
     OJ --> OR["Top-N optimization result"]
     OR --> SR
@@ -73,17 +75,19 @@ flowchart TD
    сохраненных стратегий.
 2. API ставит base calculation в очередь для выбранного периода и timeframe.
 3. Worker сохраняет summary и immutable artifact.
-4. Для completed base calculation можно поставить RSI или MDD Mean Reversion
-   strategy run либо optimization job.
+4. Для completed base calculation можно поставить RSI, MDD Mean Reversion или
+   MDDGrid strategy run. Optimization job пока доступен для RSI и MDD Mean
+   Reversion.
 5. Optimizer делит источник на последовательные samples, вычисляет кандидаты
    потоково и хранит только top-N aggregate results.
 6. Выбранный optimizer result ставит обычный strategy run в очередь. После его
    завершения результат можно сохранить как новую versioned strategy и затем
    использовать в preset.
 
-RSI и MDD используют один модульный контракт. Их параметры, outputs и
-optimization controls описываются descriptor-ами; добавление следующей
-стратегии не должно требовать ветвлений в общей очереди или API.
+RSI, MDD Mean Reversion и MDDGrid используют один модульный контракт. Их
+параметры и outputs описываются descriptor-ами; optimization controls могут
+отсутствовать для стратегии, которая еще не поддерживает поиск. Добавление
+следующей стратегии не требует ветвлений в общей очереди или API.
 
 ## Очередь и надежность
 

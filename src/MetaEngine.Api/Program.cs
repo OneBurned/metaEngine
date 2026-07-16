@@ -9,6 +9,7 @@ using MetaEngine.Domain.Model;
 using MetaEngine.Infrastructure.Identity;
 using MetaEngine.Infrastructure.Persistence;
 using MetaEngine.Strategies.Abstractions;
+using MetaEngine.Strategies.MddGrid;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
 using Microsoft.EntityFrameworkCore;
@@ -26,10 +27,13 @@ if (!migrationMode)
 {
     builder.Services.AddMetaEngineAuthentication(builder.Environment, builder.Configuration);
     builder.Services.AddSingleton<RsiStrategyModule>();
+    builder.Services.AddSingleton<MddGridStrategyModule>();
     builder.Services.AddSingleton<MddMeanReversionStrategyModule>();
     builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddGridStrategyModule>());
     builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
     builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddGridStrategyModule>());
     builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
     builder.Services.AddSingleton<StrategyModuleCatalog>();
     builder.Services.ConfigureHttpJsonOptions(options =>

@@ -15,6 +15,7 @@ src/MetaEngine.Domain
 src/MetaEngine.Infrastructure
 src/MetaEngine.Worker
 src/MetaEngine.Strategies.Abstractions
+src/MetaEngine.Strategies.MddGrid
 src/MetaEngine.Strategies.Rsi
 src/MetaEngine.Strategies.MddMeanReversion
 tests/MetaEngine.ContractTests
@@ -28,7 +29,8 @@ API и Worker являются отдельными процессами. Оба
 
 ## Статус стратегий
 
-RSI и MDD Mean Reversion являются executable modules. Descriptor содержит:
+RSI, MDD Mean Reversion и MDDGrid являются executable modules. Descriptor
+содержит:
 
 - стабильный `strategyType`;
 - `schemaVersion`;

@@ -62,5 +62,6 @@ describe("calculationDisplayName", () => {
 describe("strategyTypeLabel", () => {
   it("uses readable labels for registered strategies", () => {
     expect(strategyTypeLabel("mdd_mean_reversion")).toBe("MDD Mean Reversion")
+    expect(strategyTypeLabel("mdd_grid")).toBe("MDDGrid")
   })
 })

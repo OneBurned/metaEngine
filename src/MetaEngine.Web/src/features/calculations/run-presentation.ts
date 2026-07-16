@@ -21,6 +21,9 @@ export function strategyTypeLabel(strategyType: string | null) {
   if (strategyType === "mdd_mean_reversion") {
     return "MDD Mean Reversion"
   }
+  if (strategyType === "mdd_grid") {
+    return "MDDGrid"
+  }
   return "Стратегия"
 }
 

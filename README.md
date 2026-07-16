@@ -19,6 +19,8 @@ docs/STRATEGIES.md        торговые стратегии, модули и J
 docs/strategies/RSI.md    подробное описание стратегии RSI
 docs/strategies/MDD_MEAN_REVERSION.md
                            подробное описание MDD Mean Reversion
+docs/strategies/MDD_GRID.md
+                           подробное описание production MDDGrid
 docs/CSV_EXPORT.md        экспорт CSV, popup, columns API и имена файлов
 docs/TIMEFRAMES.md        конвертер таймфреймов и режим гистограммы
 docs/CALCULATION_CONTRACTS.md
@@ -49,8 +51,10 @@ docs/PRODUCTION_STRATEGIES.md
 
 > Важно: браузерная local lab остается **файловым прототипом** на Node.js.
 > Основной рабочий путь для версионированных данных и очереди расчетов —
-> production-платформа. Краткая карта компонентов и текущие границы запуска
-> находятся в `docs/ARCHITECTURE.md`.
+> production-платформа. В ней доступны RSI, MDD Mean Reversion и ручные
+> расчеты MDDGrid; оптимизация пока работает для RSI и MDD Mean Reversion.
+> Краткая карта компонентов и текущие границы запуска находятся в
+> `docs/ARCHITECTURE.md`.
 
 ## Что уже умеет локальная версия
 

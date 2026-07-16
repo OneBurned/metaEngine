@@ -32,6 +32,7 @@ Detailed per-strategy docs live in:
 ```text
 docs/strategies/RSI.md
 docs/strategies/MDD_MEAN_REVERSION.md
+docs/strategies/MDD_GRID.md
 ```
 
 This overview keeps shared rules, module locations, and cross-strategy UX conventions.
@@ -105,6 +106,14 @@ MDD strategy rows should distinguish:
 
 For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table input columns are shown first (`IN Diff`, `IN Accum`, `IN DD`), then local MDD/TP fields and output strategy columns (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). User-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
 
+## Production MDDGrid
+
+`MDDGrid` is a production-only module for now; it is not implemented in the
+Node.js local lab. Unlike MDD Mean Reversion, every level adds its own
+incremental lot and has an individual TP source. A closed lot becomes available
+again after a fresh source DD crossing of its level, without waiting for DD to
+recover to 0%. See `docs/strategies/MDD_GRID.md` for its calculation contract.
+
 ## Strategy optimizer
 
 Block **“5. Стратегии”** includes an optimizer for the current selected strategy type.
@@ -136,6 +145,9 @@ MDD Mean Reversion optimizer parameters:
 - maximum total target weight.
 
 MDD optimizer weights are **target total position weights**, not incremental buys. For example, levels `10%`, `20%`, `30%` mean the deepest level targets `30%` total exposure. The optimizer requires weights to be nondecreasing, equality is allowed. “Макс. общий вес” limits the maximum target weight level, not the sum of all level values.
+
+MDDGrid optimization is not available yet. It will be designed after manual
+MDDGrid runs validate the independent TP variants.
 
 ## Adding future strategies
 
