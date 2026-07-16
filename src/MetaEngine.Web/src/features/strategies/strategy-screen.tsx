@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MddOptimizationPanel, type MddOptimizationParameters } from "@/features/strategies/mdd-optimization-panel"
+import { MddGridOptimizationPanel, type MddGridOptimizationParameters } from "@/features/strategies/mdd-grid-optimization-panel"
 import { RsiOptimizationPanel } from "@/features/strategies/rsi-optimization-panel"
 import {
   getAllCalculationResult,
@@ -261,6 +262,22 @@ export function StrategyScreen() {
     void refresh()
   }
 
+  function handleMddGridOptimizationStrategyQueued(queued: CalculationRun, parameters: MddGridOptimizationParameters) {
+    setStrategyType("mdd_grid")
+    setMddGridLevels(parameters.levels.map((level) => ({
+      drawdown: Math.abs(level.drawdown) * 100,
+      weight: level.weight * 100,
+      exitMetric: level.exitMetric,
+      takeProfit: level.takeProfit * 100,
+    })))
+    setMddGridMaxTotalWeight(parameters.maxTotalWeight * 100)
+    setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
+    setSelectedRunId(queued.id)
+    setSaveName("")
+    setStrategyMode("manual")
+    void refresh()
+  }
+
   return (
     <AppShell onSignOut={() => void signOut().then(() => navigate({ to: "/login" }))}>
       <div>
@@ -284,7 +301,7 @@ export function StrategyScreen() {
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
-              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : strategyType === "rsi" ? <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} /> : <Alert className="max-w-2xl rounded-md"><AlertTitle>Оптимизация MDDGrid будет следующим этапом</AlertTitle><AlertDescription>Сначала проверьте ручные расчеты и выберите правила TP, которые дают осмысленные сделки.</AlertDescription></Alert>}</TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : strategyType === "rsi" ? <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} /> : <MddGridOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddGridOptimizationStrategyQueued} />}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>
@@ -313,7 +330,7 @@ function MddGridFields({ levels, maxTotalWeight, onLevels, onMaxTotalWeight }: {
     onLevels([...levels, { drawdown: (previous?.drawdown ?? 0) + 5, weight: previous?.weight ?? 0, exitMetric: previous?.exitMetric ?? "source_dd", takeProfit: previous?.takeProfit ?? 5 }])
   }
 
-  return <div className="md:col-span-3"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><Label>Независимые лоты MDDGrid</Label><p className="mt-1 text-sm text-slate-500">Каждый вход добавляет вес отдельно и закрывается по своему TP.</p></div><Button type="button" variant="outline" size="sm" onClick={appendLevel}><Plus />Уровень</Button></div><div className="mb-4 max-w-xs"><NumberField label="Макс. общий вес, %" value={maxTotalWeight} onChange={onMaxTotalWeight} min={0.01} /></div><div className="space-y-3">{levels.map((level, index) => <section key={index} className="grid items-end gap-3 rounded-md border border-slate-200 p-4 md:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(180px,1.35fr)_minmax(120px,1fr)_auto]"><NumberField label={`Вход ${index + 1}, DD %`} value={level.drawdown} onChange={(value) => update(index, { drawdown: value })} min={0.01} max={100} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, { weight: value })} min={0} /><Field label="TP считается по"><Select value={level.exitMetric} onValueChange={(value) => update(index, { exitMetric: value as MddGridExitMetric })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(exitMetricLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field><NumberField label="TP, %" value={level.takeProfit} onChange={(value) => update(index, { takeProfit: value })} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Удалить вход ${index + 1}`}><Trash2 /></Button></section>)}</div></div>
+  return <div className="md:col-span-3"><div className="mb-4 flex flex-wrap items-end justify-between gap-3"><div><Label>Независимые лоты MDDGrid</Label><p className="mt-1 text-sm text-slate-500">Каждый вход добавляет вес отдельно и закрывается по своему TP.</p></div><Button type="button" variant="outline" size="sm" onClick={appendLevel}><Plus />Уровень</Button></div><div className="mb-4 max-w-xs"><NumberField label="Макс. общий вес, %" value={maxTotalWeight} onChange={onMaxTotalWeight} min={0.01} /></div><div className="space-y-3">{levels.map((level, index) => <section key={index} className="grid items-end gap-3 rounded-md border border-slate-200 p-4 md:grid-cols-[minmax(120px,1fr)_minmax(120px,1fr)_minmax(180px,1.35fr)_minmax(150px,1fr)_auto]"><NumberField label={`Вход ${index + 1}, DD %`} value={level.drawdown} onChange={(value) => update(index, { drawdown: value })} min={0.01} max={100} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, { weight: value })} min={0} /><Field label="TP считается по"><Select value={level.exitMetric} onValueChange={(value) => update(index, { exitMetric: value as MddGridExitMetric })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{Object.entries(exitMetricLabels).map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></Field><NumberField label={level.exitMetric.includes("_dd") ? "Целевой DD, %" : "Рост HWM от входа, %"} value={level.takeProfit} onChange={(value) => update(index, { takeProfit: value })} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label={`Удалить вход ${index + 1}`}><Trash2 /></Button></section>)}</div></div>
 }
 
 function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {

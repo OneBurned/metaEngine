@@ -42,7 +42,20 @@ public sealed class MddGridStrategyModuleDescriptor : IStrategyModuleDescriptorP
                 0.01,
                 Unit: "decimal")
         ],
-        Optimization: new(Supported: false, Controls: []),
+        Optimization: new(
+            Supported: true,
+            Controls:
+            [
+                new("levelCount", "Количество входов", StrategyParameterKind.Integer, 5, 1, 10, 1, Unit: "count"),
+                new("minEntryDelta", "Мин. дельта входов", StrategyParameterKind.Decimal, 5d, 0, null, 1, Unit: "percent_points"),
+                new("maxTotalWeight", "Макс. общий вес", StrategyParameterKind.Decimal, 100d, 1, null, 1, Unit: "percent_points"),
+                new("drawdown", "Вход DD", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(5, 50, 5), 0, 100, Unit: "percent_points"),
+                new("weight", "Вес входа", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(10, 100, 10), 0, null, Unit: "percent_points"),
+                new("exitMetric", "TP считается по", StrategyParameterKind.Choice, "source_dd", Choices: ["source_dd", "strategy_dd", "source_hwm", "strategy_hwm"]),
+                new("takeProfit", "Цель TP", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(0, 20, 1), 0, 100, Unit: "percent_points"),
+                new("searchMode", "Режим поиска", StrategyParameterKind.Choice, "random", Choices: ["random", "full"]),
+                new("maxCandidates", "Кандидатов", StrategyParameterKind.Integer, 100000, 1, null, 1, Unit: "count")
+            ]),
         Outputs:
         [
             new("strategy_diff", "OUT Diff", StrategyOutputKind.ResultSeries, "decimal"),
@@ -53,5 +66,6 @@ public sealed class MddGridStrategyModuleDescriptor : IStrategyModuleDescriptorP
             new("signal", "Сигнал", StrategyOutputKind.Signal),
             new("execution", "Исполнение", StrategyOutputKind.Signal),
             new("position", "Вес", StrategyOutputKind.Position, "decimal")
-        ]);
+        ],
+        IsProductionOptimizationAvailable: true);
 }

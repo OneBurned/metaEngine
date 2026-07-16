@@ -72,7 +72,7 @@ preset reads its exact saved `StrategyResult`; it does not rerun the strategy.
 
 ## Optimizer handoff
 
-P6 can optimize RSI or MDD Mean Reversion against a completed base calculation.
+P6 can optimize RSI, MDD Mean Reversion or MDDGrid against a completed base calculation.
 It stores aggregate top-N results only; the user chooses ranges, samples and
 optional filters in the **Optimization** tab, then applies one row to queue the
 corresponding normal strategy run. The user saves that completed run through the
@@ -84,7 +84,7 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 The **Strategies** page selects only completed base runs, exposes manual RSI,
 MDD and MDDGrid parameters, follows queued/running status, displays the saved
 strategy result and saves its configuration. Its **Optimization** tab provides
-the full production RSI/MDD workflow: queue, progress, stop, sort and apply.
-MDDGrid optimization is intentionally deferred until its manual TP rules have
-been validated. The **Presets** page can use any saved strategy result alongside
+the full production RSI/MDD/MDDGrid workflow: queue, progress, stop, sort and
+apply. For MDDGrid, a DD exit target is absolute (`5%` means DD `-5%`); an HWM
+target is growth from the HWM recorded at entry. The **Presets** page can use any saved strategy result alongside
 portfolio sources.

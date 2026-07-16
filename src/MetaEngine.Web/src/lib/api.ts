@@ -192,6 +192,20 @@ export type MddOptimizationSearchSpace = {
   maxCandidates: number
 }
 
+export type MddGridExitMetric = "source_dd" | "strategy_dd" | "source_hwm" | "strategy_hwm"
+
+export type MddGridOptimizationSearchSpace = {
+  levelCount: number
+  minEntryDelta: number
+  maxTotalWeight: number
+  drawdown: OptimizationNumericRange
+  weight: OptimizationNumericRange
+  exitMetric: MddGridExitMetric
+  takeProfit: OptimizationNumericRange
+  searchMode: "random" | "full"
+  maxCandidates: number
+}
+
 export type SavedStrategy = {
   id: string
   strategyKey: string
@@ -472,8 +486,8 @@ export async function queueOptimization(
   workspaceId: string,
   sourceRunId: string,
   input: {
-    strategyType: "rsi" | "mdd_mean_reversion"
-    searchSpace: RsiOptimizationSearchSpace | MddOptimizationSearchSpace
+    strategyType: "rsi" | "mdd_mean_reversion" | "mdd_grid"
+    searchSpace: RsiOptimizationSearchSpace | MddOptimizationSearchSpace | MddGridOptimizationSearchSpace
     sampleCount: number
     seed: number
     topCount: number

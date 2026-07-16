@@ -27,8 +27,8 @@ The local lab is not the final production stack. The working production path is:
 
 The Node.js local lab remains useful for manual formula and CSV validation. The
 production platform handles canonical `timestamp,diff` imports, immutable
-versions, base/strategy calculations, manual RSI/MDD/MDDGrid runs, RSI/MDD
-optimizations and saved strategy results. `docs/ARCHITECTURE.md` is the concise
+versions, base/strategy calculations, manual RSI/MDD/MDDGrid runs,
+RSI/MDD/MDDGrid optimizations and saved strategy results. `docs/ARCHITECTURE.md` is the concise
 source of truth for its current component and data flow.
 
 ## Documentation map
@@ -57,10 +57,10 @@ docs/QUEUE_RELIABILITY.md  Lease-based recovery, retry and parallel Worker safet
 docs/PRODUCTION_DEPLOYMENT.md
                            Docker Compose API, migrations and Worker replicas
 docs/PRODUCTION_OPTIMIZATION.md
-                           Production RSI/MDD optimization jobs, API and Worker
+                           Production RSI/MDD/MDDGrid optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
 docs/PRODUCTION_STRATEGIES.md
-                           Production RSI/MDD runs and saved strategy configs
+                           Production RSI/MDD/MDDGrid runs and saved strategy configs
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
@@ -96,7 +96,7 @@ cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
 queue and observe base calculations, and inspect saved results with interactive
 result and comparison charts. The UI also exposes manual RSI/MDD/MDDGrid
-calculations, strategy presets and production RSI/MDD optimization with
+calculations, strategy presets and production RSI/MDD/MDDGrid optimization with
 progress, stop and result selection.
 See `docs/PRODUCTION_UI.md`.
 
@@ -119,8 +119,10 @@ TP metric: source DD/HWM or MDDGrid DD/HWM. The total configured entry weight
 is capped by `maxTotalWeight`. A lot that closes by TP is immediately armed for
 the next cycle, but it can re-enter only after source DD first moves above that
 lot's level and then crosses it again. MDDGrid is available for manual runs,
-charts and saved strategy versions; its optimizer remains intentionally out of
-scope until those TP variants are validated. See `docs/strategies/MDD_GRID.md`.
+charts, saved strategy versions and production optimization. DD TP is an
+absolute DD target; HWM TP is a growth target from entry HWM. The first
+optimizer selects one exit metric for all levels and independently searches
+level DD, incremental weight and TP. See `docs/strategies/MDD_GRID.md`.
 
 ## Production P5b: presets with strategy sources
 
@@ -131,7 +133,7 @@ rows with the configured weights and periods. The production UI exposes a
 
 ## Production P6: strategy optimizers
 
-The platform can queue an RSI or MDD Mean Reversion optimization job from a
+The platform can queue an RSI, MDD Mean Reversion or MDDGrid optimization job from a
 completed immutable base calculation. The Worker splits that source into
 consecutive samples, prepares each strategy independently for every sample,
 streams candidates and persists only top-N aggregate metrics. The job exposes
@@ -155,6 +157,12 @@ DD delta and nondecreasing target weights. Detailed mode provides an independent
 DD/weight range for every entry. Random search has a finite requested candidate
 count; full search remains streamed and intentionally avoids counting the whole
 space before running.
+
+MDDGrid uses the same queue, samples, streamed top-N and stop behavior. Before
+candidate generation, each sample prepares source `Accum`, `HWM` and `DD` once.
+The first search space chooses one exit metric for every level, then independently
+generates each level's DD entry, incremental weight and TP while enforcing the
+minimum DD delta, nondecreasing weights and the sum-of-weights cap.
 
 ## Production P8: reliable queue foundation
 

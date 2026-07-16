@@ -146,8 +146,12 @@ MDD Mean Reversion optimizer parameters:
 
 MDD optimizer weights are **target total position weights**, not incremental buys. For example, levels `10%`, `20%`, `30%` mean the deepest level targets `30%` total exposure. The optimizer requires weights to be nondecreasing, equality is allowed. “Макс. общий вес” limits the maximum target weight level, not the sum of all level values.
 
-MDDGrid optimization is not available yet. It will be designed after manual
-MDDGrid runs validate the independent TP variants.
+Production MDDGrid optimization uses the completed base calculation split into
+sequential samples. It prepares source metrics once per sample, streams valid
+candidates and persists only top-N results. One job selects a common exit metric
+for all levels, while each level receives its own DD entry, incremental weight
+and TP. DD TP is an absolute target DD; HWM TP is growth from HWM at entry.
+Mixed exit metrics remain available in manual MDDGrid runs.
 
 ## Adding future strategies
 

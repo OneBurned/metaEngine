@@ -67,12 +67,13 @@ public sealed class StrategyCatalogTests
     }
 
     [Fact]
-    public void Mdd_grid_descriptor_exposes_independent_lot_configuration_without_an_optimizer()
+    public void Mdd_grid_descriptor_exposes_independent_lot_configuration_and_optimizer()
     {
         var descriptor = CreateCatalog().GetRequired("mdd_grid");
 
-        Assert.False(descriptor.Optimization.Supported);
-        Assert.Empty(descriptor.Optimization.Controls);
+        Assert.True(descriptor.Optimization.Supported);
+        Assert.True(descriptor.IsProductionOptimizationAvailable);
+        Assert.Contains(descriptor.Optimization.Controls, control => control.Key == "exitMetric");
         Assert.Contains(descriptor.Parameters, parameter => parameter.Key == "maxTotalWeight");
         Assert.Contains(descriptor.Outputs, output => output.Key == "strategy_hwm");
     }

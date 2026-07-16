@@ -23,10 +23,79 @@ public sealed class MddGridStrategyModule : IStrategyModule
         return ValueTask.FromResult<IStrategyPreparedData>(new PreparedData(source, BaseMetricsCalculator.Calculate(points)));
     }
 
-    public StrategyValidationResult ValidateSearchSpace(JsonElement searchSpace) =>
-        new([new("searchSpace", "MDDGrid optimization is not available yet.")]);
+    public StrategyValidationResult ValidateSearchSpace(JsonElement searchSpace)
+    {
+        if (searchSpace.ValueKind != JsonValueKind.Object)
+        {
+            return new StrategyValidationResult([new("searchSpace", "Search space must be an object.")]);
+        }
 
-    public long? EstimateCandidateCount(JsonElement searchSpace) => null;
+        var errors = new List<StrategyValidationError>();
+        var levelCount = ReadInt(searchSpace, "levelCount", 0);
+        if (levelCount is < 1 or > 10)
+        {
+            errors.Add(new("levelCount", "Level count must be between one and ten."));
+        }
+
+        var minEntryDelta = ReadDouble(searchSpace, "minEntryDelta", double.NaN);
+        if (!double.IsFinite(minEntryDelta) || minEntryDelta < 0)
+        {
+            errors.Add(new("minEntryDelta", "Minimum entry delta must be non-negative."));
+        }
+
+        var maxTotalWeight = ReadDouble(searchSpace, "maxTotalWeight", double.NaN);
+        if (!double.IsFinite(maxTotalWeight) || maxTotalWeight <= 0)
+        {
+            errors.Add(new("maxTotalWeight", "Maximum total weight must be positive."));
+        }
+
+        ValidateRange(searchSpace, "drawdown", double.Epsilon, 100, errors);
+        ValidateRange(searchSpace, "weight", 0, null, errors);
+        ValidateRange(searchSpace, "takeProfit", 0, 100, errors);
+
+        var exitMetric = ReadString(searchSpace, "exitMetric", string.Empty);
+        if (!IsSupportedExitMetric(exitMetric))
+        {
+            errors.Add(new("exitMetric", "Exit metric is not supported."));
+        }
+
+        var searchMode = ReadString(searchSpace, "searchMode", string.Empty);
+        if (searchMode is not ("random" or "full"))
+        {
+            errors.Add(new("searchMode", "Search mode must be random or full."));
+        }
+
+        var maxCandidates = ReadInt(searchSpace, "maxCandidates", 0);
+        if (maxCandidates < 1)
+        {
+            errors.Add(new("maxCandidates", "Maximum candidate count must be at least one."));
+        }
+
+        if (errors.Count > 0)
+        {
+            return new StrategyValidationResult(errors);
+        }
+
+        var config = ReadSearchConfig(searchSpace);
+        if (!TryBuildRandomCandidate(config, new Random(0), out _))
+        {
+            errors.Add(new("searchSpace", "The selected ranges cannot produce valid MDDGrid levels within the total weight limit."));
+        }
+
+        return errors.Count == 0 ? StrategyValidationResult.Valid : new StrategyValidationResult(errors);
+    }
+
+    public long? EstimateCandidateCount(JsonElement searchSpace)
+    {
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
+        {
+            return null;
+        }
+
+        var config = ReadSearchConfig(searchSpace);
+        return config.SearchMode == "random" ? config.MaxCandidates : null;
+    }
 
     public async IAsyncEnumerable<JsonElement> GenerateCandidatesAsync(
         JsonElement searchSpace,
@@ -34,12 +103,34 @@ public sealed class MddGridStrategyModule : IStrategyModule
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.CompletedTask;
-        cancellationToken.ThrowIfCancellationRequested();
-        if (searchSpace.ValueKind == JsonValueKind.Undefined)
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
         {
+            throw new StrategyParameterException(validation.Errors);
+        }
+
+        var config = ReadSearchConfig(searchSpace);
+        if (config.SearchMode == "random")
+        {
+            var random = new Random(seed);
+            for (var index = 0; index < config.MaxCandidates; index++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!TryBuildRandomCandidate(config, random, out var levels))
+                {
+                    throw new StrategyParameterException([new("searchSpace", "The selected ranges cannot produce a valid MDDGrid candidate.")]);
+                }
+
+                yield return ToParameters(levels, config);
+            }
             yield break;
         }
-        throw new NotSupportedException("MDDGrid optimization is not available yet.");
+
+        foreach (var levels in GenerateFullCandidates(config, cancellationToken))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return ToParameters(levels, config);
+        }
     }
 
     public ValueTask<StrategyCalculationResult> CalculateAsync(
@@ -153,7 +244,8 @@ public sealed class MddGridStrategyModule : IStrategyModule
                 var lot = lots[levelIndex];
                 if (lot.IsActive)
                 {
-                    if (!lot.IsClosePending && HasReachedTakeProfit(
+                    if (!lot.IsClosePending && HasReachedExitTarget(
+                            level.ExitMetric,
                             lot.EntryMetric,
                             ReadMetric(level.ExitMetric, metrics),
                             level.TakeProfit))
@@ -225,8 +317,14 @@ public sealed class MddGridStrategyModule : IStrategyModule
     private static double ActiveWeight(IReadOnlyList<Level> levels, IReadOnlyList<LotState> lots) =>
         levels.Where((_, index) => lots[index].IsActive).Sum(level => level.Weight);
 
-    private static bool HasReachedTakeProfit(double entryMetric, double currentMetric, double takeProfit) =>
-        currentMetric + ComparisonTolerance >= entryMetric + takeProfit;
+    private static bool HasReachedExitTarget(
+        string exitMetric,
+        double entryMetric,
+        double currentMetric,
+        double takeProfit) =>
+        IsDrawdownMetric(exitMetric)
+            ? currentMetric + ComparisonTolerance >= -takeProfit
+            : currentMetric + ComparisonTolerance >= entryMetric + takeProfit;
 
     private static double ReadMetric(string exitMetric, MetricValues metrics) => exitMetric switch
     {
@@ -280,7 +378,7 @@ public sealed class MddGridStrategyModule : IStrategyModule
                 isValid = false;
             }
 
-            if (exitMetric is not ("source_dd" or "strategy_dd" or "source_hwm" or "strategy_hwm"))
+            if (!IsSupportedExitMetric(exitMetric))
             {
                 errors.Add(new($"{path}.exitMetric", "Exit metric is not supported."));
                 isValid = false;
@@ -288,6 +386,11 @@ public sealed class MddGridStrategyModule : IStrategyModule
             if (!double.IsFinite(takeProfit) || takeProfit < 0)
             {
                 errors.Add(new($"{path}.takeProfit", "Take profit must be non-negative."));
+                isValid = false;
+            }
+            else if (IsDrawdownMetric(exitMetric) && takeProfit > -drawdown + ComparisonTolerance)
+            {
+                errors.Add(new($"{path}.takeProfit", "The target drawdown cannot be deeper than its entry drawdown."));
                 isValid = false;
             }
 
@@ -306,10 +409,197 @@ public sealed class MddGridStrategyModule : IStrategyModule
     private static double ReadDouble(JsonElement owner, string name, double fallback) =>
         owner.TryGetProperty(name, out var property) && property.TryGetDouble(out var value) ? value : fallback;
 
+    private static int ReadInt(JsonElement owner, string name, int fallback) =>
+        owner.TryGetProperty(name, out var property) && property.TryGetInt32(out var value) ? value : fallback;
+
     private static string ReadString(JsonElement owner, string name, string fallback) =>
         owner.TryGetProperty(name, out var property) && property.ValueKind == JsonValueKind.String
             ? property.GetString() ?? fallback
             : fallback;
+
+    private static bool IsSupportedExitMetric(string exitMetric) =>
+        exitMetric is "source_dd" or "strategy_dd" or "source_hwm" or "strategy_hwm";
+
+    private static bool IsDrawdownMetric(string exitMetric) =>
+        exitMetric is "source_dd" or "strategy_dd";
+
+    private static void ValidateRange(
+        JsonElement owner,
+        string name,
+        double minimum,
+        double? maximum,
+        List<StrategyValidationError> errors)
+    {
+        if (!owner.TryGetProperty(name, out var range) || range.ValueKind != JsonValueKind.Object ||
+            !range.TryGetProperty("from", out var fromProperty) || !fromProperty.TryGetDecimal(out var from) ||
+            !range.TryGetProperty("to", out var toProperty) || !toProperty.TryGetDecimal(out var to) ||
+            !range.TryGetProperty("step", out var stepProperty) || !stepProperty.TryGetDecimal(out var step))
+        {
+            errors.Add(new(name, "A range with from, to, and step is required."));
+            return;
+        }
+
+        var fromDouble = (double)from;
+        var toDouble = (double)to;
+        var stepDouble = (double)step;
+        if (!double.IsFinite(fromDouble) || !double.IsFinite(toDouble) || !double.IsFinite(stepDouble) ||
+            fromDouble < minimum || toDouble < minimum || (maximum is double max && toDouble > max) ||
+            from > to || step <= 0)
+        {
+            var maximumText = maximum is double value ? $" and {value}" : string.Empty;
+            errors.Add(new(name, $"Range must be at least {minimum}{maximumText} with a positive step."));
+        }
+    }
+
+    private static SearchConfig ReadSearchConfig(JsonElement searchSpace) => new(
+        ReadInt(searchSpace, "levelCount", 1),
+        ReadDouble(searchSpace, "minEntryDelta", 0),
+        ReadDouble(searchSpace, "maxTotalWeight", 100),
+        ReadRangeValues(searchSpace, "drawdown"),
+        ReadRangeValues(searchSpace, "weight"),
+        ReadRangeValues(searchSpace, "takeProfit"),
+        ReadString(searchSpace, "exitMetric", "source_dd"),
+        ReadString(searchSpace, "searchMode", "random"),
+        ReadInt(searchSpace, "maxCandidates", 1));
+
+    private static double[] ReadRangeValues(JsonElement owner, string name)
+    {
+        var range = owner.GetProperty(name);
+        var from = range.GetProperty("from").GetDecimal();
+        var to = range.GetProperty("to").GetDecimal();
+        var step = range.GetProperty("step").GetDecimal();
+        var values = new List<double>();
+        for (var value = from; value <= to; value += step)
+        {
+            values.Add((double)value);
+        }
+        return values.ToArray();
+    }
+
+    private static bool TryBuildRandomCandidate(SearchConfig config, Random random, out CandidateLevel[] levels)
+    {
+        var candidateLevels = new CandidateLevel[config.LevelCount];
+        var success = Build(0, 0, 0, 0, false);
+        levels = candidateLevels;
+        return success;
+
+        bool Build(int levelIndex, double previousDrawdown, double previousWeight, double totalWeight, bool hasPrevious)
+        {
+            if (levelIndex == candidateLevels.Length)
+            {
+                return true;
+            }
+
+            foreach (var drawdown in EnumerateRandomized(config.Drawdowns, random))
+            {
+                if (hasPrevious && (drawdown <= previousDrawdown || drawdown < previousDrawdown + config.MinEntryDelta))
+                {
+                    continue;
+                }
+
+                foreach (var weight in EnumerateRandomized(config.Weights, random))
+                {
+                    if ((hasPrevious && weight + ComparisonTolerance < previousWeight) ||
+                        totalWeight + weight > config.MaxTotalWeight + ComparisonTolerance)
+                    {
+                        continue;
+                    }
+
+                    foreach (var takeProfit in EnumerateRandomized(config.TakeProfits, random))
+                    {
+                        if (!IsCandidateTakeProfitValid(config.ExitMetric, drawdown, takeProfit))
+                        {
+                            continue;
+                        }
+
+                        candidateLevels[levelIndex] = new CandidateLevel(drawdown, weight, takeProfit);
+                        if (Build(levelIndex + 1, drawdown, weight, totalWeight + weight, true))
+                        {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+    }
+
+    private static IEnumerable<CandidateLevel[]> GenerateFullCandidates(SearchConfig config, CancellationToken cancellationToken)
+    {
+        var levels = new CandidateLevel[config.LevelCount];
+        return Traverse(0, 0, 0, 0, false);
+
+        IEnumerable<CandidateLevel[]> Traverse(
+            int levelIndex,
+            double previousDrawdown,
+            double previousWeight,
+            double totalWeight,
+            bool hasPrevious)
+        {
+            if (levelIndex == levels.Length)
+            {
+                yield return levels.ToArray();
+                yield break;
+            }
+
+            foreach (var drawdown in config.Drawdowns)
+            {
+                if (hasPrevious && (drawdown <= previousDrawdown || drawdown < previousDrawdown + config.MinEntryDelta))
+                {
+                    continue;
+                }
+
+                foreach (var weight in config.Weights)
+                {
+                    if ((hasPrevious && weight + ComparisonTolerance < previousWeight) ||
+                        totalWeight + weight > config.MaxTotalWeight + ComparisonTolerance)
+                    {
+                        continue;
+                    }
+
+                    foreach (var takeProfit in config.TakeProfits)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (!IsCandidateTakeProfitValid(config.ExitMetric, drawdown, takeProfit))
+                        {
+                            continue;
+                        }
+
+                        levels[levelIndex] = new CandidateLevel(drawdown, weight, takeProfit);
+                        foreach (var candidate in Traverse(levelIndex + 1, drawdown, weight, totalWeight + weight, true))
+                        {
+                            yield return candidate;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static IEnumerable<double> EnumerateRandomized(IReadOnlyList<double> values, Random random)
+    {
+        var startIndex = random.Next(values.Count);
+        for (var offset = 0; offset < values.Count; offset++)
+        {
+            yield return values[(startIndex + offset) % values.Count];
+        }
+    }
+
+    private static bool IsCandidateTakeProfitValid(string exitMetric, double entryDrawdown, double takeProfit) =>
+        !IsDrawdownMetric(exitMetric) || takeProfit <= entryDrawdown + ComparisonTolerance;
+
+    private static JsonElement ToParameters(IReadOnlyList<CandidateLevel> levels, SearchConfig config) =>
+        JsonSerializer.SerializeToElement(new
+        {
+            maxTotalWeight = config.MaxTotalWeight / 100d,
+            levels = levels.Select(level => new
+            {
+                drawdown = -level.DrawdownPercent / 100d,
+                weight = level.WeightPercent / 100d,
+                exitMetric = config.ExitMetric,
+                takeProfit = level.TakeProfitPercent / 100d
+            }).ToArray()
+        });
 
     private sealed record Configuration(IReadOnlyList<Level> Levels, double MaxTotalWeight);
 
@@ -320,6 +610,19 @@ public sealed class MddGridStrategyModule : IStrategyModule
         double SourceHighWaterMark,
         double StrategyDrawdown,
         double StrategyHighWaterMark);
+
+    private sealed record CandidateLevel(double DrawdownPercent, double WeightPercent, double TakeProfitPercent);
+
+    private sealed record SearchConfig(
+        int LevelCount,
+        double MinEntryDelta,
+        double MaxTotalWeight,
+        double[] Drawdowns,
+        double[] Weights,
+        double[] TakeProfits,
+        string ExitMetric,
+        string SearchMode,
+        int MaxCandidates);
 
     private sealed class LotState
     {

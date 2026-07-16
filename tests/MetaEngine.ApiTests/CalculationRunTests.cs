@@ -25,7 +25,7 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     [Fact]
-    public async Task Strategy_catalog_exposes_manual_mdd_grid_without_optimization()
+    public async Task Strategy_catalog_exposes_mdd_grid_optimization()
     {
         using var client = factory.CreateClient();
         var response = await client.GetFromJsonAsync<JsonElement>("/api/v1/strategy-types");
@@ -36,8 +36,11 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
 
         Assert.Equal("MDDGrid", item.GetProperty("displayName").GetString());
         Assert.True(item.GetProperty("isProductionCalculationAvailable").GetBoolean());
-        Assert.False(item.GetProperty("isProductionOptimizationAvailable").GetBoolean());
-        Assert.False(item.GetProperty("optimization").GetProperty("supported").GetBoolean());
+        Assert.True(item.GetProperty("isProductionOptimizationAvailable").GetBoolean());
+        Assert.True(item.GetProperty("optimization").GetProperty("supported").GetBoolean());
+        Assert.Contains(
+            item.GetProperty("optimization").GetProperty("controls").EnumerateArray(),
+            control => control.GetProperty("key").GetString() == "exitMetric");
     }
 
     [Fact]
@@ -402,6 +405,73 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         Assert.Equal(HttpStatusCode.Accepted, strategyResponse.StatusCode);
         Assert.NotNull(strategyRun);
         Assert.Equal("mdd_mean_reversion", strategyRun.StrategyType);
+        await ProcessOneAsync();
+    }
+
+    [Fact]
+    public async Task Admin_can_optimize_mdd_grid_and_apply_a_result_as_a_strategy_run()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "MDDGrid optimization source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var optimizationResponse = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "mdd_grid",
+                JsonSerializer.SerializeToElement(new
+                {
+                    levelCount = 1,
+                    minEntryDelta = 0,
+                    maxTotalWeight = 100,
+                    drawdown = new { from = 10, to = 10, step = 1 },
+                    weight = new { from = 20, to = 20, step = 1 },
+                    exitMetric = "source_dd",
+                    takeProfit = new { from = 0, to = 0, step = 1 },
+                    searchMode = "random",
+                    maxCandidates = 2
+                }),
+                SampleCount: 2,
+                Seed: 42,
+                TopCount: 2));
+        var queued = await optimizationResponse.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, optimizationResponse.StatusCode);
+        Assert.NotNull(queued);
+        Assert.Equal(2, queued.TotalCandidates);
+        await ProcessOptimizationAsync();
+
+        var details = await client.GetFromJsonAsync<OptimizationJobDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/optimization-jobs/{queued.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Completed, details.Job.Status);
+        Assert.Equal(2, details.Job.ProcessedCandidates);
+        Assert.NotEmpty(details.Results);
+        Assert.All(details.Results, result => Assert.Equal(2, result.Samples.Count));
+
+        var strategyResponse = await SendOptimizationStrategyQueueAsync(
+            client,
+            owner.WorkspaceId,
+            queued.Id,
+            details.Results[0].Id);
+        var strategyRun = await strategyResponse.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+        Assert.Equal(HttpStatusCode.Accepted, strategyResponse.StatusCode);
+        Assert.NotNull(strategyRun);
+        Assert.Equal("mdd_grid", strategyRun.StrategyType);
         await ProcessOneAsync();
     }
 

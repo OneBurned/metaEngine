@@ -1,12 +1,8 @@
 # Production optimization
 
-P6 adds production optimizers for RSI and MDD Mean Reversion: the
+P6 adds production optimizers for RSI, MDD Mean Reversion and MDDGrid: the
 PostgreSQL/Worker workflow and their screens in the React client. They are
 separate from the local Node.js optimizer.
-
-MDDGrid is intentionally excluded from P6 for now. Its independent per-level
-TP rules are available in manual strategy runs first and need product
-validation before defining an optimizer search space.
 
 ## Current scope
 
@@ -31,9 +27,16 @@ validation before defining an optimizer search space.
 - MDD random search produces the requested candidate count with a deterministic
   seed. Full search streams every valid candidate and deliberately reports an
   unknown total, avoiding a pre-count that could itself exhaust memory.
+- MDDGrid prepares source `Accum`, `HWM` and `DD` once per sample. Its first
+  optimizer mode uses one selected exit metric for all levels and independently
+  searches each level's entry DD, incremental weight and TP. Entries must be
+  strictly deeper by the configured minimum delta; weights are nondecreasing
+  and their **sum** cannot exceed maximum total weight. For DD exit metrics TP
+  is an absolute target DD magnitude; for HWM it is a growth from entry HWM.
+  Mixed exit metrics per level remain a manual-run capability for now.
 - The Worker records progress and honours a stop request after the candidate
   currently being calculated has completed.
-- A result can queue the corresponding normal RSI or MDD strategy run against
+- A result can queue the corresponding normal RSI, MDD or MDDGrid strategy run against
   the same base calculation.
   After that run completes, the existing save workflow creates a reusable saved
   strategy and preserves a link to the selected optimization result.
@@ -44,7 +47,7 @@ The **Strategies** page has separate **Manual calculation** and **Optimization**
 tabs. The optimization tab lets the user:
 
 1. choose a completed base calculation;
-2. choose RSI or MDD Mean Reversion and define its search ranges;
+2. choose RSI, MDD Mean Reversion or MDDGrid and define its search ranges;
 3. choose sequential sample count, top result count and optional filters for
    maximum MDD, total trades and profitable samples;
 4. monitor processed combinations, stop an active job and open recent jobs;
@@ -91,8 +94,8 @@ Queue request example:
 Ranges are inclusive. `0.2` for maximum drawdown magnitude means 20%. Omit a
 filter to leave it disabled. `topCount` is limited to 1,000 stored rows; the
 candidate search itself is streamed. RSI reports its finite cartesian-product
-count. MDD random search reports the requested count, while MDD full search
-reports an unknown total.
+count. MDD and MDDGrid random search report the requested count, while their
+full searches report an unknown total.
 
 ## Metrics and lifecycle
 
@@ -112,7 +115,7 @@ deliberate final action after its canonical result is calculated.
 ## Worker
 
 `MetaEngine.Worker` checks calculation runs first and optimizer jobs second. A
-Worker process must be running for queued RSI or MDD optimization to progress.
+Worker process must be running for queued RSI, MDD or MDDGrid optimization to progress.
 Each claim carries a database lease. A transient database failure or an expired
 lease is automatically requeued with exponential delay until the retry budget
 is exhausted, then becomes `interrupted` and can be retried manually. An

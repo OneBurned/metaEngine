@@ -146,8 +146,8 @@ public sealed class StrategyModuleTests
             {
               "maxTotalWeight": 0.3,
               "levels": [
-                { "drawdown": -0.1, "weight": 0.1, "exitMetric": "source_dd", "takeProfit": 1 },
-                { "drawdown": -0.2, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 1 }
+                { "drawdown": -0.1, "weight": 0.1, "exitMetric": "source_dd", "takeProfit": 0 },
+                { "drawdown": -0.2, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 0 }
               ]
             }
             """);
@@ -168,17 +168,15 @@ public sealed class StrategyModuleTests
         {
             new StrategySourcePoint(1, 0),
             new StrategySourcePoint(2, -0.2),
-            new StrategySourcePoint(3, 0.1),
-            new StrategySourcePoint(4, -0.1),
-            new StrategySourcePoint(5, 0.15),
-            new StrategySourcePoint(6, -0.05),
-            new StrategySourcePoint(7, 0.01)
+            new StrategySourcePoint(3, 0.25),
+            new StrategySourcePoint(4, -0.11),
+            new StrategySourcePoint(5, 0.01),
         };
         using var parameters = JsonDocument.Parse("""
             {
               "maxTotalWeight": 0.2,
               "levels": [
-                { "drawdown": -0.1, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 0.05 }
+                { "drawdown": -0.1, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 0 }
               ]
             }
             """);
@@ -186,9 +184,9 @@ public sealed class StrategyModuleTests
         var prepared = await module.PrepareAsync(source, CancellationToken.None);
         var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
 
-        AssertClose(0.02, result.Rows[2].Diff);
+        AssertClose(0.05, result.Rows[2].Diff);
         Assert.Equal(0, result.Rows[3].Diff);
-        AssertClose(0.002, result.Rows[6].Diff);
+        AssertClose(0.002, result.Rows[4].Diff);
         Assert.Equal(2, result.Summary.BuyCount);
         Assert.Equal(1, result.Summary.SellCount);
     }
@@ -276,6 +274,121 @@ public sealed class StrategyModuleTests
 
         Assert.False(validation.IsValid);
         Assert.Contains(validation.Errors, error => error.Path == "levels.weight");
+    }
+
+    [Fact]
+    public async Task Mdd_grid_closes_source_drawdown_lot_at_the_absolute_target()
+    {
+        var module = new MddGridStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.11),
+            new StrategySourcePoint(3, 0.04),
+            new StrategySourcePoint(4, 0.03),
+            new StrategySourcePoint(5, 0)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {
+              "maxTotalWeight": 0.2,
+              "levels": [
+                { "drawdown": -0.1, "weight": 0.2, "exitMetric": "source_dd", "takeProfit": 0.05 }
+              ]
+            }
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        AssertClose(0.008, result.Rows[2].Diff);
+        AssertClose(0.006, result.Rows[3].Diff);
+        Assert.Equal(0, result.Rows[4].Diff);
+        Assert.Equal(1, result.Summary.SellCount);
+    }
+
+    [Fact]
+    public async Task Mdd_grid_generates_valid_random_candidates_with_independent_take_profits()
+    {
+        var module = new MddGridStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "levelCount": 3,
+              "minEntryDelta": 5,
+              "maxTotalWeight": 60,
+              "drawdown": { "from": 5, "to": 25, "step": 5 },
+              "weight": { "from": 10, "to": 30, "step": 10 },
+              "exitMetric": "source_dd",
+              "takeProfit": { "from": 0, "to": 15, "step": 5 },
+              "searchMode": "random",
+              "maxCandidates": 4
+            }
+            """);
+
+        Assert.True(module.ValidateSearchSpace(searchSpace.RootElement).IsValid);
+        Assert.Equal(4, module.EstimateCandidateCount(searchSpace.RootElement));
+
+        var candidates = new List<JsonElement>();
+        await foreach (var candidate in module.GenerateCandidatesAsync(searchSpace.RootElement, 42, CancellationToken.None))
+        {
+            candidates.Add(candidate);
+        }
+
+        Assert.Equal(4, candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            var levels = candidate.GetProperty("levels").EnumerateArray().ToArray();
+            Assert.Equal(3, levels.Length);
+            var previousDrawdown = 0d;
+            var previousWeight = double.NegativeInfinity;
+            var totalWeight = 0d;
+            foreach (var level in levels)
+            {
+                var drawdown = level.GetProperty("drawdown").GetDouble();
+                var weight = level.GetProperty("weight").GetDouble();
+                var takeProfit = level.GetProperty("takeProfit").GetDouble();
+                Assert.True(drawdown < previousDrawdown);
+                Assert.True(Math.Abs(drawdown - previousDrawdown) >= 0.05 - 1e-12);
+                Assert.True(weight + 1e-12 >= previousWeight);
+                Assert.True(takeProfit <= -drawdown + 1e-12);
+                Assert.Equal("source_dd", level.GetProperty("exitMetric").GetString());
+                previousDrawdown = drawdown;
+                previousWeight = weight;
+                totalWeight += weight;
+            }
+            Assert.True(totalWeight <= 0.6 + 1e-12);
+        }
+    }
+
+    [Fact]
+    public async Task Mdd_grid_full_search_streams_candidates_without_a_total_estimate()
+    {
+        var module = new MddGridStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "levelCount": 2,
+              "minEntryDelta": 5,
+              "maxTotalWeight": 30,
+              "drawdown": { "from": 5, "to": 10, "step": 5 },
+              "weight": { "from": 10, "to": 20, "step": 10 },
+              "exitMetric": "source_dd",
+              "takeProfit": { "from": 0, "to": 0, "step": 1 },
+              "searchMode": "full",
+              "maxCandidates": 1
+            }
+            """);
+
+        Assert.True(module.ValidateSearchSpace(searchSpace.RootElement).IsValid);
+        Assert.Null(module.EstimateCandidateCount(searchSpace.RootElement));
+
+        var candidates = new List<JsonElement>();
+        await foreach (var candidate in module.GenerateCandidatesAsync(searchSpace.RootElement, 42, CancellationToken.None))
+        {
+            candidates.Add(candidate);
+        }
+
+        Assert.Equal(2, candidates.Count);
+        Assert.Equal(-0.05, candidates[0].GetProperty("levels")[0].GetProperty("drawdown").GetDouble(), 10);
+        Assert.Equal(0.2, candidates[1].GetProperty("levels")[1].GetProperty("weight").GetDouble(), 10);
     }
 
     [Fact]

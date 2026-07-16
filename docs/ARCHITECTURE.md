@@ -13,8 +13,7 @@
 | Node.js local lab | Быстрая ручная проверка формул, CSV и старого интерфейса | Файлы `samples/`, `npm start`, порт `5173` |
 | Production platform | Версионированные данные, асинхронные расчеты, стратегии и оптимизация | ASP.NET Core, PostgreSQL, Worker, React UI |
 
-Production platform уже выполняет расчеты и оптимизацию RSI/MDD, а также
-ручные расчеты MDDGrid. Она пока не
+Production platform уже выполняет расчеты и оптимизацию RSI/MDD/MDDGrid. Она пока не
 является публичным интернет-сервисом: UI развертывается отдельно, а TLS,
 reverse proxy, backups, metrics, alerts и release runbook еще не готовы.
 
@@ -31,8 +30,8 @@ flowchart LR
     M["Migration container"] --> P
 ```
 
-- **React UI**: вход, импорт данных, пресеты, постановка расчетов, RSI/MDD
-  calculations и optimizations, ручные MDDGrid calculations, просмотр
+- **React UI**: вход, импорт данных, пресеты, постановка расчетов, RSI/MDD/MDDGrid
+  calculations и optimizations, просмотр
   результатов и сравнение рядов.
 - **API**: workspace authorization, cookie authentication, CSRF, валидация
   запросов и запись неизменяемых версий и задач. API не выполняет тяжелый
@@ -59,7 +58,7 @@ flowchart TD
     PV --> BR["Completed base calculation"]
     PR --> BR
     BR --> SR["RSI, MDD Mean Reversion or MDDGrid run"]
-    BR --> OJ["RSI or MDD optimization job"]
+    BR --> OJ["RSI, MDD or MDDGrid optimization job"]
     OJ --> OR["Top-N optimization result"]
     OR --> SR
     SR --> SS
@@ -76,8 +75,8 @@ flowchart TD
 2. API ставит base calculation в очередь для выбранного периода и timeframe.
 3. Worker сохраняет summary и immutable artifact.
 4. Для completed base calculation можно поставить RSI, MDD Mean Reversion или
-   MDDGrid strategy run. Optimization job пока доступен для RSI и MDD Mean
-   Reversion.
+   MDDGrid strategy run. Optimization job доступен для RSI, MDD Mean Reversion
+   и MDDGrid.
 5. Optimizer делит источник на последовательные samples, вычисляет кандидаты
    потоково и хранит только top-N aggregate results.
 6. Выбранный optimizer result ставит обычный strategy run в очередь. После его
@@ -126,7 +125,7 @@ lease восстанавливается, временная ошибка Postgr
 - `docs/PRODUCTION_AUTH.md` — bootstrap, cookie и CSRF;
 - `docs/CALCULATION_RUNS.md` — runs и artifacts;
 - `docs/PRODUCTION_STRATEGIES.md` — strategy runs и saved strategies;
-- `docs/PRODUCTION_OPTIMIZATION.md` — RSI/MDD optimization;
+- `docs/PRODUCTION_OPTIMIZATION.md` — RSI/MDD/MDDGrid optimization;
 - `docs/QUEUE_RELIABILITY.md` — leases, retry и несколько Worker;
 - `docs/PRODUCTION_DEPLOYMENT.md` — Compose deployment;
 - `docs/PRODUCTION_UI.md` — пользовательский workflow React UI.

@@ -23,7 +23,7 @@ After signing in, the user can:
 8. open the point table only when needed and continue loading rows in batches;
 9. select a completed base run, calculate RSI, MDD Mean Reversion or MDDGrid,
    and save the resulting strategy configuration.
-10. optimize RSI or MDD Mean Reversion across several sequential samples,
+10. optimize RSI, MDD Mean Reversion or MDDGrid across several sequential samples,
     follow, stop or retry the job, compare sortable top results and queue one
     configuration as a normal strategy run before saving it.
 11. create a preset from portfolio and saved-strategy sources, then select that
@@ -42,8 +42,9 @@ controls.
 
 ## Client boundaries
 
-The UI supports manual MDDGrid calculations and RSI/MDD Mean Reversion
-optimization. Retry actions are available for failed or interrupted calculation
+The UI supports manual calculation and optimization for RSI, MDD Mean Reversion
+and MDDGrid. MDDGrid optimizes one exit metric for all levels in a job while
+selecting each level's DD, incremental weight and TP independently. Retry actions are available for failed or interrupted calculation
 and optimization jobs. User management and CSV export remain future work or are
 governed by their API and domain contracts.
 

@@ -120,7 +120,7 @@ GET /api/v1/workspaces/{id}/calculation-runs/{runId}  статус, summary и a
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}/result  paged timestamp,diff
 POST /api/v1/workspaces/{id}/strategies          сохранить completed strategy run
 GET /api/v1/workspaces/{id}/strategies           список сохраненных стратегий
-POST /api/v1/workspaces/{id}/calculation-runs/{baseRunId}/optimizations  поставить RSI/MDD optimization
+POST /api/v1/workspaces/{id}/calculation-runs/{baseRunId}/optimizations  поставить RSI/MDD/MDDGrid optimization
 GET /api/v1/workspaces/{id}/optimization-jobs     список optimization jobs
 GET /api/v1/workspaces/{id}/optimization-jobs/{jobId}  статус и top-N results
 POST /api/v1/workspaces/{id}/optimization-jobs/{jobId}/stop  запросить остановку optimization

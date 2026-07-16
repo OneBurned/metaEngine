@@ -539,8 +539,10 @@ golden fixtures.
   запуск пресетов через очередь;
 - P5a/P5b/P5c: добавлены RSI/MDD/MDDGrid strategy runs, versioned saved strategies и
   пресеты, которые используют сохраненную стратегию как источник;
-- P6: добавлены streamed RSI/MDD optimizations с samples, top-N, filters,
-  stop, retry и передачей выбранного candidate в strategy run;
+- P6: добавлены streamed RSI/MDD/MDDGrid optimizations с samples, top-N,
+  filters, stop, retry и передачей выбранного candidate в strategy run. MDDGrid
+  готовит source Accum/HWM/DD один раз на семпл, использует абсолютный DD TP и
+  потоково генерирует независимые параметры лотов;
 - P8: добавлены атомарные lease-claims PostgreSQL, автоматический retry
   временных ошибок, recovery просроченных Worker-задач, статус `interrupted` и
   ручной повтор расчётов и оптимизаций; несколько Worker-процессов могут

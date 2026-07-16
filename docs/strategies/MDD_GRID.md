@@ -7,8 +7,9 @@ not target positions.
 ## Inputs
 
 The source is one completed immutable base calculation. The strategy uses its
-canonical `timestamp,diff` series and rebuilds source accum, HWM and DD before
-calculating the grid.
+canonical `timestamp,diff` series. Before a manual run or an optimizer starts,
+it builds the source accum, HWM and DD series once; every lot and every
+candidate then reuses those prepared source metrics.
 
 Each level contains:
 
@@ -16,7 +17,7 @@ Each level contains:
 drawdown   Source DD level that opens the lot, for example -0.20.
 weight     Incremental strategy weight, for example 0.15 for 15%.
 exitMetric Metric used by that lot's TP.
-takeProfit Improvement required from the metric at entry, for example 0.05.
+takeProfit Target used by the selected exit metric, for example 0.05.
 ```
 
 `maxTotalWeight` limits the **sum** of all configured entry weights. It can be
@@ -39,13 +40,20 @@ single source point falls from 0% DD to -25% DD.
 
 ## Independent TP
 
-Every lot records its selected metric at the entry signal. Its TP is hit when
-the metric improves by the configured `takeProfit` in percentage points:
+Every lot is independent. The meaning of its `takeProfit` depends on the
+selected exit metric:
 
 ```text
-source DD at entry -20%, TP 5% -> close when source DD is at least -15%
-source HWM at entry 40%, TP 10% -> close when source HWM is at least 50%
+source DD entry -5%, target DD 0% -> close when source DD reaches 0%
+source DD entry -10%, target DD 5% -> close when source DD reaches -5%
+source HWM at entry 40%, TP 10% -> close when source HWM reaches 50%
 ```
+
+For `source_dd` and `strategy_dd`, `takeProfit` is an **absolute target DD
+magnitude**: `0.05` means target DD `-5%`, and a lot closes when the current DD
+is at or above that target. A DD target cannot be deeper than the source DD
+entry level. For `source_hwm` and `strategy_hwm`, the lot records HWM at entry
+and closes when HWM grows by `takeProfit` from that value.
 
 The four available metrics are:
 
@@ -66,8 +74,21 @@ not wait for source DD to return to 0%. To avoid a buy on every point below the
 same level, the lot opens again only after a fresh crossing: source DD must
 first recover above the entry level and later fall to or below it again.
 
-## Scope
+## Optimizer
 
-MDDGrid is available for manual production runs, charts and saving as a
-versioned strategy that can be used in presets. Its optimizer is deliberately
-not available yet; the first step is validating TP rules on manual runs.
+MDDGrid is available for production optimization from a completed base
+calculation. The source can be split into sequential samples. Source metrics
+are prepared once per sample, while each candidate only calculates its own lot
+state and strategy metrics.
+
+The first optimizer version searches a common exit metric for all levels and
+independently selects each level's DD entry, incremental weight and TP target.
+It enforces strictly deeper entries, the configured minimum DD delta,
+nondecreasing weights and a cap on the **sum** of all weights. Random search is
+seeded and bounded by the requested candidate count; full search is streamed
+and intentionally has no precounted total. Mixing different exit metrics across
+levels remains available in a manual MDDGrid run and is a future optimizer
+extension.
+
+As with RSI and MDD Mean Reversion, a top result can be queued as a normal
+strategy run, inspected, and then saved as a versioned strategy for presets.
