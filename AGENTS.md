@@ -10,8 +10,10 @@
 
 1. `AGENTS.md` — обязательные правила работы.
 2. `README.md` — пользовательский обзор проекта и запуск.
-3. `docs/PROJECT_CONTEXT.md` — полный контекст проекта и продуктовые решения.
-4. Тематические документы из `docs/`, если задача относится к конкретному модулю:
+3. `docs/ARCHITECTURE.md` — актуальная карта production-платформы и local lab.
+4. `docs/PROJECT_CONTEXT.md` — полный контекст проекта, история этапов и
+   продуктовые решения.
+5. Тематические документы из `docs/`, если задача относится к конкретному модулю:
    - `docs/STRATEGIES.md` — торговые стратегии и модульная структура;
    - `docs/CSV_EXPORT.md` — экспорт CSV;
    - `docs/TIMEFRAMES.md` — конвертер таймфреймов и режим гистограммы;
@@ -36,14 +38,15 @@
      параллельный запуск Worker.
    - `docs/PRODUCTION_DEPLOYMENT.md` — Docker Compose, migrations и Worker
      replicas для deployment-окружения.
-   - `docs/PRODUCTION_OPTIMIZATION.md` — production RSI-оптимизация, API и Worker.
+   - `docs/PRODUCTION_OPTIMIZATION.md` — production RSI/MDD-оптимизация, API и Worker.
    - `docs/PRODUCTION_UI.md` — React-клиент production workflow и его запуск.
    - `docs/PRODUCTION_STRATEGIES.md` — production RSI/MDD runs и сохраненные
      конфигурации стратегий.
 
 `AGENTS.md` — не единственный большой источник контекста. Это быстрый вход и
-обязательные правила. Подробный контекст хранится в `docs/PROJECT_CONTEXT.md`,
-а детали модулей — в тематических документах `docs/`.
+обязательные правила. Фактическая архитектура хранится в
+`docs/ARCHITECTURE.md`, история решений — в `docs/PROJECT_CONTEXT.md`, а детали
+модулей — в тематических документах `docs/`.
 
 ## Обязательный порядок работы
 
@@ -67,6 +70,8 @@
 
 - `README.md`, если изменился пользовательский сценарий, запуск или структура проекта;
 - `AGENTS.md`, если изменились правила работы агента, workflow или быстрый контекст;
+- `docs/ARCHITECTURE.md`, если изменились компоненты, поток данных, очередь,
+  deployment-топология или границы production-платформы;
 - `docs/PROJECT_CONTEXT.md`, если изменились общий контекст, архитектура или продуктовые решения;
 - тематические документы в `docs/`, если изменился конкретный модуль.
 

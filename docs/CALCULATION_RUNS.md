@@ -18,10 +18,11 @@ queued or completed run.
 
 P5a adds **strategy calculations**. A strategy always takes one completed base
 run as an immutable input and produces a separate canonical artifact. RSI and
-MDD Mean Reversion are available. P6 adds a separate RSI optimizer job: it
-uses a completed base artifact, evaluates parameter candidates on sequential
-samples and stores only top-N metrics. Applying an optimizer row queues a normal
-strategy run. See `docs/PRODUCTION_OPTIMIZATION.md`.
+MDD Mean Reversion are available. P6 adds separate RSI and MDD Mean Reversion
+optimizer jobs: they use a completed base artifact, evaluate parameter
+candidates on sequential samples and store only top-N metrics. Applying an
+optimizer row queues a normal strategy run. See
+`docs/PRODUCTION_OPTIMIZATION.md`.
 
 The run summary exposes `kind`, the original portfolio/preset source and, for a
 strategy run, `strategyType` and `strategySchemaVersion`. The production UI

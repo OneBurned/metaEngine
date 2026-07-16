@@ -1,14 +1,14 @@
-# Agent handoff: MetaEngine local lab
+# Agent handoff: MetaEngine production platform and local lab
 
-This document is written for a future AI agent that receives the repository with little or no chat history. It explains the current local prototype, product decisions, exact behavior, git workflow expectations, and safe backup/restore practices.
+This document is written for a future AI agent that receives the repository with little or no chat history. It explains the production platform, the retained local lab, historical product decisions, exact behavior, git workflow expectations, and safe backup/restore practices.
 
 ## 1. Current project state
 
 MetaEngine currently contains two parallel parts:
 
 - a **local file-based Node.js calculation lab** for validating formulas and UI;
-- an initial **.NET 10 production scaffold** with separate API, Worker, strategy
-  abstractions and descriptors for RSI and MDD Mean Reversion.
+- a working **.NET 10 production platform** with separate API, PostgreSQL,
+  Worker replicas, React UI and modular RSI/MDD strategies.
 
 The local lab implementation is intentionally small:
 
@@ -17,21 +17,26 @@ The local lab implementation is intentionally small:
 - storage: files under `samples/`;
 - tests: Node built-in test runner.
 
-This is not the final production stack. The repository defaults still say production should be:
+The local lab is not the final production stack. The working production path is:
 
 - ASP.NET Core / C#;
 - .NET 10 LTS;
 - PostgreSQL;
 - async calculations saved to database;
-- API responses suitable for frontend JSON contracts and later Plotly-compatible chart payloads.
+- React/TanStack Router UI with same-origin development proxy to the API.
 
-The Node.js local lab exists because the immediate goal is to let the user manually validate CSV data, preset behavior, and calculation formulas quickly. The .NET scaffold does not calculate strategies yet; descriptors explicitly report that production calculation is unavailable until formula parity is complete.
+The Node.js local lab remains useful for manual formula and CSV validation. The
+production platform handles canonical `timestamp,diff` imports, immutable
+versions, base/strategy calculations, RSI/MDD optimizations and saved strategy
+results. `docs/ARCHITECTURE.md` is the concise source of truth for its current
+component and data flow.
 
 ## Documentation map
 
 ```text
 README.md                 Human-facing project overview and run guide
 AGENTS.md                 Required workflow rules for AI agents
+docs/ARCHITECTURE.md      Current production architecture and local lab boundary
 docs/PROJECT_CONTEXT.md   Full project context and product decisions
 docs/STRATEGIES.md        Trading strategy modules and saved strategy configs
 docs/CSV_EXPORT.md        CSV export behavior and API
@@ -42,7 +47,7 @@ docs/CALCULATION_ENGINE.md Production base metrics and timeframe engine
 docs/PRODUCTION_READINESS.md
                            Production architecture, migration and release gates
 docs/PRODUCTION_SCAFFOLD.md
-                           Current .NET scaffold, API, Worker and run guide
+                           Current .NET platform structure, API, Worker and run guide
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
@@ -50,7 +55,7 @@ docs/QUEUE_RELIABILITY.md  Lease-based recovery, retry and parallel Worker safet
 docs/PRODUCTION_DEPLOYMENT.md
                            Docker Compose API, migrations and Worker replicas
 docs/PRODUCTION_OPTIMIZATION.md
-                           Production RSI optimization jobs, API and Worker
+                           Production RSI/MDD optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
 docs/PRODUCTION_STRATEGIES.md
                            Production RSI/MDD runs and saved strategy configs
@@ -66,9 +71,9 @@ portfolio version; its decimal weight may create leverage and its time range is
 `[start, end)` with `null` as open end. The same portfolio version may be used
 for rebalancing only when its ranges do not overlap. The engine combines active
 weighted `diff` rows, fills a missing native source point with zero, and then
-uses the shared base-metrics/timeframe engine. P3 can calculate a saved preset
-through a job; P4 UI does not yet expose preset creation or execution. See
-`docs/PRESETS.md` for the current API and constraints.
+uses the shared base-metrics/timeframe engine. The API, Worker and React UI can
+create a preset, calculate it and show the saved result. See `docs/PRESETS.md`
+for the current API and constraints.
 
 ## Production P3: calculation runs
 
@@ -76,9 +81,9 @@ The platform can now queue a base calculation for one immutable portfolio or
 preset version. API returns `queued` immediately; the separate Worker claims
 the run, calculates the canonical result, saves a `timestamp,diff` artifact and
 updates its summary/status. The API exposes list, details and paged canonical
-result rows. P3 itself did not include a UI, cancel/retry, strategies or
-optimizer jobs; the browser UI for portfolio imports and calculation runs is
-added in P4.
+result rows. This section records the historical P3 scope; P4-P9 subsequently
+added the UI, strategy/optimizer jobs, retry and lease recovery described in
+the sections below.
 See `docs/CALCULATION_RUNS.md` for endpoints and operational behavior.
 
 ## Production P4: working UI
@@ -89,7 +94,7 @@ cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
 queue and observe base calculations, and inspect saved results with interactive
 result and comparison charts. The UI also exposes manual RSI/MDD calculations,
-strategy presets and production RSI optimization with progress, stop and
+strategy presets and production RSI/MDD optimization with progress, stop and
 result selection.
 See `docs/PRODUCTION_UI.md`.
 
@@ -229,8 +234,8 @@ Do not use destructive git commands such as `git reset --hard` unless the user e
 ```text
 server.js                         Node HTTP server and API
 MetaEngine.slnx                   .NET 10 production solution
-src/MetaEngine.Api               ASP.NET Core API scaffold
-src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Api               ASP.NET Core API production-платформы
+src/MetaEngine.Worker            Separate background Worker production-платформы
 src/MetaEngine.Web               React/TanStack Router production client
 src/MetaEngine.Domain/Calculations
                                  Production base calculation engine
@@ -261,22 +266,19 @@ cd /workspaces/metaEngine
 npm start
 ```
 
-Production scaffold commands:
+Production platform with Docker Compose:
 
 ```bash
 cp -n .env.example .env
-docker compose up -d postgres
-dotnet tool restore
-dotnet ef database update --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
-dotnet build MetaEngine.slnx
-dotnet test MetaEngine.slnx
-dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
+docker compose up -d --build
+docker compose ps
+curl -s http://localhost:5080/health/ready
 ```
 
 Port `5080` exposes health endpoints and `/api/v1/strategy-types`.
 `/health/ready` requires PostgreSQL connectivity and an up-to-date migration
-history. The production scaffold is not yet a replacement for the Node.js
-calculation API.
+history. The React UI starts separately on port `3000`; its workflow is in
+`docs/PRODUCTION_UI.md`.
 
 Production authentication has no public registration. The initial owner and
 personal workspace are created once through `--bootstrap-admin` with email and
@@ -291,21 +293,22 @@ PostgreSQL bootstrap/login/workspace integration test. The integration test is
 conditionally skipped on developer machines without a dedicated test database,
 but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
 
-The first production calculation-engine slice is portfolio persistence. The API
-accepts only canonical UTF-8 `timestamp,diff` CSV at this stage, normalizes UTC
+The production importer accepts only canonical UTF-8 `timestamp,diff` CSV,
+normalizes UTC
 ordering, rejects duplicate timestamps, reports gaps, and stores immutable
 versions with raw and normalized-series SHA-256 checksums. Re-importing the same
 file or semantic series returns the existing version. This intentionally does
 not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
 upload. See `docs/PORTFOLIO_IMPORT.md`.
 
-The second calculation-engine slice is the pure C# base calculation core. It
-builds the selected source grid, applies `missing diff = 0`, calculates
+The pure C# base calculation core builds the selected source grid, applies
+`missing diff = 0`, calculates
 `accum/hwm/dd/mdd`, and converts only to the same or a larger timeframe through
 UTC checkpoints. It reads the same base golden fixture as the Node.js reference.
 Returns below `-100%` are rejected; exactly `-100%` leaves equity at zero and is
-handled without non-finite values during timeframe conversion. The core has no
-HTTP endpoint or persistence workflow yet. See `docs/CALCULATION_ENGINE.md`.
+handled without non-finite values during timeframe conversion. API and Worker
+persist immutable base calculation runs around this core. See
+`docs/CALCULATION_ENGINE.md` and `docs/CALCULATION_RUNS.md`.
 
 The server prints:
 
