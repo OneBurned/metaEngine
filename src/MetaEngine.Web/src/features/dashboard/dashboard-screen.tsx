@@ -1,0 +1,259 @@
+import { AppShell } from "@/components/app-shell"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Progress } from "@/components/ui/progress"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ComparisonPanel } from "@/features/calculations/comparison-panel"
+import { calculationDisplayName, calculationKindLabel } from "@/features/calculations/run-presentation"
+import { useSession } from "@/features/session/session-context"
+import { getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
+import { deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent, toDateTimeLocal, toIsoDateTime } from "@/lib/metrics"
+import { Link, useNavigate } from "@tanstack/react-router"
+import { AlertCircle, BarChart3, CalendarClock, ChevronDown, ChevronUp, Layers3, LoaderCircle, Play, RefreshCw, TableProperties } from "lucide-react"
+import { Brush, CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
+import { toast } from "sonner"
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
+
+const chartConfig = {
+  accum: { label: "Доходность", color: "#2563eb" },
+  drawdown: { label: "Просадка", color: "#e11d48" },
+} satisfies ChartConfig
+
+const activeStatuses = new Set<CalculationRun["status"]>(["queued", "running"])
+
+export function DashboardScreen() {
+  const { workspace, signOut } = useSession()
+  const navigate = useNavigate({ from: "/" })
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [presets, setPresets] = useState<Preset[]>([])
+  const [strategies, setStrategies] = useState<SavedStrategy[]>([])
+  const [runs, setRuns] = useState<CalculationRun[]>([])
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [selectedRun, setSelectedRun] = useState<CalculationRunDetails | null>(null)
+  const [resultPoints, setResultPoints] = useState<PortfolioPoint[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isLoadingResult, setIsLoadingResult] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const presentationSources = useMemo(() => ({ portfolios, presets, runs }), [portfolios, presets, runs])
+
+  const refreshOverview = useCallback(async () => {
+    if (!workspace) {
+      setPortfolios([])
+      setPresets([])
+      setStrategies([])
+      setRuns([])
+      setIsLoading(false)
+      return
+    }
+
+    try {
+      const [nextPortfolios, nextPresets, nextStrategies, nextRuns] = await Promise.all([
+        listPortfolios(workspace.id),
+        listPresets(workspace.id),
+        listSavedStrategies(workspace.id),
+        listCalculationRuns(workspace.id),
+      ])
+      setPortfolios(nextPortfolios)
+      setPresets(nextPresets)
+      setStrategies(nextStrategies)
+      setRuns(nextRuns)
+      setSelectedRunId((current) => current && nextRuns.some((run) => run.id === current) ? current : (nextRuns[0]?.id ?? null))
+      setError(null)
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [workspace])
+
+  const loadRun = useCallback(async (runId: string) => {
+    if (!workspace) {
+      return
+    }
+
+    setIsLoadingResult(true)
+    try {
+      const details = await getCalculationRun(workspace.id, runId)
+      setSelectedRun(details)
+      setResultPoints(details.run.status === "completed" ? await getAllCalculationResult(workspace.id, runId) : [])
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    } finally {
+      setIsLoadingResult(false)
+    }
+  }, [workspace])
+
+  useEffect(() => {
+    setIsLoading(true)
+    setSelectedRun(null)
+    setResultPoints([])
+    void refreshOverview()
+  }, [refreshOverview])
+
+  useEffect(() => {
+    if (selectedRunId) {
+      void loadRun(selectedRunId)
+    }
+  }, [loadRun, selectedRunId])
+
+  useEffect(() => {
+    if (!runs.some((run) => activeStatuses.has(run.status))) {
+      return
+    }
+
+    const timer = window.setInterval(() => {
+      void refreshOverview()
+      if (selectedRunId) {
+        void loadRun(selectedRunId)
+      }
+    }, 2_500)
+    return () => window.clearInterval(timer)
+  }, [loadRun, refreshOverview, runs, selectedRunId])
+
+  async function handleQueue(input: ({ portfolioId: string; presetId?: never } | { portfolioId?: never; presetId: string }) & { periodStart: string; periodEnd: string; timeframe: Timeframe }) {
+    if (!workspace) {
+      return
+    }
+
+    const run = await queueCalculation(workspace.id, input)
+    toast.success("Базовый расчёт поставлен в очередь")
+    setSelectedRunId(run.id)
+    await refreshOverview()
+  }
+
+  async function handleSignOut() {
+    await signOut()
+    await navigate({ to: "/login" })
+  }
+
+  return <AppShell onSignOut={() => void handleSignOut()}>
+    <div className="flex flex-wrap items-end justify-between gap-4">
+      <div><p className="text-sm font-medium text-teal-700">Production workspace</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">Расчёты</h1></div>
+      <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => void refreshOverview()} aria-label="Обновить данные"><RefreshCw className="size-4" /></Button></TooltipTrigger><TooltipContent>Обновить</TooltipContent></Tooltip>
+    </div>
+
+    {error ? <Alert variant="destructive" className="mt-5 rounded-md"><AlertCircle className="size-4" /><AlertTitle>Операция не выполнена</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
+    {!workspace ? <Alert className="mt-6 rounded-md border-amber-200 bg-amber-50 text-amber-950"><AlertCircle className="size-4 text-amber-700" /><AlertTitle>Нет доступного workspace</AlertTitle><AlertDescription>Обратитесь к администратору, чтобы получить доступ к workspace.</AlertDescription></Alert> : <>
+      <section className="mt-6"><CalculationPanel canWrite={workspace.canWrite} portfolios={portfolios} presets={presets} workspaceId={workspace.id} onQueue={handleQueue} /></section>
+      <section className="mt-7" aria-labelledby="runs-heading"><SectionHeading id="runs-heading" icon={<CalendarClock className="size-4" />} title="Последние запуски" /><RecentRunTable isLoading={isLoading} runs={runs} selectedId={selectedRunId} onSelect={setSelectedRunId} presentationSources={presentationSources} /></section>
+      <section className="mt-7" aria-labelledby="analysis-heading"><SectionHeading id="analysis-heading" icon={<BarChart3 className="size-4" />} title="Анализ" /><Tabs defaultValue="result"><TabsList><TabsTrigger value="result">Текущий результат</TabsTrigger><TabsTrigger value="comparison">Сравнение</TabsTrigger></TabsList><TabsContent value="result" className="mt-4"><ResultPanel details={selectedRun} isLoading={isLoadingResult} points={resultPoints} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} /></TabsContent><TabsContent value="comparison" className="mt-4"><ComparisonPanel workspaceId={workspace.id} portfolios={portfolios} presets={presets} strategies={strategies} runs={runs} /></TabsContent></Tabs></section>
+    </>}
+  </AppShell>
+}
+
+function CalculationPanel({ canWrite, portfolios, presets, workspaceId, onQueue }: { canWrite: boolean; portfolios: Portfolio[]; presets: Preset[]; workspaceId: string; onQueue: (input: ({ portfolioId: string; presetId?: never } | { portfolioId?: never; presetId: string }) & { periodStart: string; periodEnd: string; timeframe: Timeframe }) => Promise<void> }) {
+  const [sourceType, setSourceType] = useState<"portfolio" | "preset">("portfolio")
+  const [portfolioId, setPortfolioId] = useState("")
+  const [presetId, setPresetId] = useState("")
+  const [bounds, setBounds] = useState<{ startsAt: string; endsAt: string; timeframe: Timeframe } | null>(null)
+  const [periodStart, setPeriodStart] = useState("")
+  const [periodEnd, setPeriodEnd] = useState("")
+  const [timeframe, setTimeframe] = useState<Timeframe>("1h")
+  const [isLoadingBounds, setIsLoadingBounds] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => { setPortfolioId((current) => portfolios.some((portfolio) => portfolio.id === current) ? current : (portfolios[0]?.id ?? "")) }, [portfolios])
+  useEffect(() => { setPresetId((current) => presets.some((preset) => preset.id === current) ? current : (presets[0]?.id ?? "")) }, [presets])
+
+  const selectedPortfolio = portfolios.find((portfolio) => portfolio.id === portfolioId) ?? null
+
+  useEffect(() => {
+    const selectedId = sourceType === "portfolio" ? portfolioId : presetId
+    if (!selectedId || (sourceType === "portfolio" && !selectedPortfolio)) {
+      setBounds(null)
+      setPeriodStart("")
+      setPeriodEnd("")
+      return
+    }
+
+    setIsLoadingBounds(true)
+    setError(null)
+    const request = sourceType === "portfolio"
+      ? getPortfolioBounds(workspaceId, selectedId).then((nextBounds) => ({ ...nextBounds, timeframe: selectedPortfolio!.timeframe }))
+      : getPresetBounds(workspaceId, selectedId)
+    void request.then((nextBounds) => {
+      setBounds(nextBounds)
+      setPeriodStart(toDateTimeLocal(nextBounds.startsAt))
+      setPeriodEnd(toDateTimeLocal(nextBounds.endsAt))
+      setTimeframe(nextBounds.timeframe)
+    }).catch((requestError) => setError(toDisplayMessage(requestError))).finally(() => setIsLoadingBounds(false))
+  }, [portfolioId, presetId, selectedPortfolio, sourceType, workspaceId])
+
+  const allowedTimeframes = bounds ? timeframeOptions.slice(timeframeOptions.indexOf(bounds.timeframe)) : []
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const selectedId = sourceType === "portfolio" ? portfolioId : presetId
+    if (!selectedId || !periodStart || !periodEnd) {
+      setError("Выберите источник и период.")
+      return
+    }
+
+    setIsSubmitting(true)
+    setError(null)
+    try {
+      await onQueue(sourceType === "portfolio" ? { portfolioId: selectedId, periodStart: toIsoDateTime(periodStart), periodEnd: toIsoDateTime(periodEnd), timeframe } : { presetId: selectedId, periodStart: toIsoDateTime(periodStart), periodEnd: toIsoDateTime(periodEnd), timeframe })
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return <Card className="rounded-lg border-slate-200 shadow-none"><CardHeader className="flex-row items-center justify-between gap-4"><CardTitle className="text-base">Новый расчёт</CardTitle><Badge variant="outline" className="border-teal-200 bg-teal-50 text-teal-800">Базовый</Badge></CardHeader><CardContent><form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
+    <div className="grid gap-2 md:col-span-3"><Label>Источник</Label><Tabs value={sourceType} onValueChange={(value) => setSourceType(value as "portfolio" | "preset")}><TabsList><TabsTrigger value="portfolio">Портфолио</TabsTrigger><TabsTrigger value="preset">Пресет</TabsTrigger></TabsList></Tabs>{sourceType === "portfolio" ? <Select value={portfolioId} onValueChange={setPortfolioId} disabled={!portfolios.length || isSubmitting}><SelectTrigger><SelectValue placeholder="Выберите портфолио" /></SelectTrigger><SelectContent>{portfolios.map((portfolio) => <SelectItem key={portfolio.id} value={portfolio.id}>{portfolio.name} · v{portfolio.version}</SelectItem>)}</SelectContent></Select> : <Select value={presetId} onValueChange={setPresetId} disabled={!presets.length || isSubmitting}><SelectTrigger><SelectValue placeholder="Выберите пресет" /></SelectTrigger><SelectContent>{presets.map((preset) => <SelectItem key={preset.id} value={preset.id}>{preset.name} · v{preset.version}</SelectItem>)}</SelectContent></Select>}</div>
+    <Field label="Таймфрейм" htmlFor="calculation-timeframe"><Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)} disabled={!bounds || isLoadingBounds || isSubmitting}><SelectTrigger id="calculation-timeframe"><SelectValue /></SelectTrigger><SelectContent>{allowedTimeframes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></Field>
+    <Field label="Период с" htmlFor="period-start"><Input id="period-start" type="datetime-local" value={periodStart} min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined} max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined} onChange={(event) => setPeriodStart(event.target.value)} disabled={!bounds || isLoadingBounds || isSubmitting} /></Field>
+    <Field label="Период по" htmlFor="period-end"><Input id="period-end" type="datetime-local" value={periodEnd} min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined} max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined} onChange={(event) => setPeriodEnd(event.target.value)} disabled={!bounds || isLoadingBounds || isSubmitting} /></Field>
+    {isLoadingBounds ? <Progress className="md:col-span-3" value={55} /> : null}{error ? <p className="md:col-span-3 text-sm text-rose-700">{error}</p> : null}
+    <div className="flex md:col-span-3"><Button type="submit" disabled={!canWrite || !bounds || isLoadingBounds || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать</Button></div>
+  </form></CardContent></Card>
+}
+
+function RecentRunTable({ isLoading, runs, selectedId, onSelect, presentationSources }: { isLoading: boolean; runs: CalculationRun[]; selectedId: string | null; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
+  const [showAll, setShowAll] = useState(false)
+  const visibleRuns = showAll ? runs : runs.slice(0, 5)
+
+  return <div className="space-y-3"><div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Период</TableHead><TableHead className="hidden lg:table-cell text-right">Доходность</TableHead><TableHead className="w-24 text-right">Детали</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRows columns={5} /> : null}{!isLoading && runs.length === 0 ? <EmptyRow columns={5} text="Запусков пока нет." /> : visibleRuns.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationKindLabel(run)} · {run.timeframe}</div></TableCell><TableCell><StatusBadge status={run.status} /></TableCell><TableCell className="hidden md:table-cell text-sm">{formatDateTime(run.periodStart)} - {formatDateTime(run.periodEnd)}</TableCell><TableCell className="hidden lg:table-cell text-right tabular-nums">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>{runs.length > 5 ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>{showAll ? <ChevronUp /> : <ChevronDown />}{showAll ? "Скрыть старые" : `Вся история (${runs.length})`}</Button></div> : null}</div>
+}
+
+function ResultPanel({ details, isLoading, points, title }: { details: CalculationRunDetails | null; isLoading: boolean; points: PortfolioPoint[]; title: string | null }) {
+  const [showAccum, setShowAccum] = useState(true)
+  const [showDrawdown, setShowDrawdown] = useState(true)
+  const [showData, setShowData] = useState(false)
+  const [visibleRows, setVisibleRows] = useState(100)
+  const metrics = useMemo(() => deriveMetricSeries(points), [points])
+  const chartPoints = useMemo(() => downsampleForChart(metrics), [metrics])
+
+  useEffect(() => { setShowData(false); setVisibleRows(100) }, [details?.run.id])
+
+  if (isLoading) return <div className="grid min-h-56 place-items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" /> Загрузка результата</div>
+  if (!details) return <EmptyResult text="Выберите запуск расчёта." />
+  if (details.run.status !== "completed") return <EmptyResult text={details.run.status === "failed" ? `Расчёт завершился с ошибкой: ${details.run.errorCode ?? "unknown_error"}.` : "Расчёт выполняется. Статус обновляется автоматически."} />
+
+  return <div className="space-y-5"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · {details.run.timeframe}</p></div>{details.run.kind === "base" ? <Button asChild variant="outline"><Link to="/strategies"><Layers3 />Рассчитать стратегию</Link></Button> : <Badge variant="outline" className="border-violet-200 bg-violet-50 text-violet-800">{calculationKindLabel(details.run)}</Badge>}</div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Точек" value={details.run.pointCount.toLocaleString("ru-RU")} /></div>
+    <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-4 text-sm"><label className="flex items-center gap-2"><Checkbox checked={showAccum} onCheckedChange={(value) => setShowAccum(value === true)} />Доходность</label><label className="flex items-center gap-2"><Checkbox checked={showDrawdown} onCheckedChange={(value) => setShowDrawdown(value === true)} />Просадка</label></div><p className="text-xs text-slate-500">Перетаскивайте нижний диапазон для детализации.</p></div><ChartContainer config={chartConfig} className="h-[420px] w-full aspect-auto" aria-label="График доходности и просадки"><LineChart data={chartPoints} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="drawdown" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />}/>{showAccum ? <Line yAxisId="accum" type="monotone" dataKey="accum" stroke="var(--color-accum)" strokeWidth={1.75} dot={false} /> : null}{showDrawdown ? <Line yAxisId="drawdown" type="monotone" dataKey="drawdown" stroke="var(--color-drawdown)" strokeWidth={1.5} dot={false} /> : null}<Brush dataKey="label" height={28} stroke="#0f766e" travellerWidth={8} /></LineChart></ChartContainer></div>
+    <div className="flex justify-start"><Button type="button" variant="outline" onClick={() => setShowData((current) => !current)}>{showData ? <ChevronUp /> : <TableProperties />}{showData ? "Скрыть данные" : `Показать данные (${details.run.pointCount.toLocaleString("ru-RU")})`}</Button></div>
+    {showData ? <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Время</TableHead><TableHead className="text-right">Diff</TableHead><TableHead className="hidden sm:table-cell text-right">Accum</TableHead><TableHead className="hidden sm:table-cell text-right">DD</TableHead></TableRow></TableHeader><TableBody>{metrics.slice(0, visibleRows).map((point) => <TableRow key={point.timestamp}><TableCell>{formatDateTime(point.timestamp)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="hidden sm:table-cell text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="hidden sm:table-cell text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell></TableRow>)}</TableBody></Table>{visibleRows < metrics.length ? <div className="border-t border-slate-200 p-3 text-center"><Button type="button" variant="outline" size="sm" onClick={() => setVisibleRows((current) => Math.min(current + 500, metrics.length))}>Показать ещё {Math.min(500, metrics.length - visibleRows).toLocaleString("ru-RU")}</Button></div> : null}</div> : null}
+  </div>
+}
+
+function SectionHeading({ id, icon, title }: { id: string; icon: React.ReactNode; title: string }) { return <div className="mb-3 flex items-center gap-2"><span className="text-teal-700">{icon}</span><h2 id={id} className="text-base font-semibold">{title}</h2></div> }
+function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}</div> }
+function Metric({ label, value }: { label: string; value: string }) { return <div className="bg-white px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums">{value}</p></div> }
+function StatusBadge({ status }: { status: CalculationRun["status"] }) { const styles: Record<CalculationRun["status"], string> = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800" }; const labels: Record<CalculationRun["status"], string> = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка" }; return <Badge variant="outline" className={styles[status]}>{labels[status]}</Badge> }
+function LoadingRows({ columns }: { columns: number }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">Загрузка...</TableCell></TableRow> }
+function EmptyRow({ columns, text }: { columns: number; text: string }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">{text}</TableCell></TableRow> }
+function EmptyResult({ text }: { text: string }) { return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500">{text}</div> }
+function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }

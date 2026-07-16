@@ -121,9 +121,10 @@ public sealed class PersistenceModelTests
 
         var migrations = dbContext.Database.GetMigrations().ToArray();
 
-        Assert.Equal(3, migrations.Length);
+        Assert.Equal(4, migrations.Length);
         Assert.Contains(migrations, migration => migration.EndsWith("_InitialProductionSchema"));
         Assert.Contains(migrations, migration => migration.EndsWith("_AddIdentityAndWorkspaceSecurity"));
         Assert.Contains(migrations, migration => migration.EndsWith("_AddPortfolioImportChecksums"));
+        Assert.Contains(migrations, migration => migration.EndsWith("_AddStrategyRunSource"));
     }
 }

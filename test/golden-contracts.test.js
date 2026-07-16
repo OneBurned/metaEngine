@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { calculateFromDiffs } = require('../lib/calculations');
+const { calculateFromDiffs, calculatePresetFromSources } = require('../lib/calculations');
 const { calculateTradingStrategy } = require('../strategies');
 
 const FIXTURES_DIR = path.join(__dirname, 'fixtures', 'golden');
@@ -45,6 +45,15 @@ function assertFixtureMetadata(fixture) {
   assert.ok(fixture.id);
   assert.ok(Number.isFinite(fixture.absoluteTolerance));
   assert.ok(fixture.absoluteTolerance > 0);
+  if (fixture.kind === 'preset_calculation') {
+    assert.ok(Array.isArray(fixture.input.items));
+    assert.ok(fixture.input.items.length > 0);
+    fixture.input.items.forEach((item) => {
+      assert.equal(item.timestamps.length, item.diffs.length);
+    });
+    return;
+  }
+
   assert.equal(fixture.input.timestamps.length, fixture.input.diffs.length);
 }
 
@@ -87,3 +96,39 @@ for (const file of ['rsi_strategy.json', 'mdd_mean_reversion_strategy.json']) {
     assertContractValue(result.summary, fixture.expected.summary, fixture.absoluteTolerance, `${fixture.id}.summary`);
   });
 }
+
+test('preset calculation matches the golden contract', () => {
+  const fixture = loadFixture('preset_calculation.json');
+  assertFixtureMetadata(fixture);
+  assert.equal(fixture.kind, 'preset_calculation');
+
+  const sources = new Map(fixture.input.items.map((item) => [
+    item.portfolioId,
+    {
+      step: item.sourceStepMilliseconds,
+      points: item.timestamps.map((timestamp, index) => ({ timestamp, diff: item.diffs[index] }))
+    }
+  ]));
+  const preset = {
+    items: fixture.input.items.map((item) => ({
+      portfolio: item.portfolioId,
+      weight: item.weight,
+      date_from: item.startsAt,
+      date_to: item.endsAt
+    }))
+  };
+  const result = calculatePresetFromSources(
+    preset,
+    sources,
+    fixture.input.periodStart,
+    fixture.input.periodEnd,
+    { timeframe: fixture.input.targetTimeframe });
+
+  assertContractValue(result.rows, fixture.expected.rows, fixture.absoluteTolerance, `${fixture.id}.rows`);
+  assertContractValue(result.summary, fixture.expected.summary, fixture.absoluteTolerance, `${fixture.id}.summary`);
+  assertContractValue(result.missingPointCount, fixture.expected.missingPointCount, fixture.absoluteTolerance, `${fixture.id}.missingPointCount`);
+  assertContractValue(result.warningsTruncated, fixture.expected.warningsTruncated, fixture.absoluteTolerance, `${fixture.id}.warningsTruncated`);
+  assert.equal(result.sourceTimeframe, fixture.expected.sourceTimeframe);
+  assert.equal(result.step, fixture.expected.timeframe);
+  assert.equal(result.sourceStep, fixture.expected.sourceStepMilliseconds);
+});

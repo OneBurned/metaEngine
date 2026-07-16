@@ -44,9 +44,66 @@ docs/PRODUCTION_READINESS.md
 docs/PRODUCTION_SCAFFOLD.md
                            Current .NET scaffold, API, Worker and run guide
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
+docs/PRESETS.md            Production presets, versions, API and calculation core
+docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
+docs/PRODUCTION_UI.md      Production React UI and local run workflow
+docs/PRODUCTION_STRATEGIES.md
+                           Production RSI/MDD runs and saved strategy configs
 ```
 
 Keep documentation updated after functional changes. Update the thematic docs when a module changes instead of growing this file endlessly.
+
+## Production P2c: presets
+
+The production platform now has a versioned preset API and a domain-level
+preset calculation engine. Each preset item references an exact immutable
+portfolio version; its decimal weight may create leverage and its time range is
+`[start, end)` with `null` as open end. The same portfolio version may be used
+for rebalancing only when its ranges do not overlap. The engine combines active
+weighted `diff` rows, fills a missing native source point with zero, and then
+uses the shared base-metrics/timeframe engine. P3 can calculate a saved preset
+through a job; P4 UI does not yet expose preset creation or execution. See
+`docs/PRESETS.md` for the current API and constraints.
+
+## Production P3: calculation runs
+
+The platform can now queue a base calculation for one immutable portfolio or
+preset version. API returns `queued` immediately; the separate Worker claims
+the run, calculates the canonical result, saves a `timestamp,diff` artifact and
+updates its summary/status. The API exposes list, details and paged canonical
+result rows. P3 itself did not include a UI, cancel/retry, strategies or
+optimizer jobs; the browser UI for portfolio imports and calculation runs is
+added in P4.
+See `docs/CALCULATION_RUNS.md` for endpoints and operational behavior.
+
+## Production P4: working UI
+
+`src/MetaEngine.Web` is a separate React/TypeScript client built with TanStack
+Router and shadcn/ui. It uses a same-origin development proxy to the API so
+cookie/CSRF protections remain unchanged. The user can sign in, import a
+portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
+queue and observe base calculations, and inspect saved results with interactive
+result and comparison charts. The UI also exposes manual RSI/MDD calculations
+and strategy presets. It does not yet expose optimizer jobs or cancellation.
+See `docs/PRODUCTION_UI.md`.
+
+## Production P5a: strategy runs
+
+RSI and MDD Mean Reversion are now executable production modules. A strategy
+run references one completed immutable base run, is processed by the Worker,
+and saves a canonical `timestamp,diff` `StrategyResult` artifact. A completed
+run can be saved as a versioned strategy configuration. The UI exposes manual
+RSI/MDD calculation and saved configurations; optimization and use of saved
+strategy artifact points separate from portfolio/preset points, avoiding
+cross-product queries on long source series. See `docs/PRODUCTION_STRATEGIES.md`.
+
+## Production P5b: presets with strategy sources
+
+Saved strategy versions can now be used alongside portfolio versions in an
+immutable preset. A preset calculation combines their canonical `timestamp,diff`
+rows with the configured weights and periods. The production UI exposes a
+**Presets** page and allows a saved preset to be chosen for a base calculation.
+Optimizer jobs remain a later stage.
 
 ## 2. User communication rules
 
@@ -119,6 +176,7 @@ server.js                         Node HTTP server and API
 MetaEngine.slnx                   .NET 10 production solution
 src/MetaEngine.Api               ASP.NET Core API scaffold
 src/MetaEngine.Worker            Separate background Worker scaffold
+src/MetaEngine.Web               React/TanStack Router production client
 src/MetaEngine.Domain/Calculations
                                  Production base calculation engine
 src/MetaEngine.Strategies.*      Strategy contracts and module descriptors

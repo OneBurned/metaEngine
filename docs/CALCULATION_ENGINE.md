@@ -1,6 +1,6 @@
 # Production calculation engine
 
-Этап P2b переносит базовые расчетные формулы MetaEngine из Node.js reference в
+Этапы P2b-P2c переносят базовые расчетные формулы MetaEngine из Node.js reference в
 чистое доменное ядро C#. Оно не зависит от HTTP, PostgreSQL, Worker или
 конкретной мета-стратегии и станет общим основанием для пресетов, RSI, MDD Mean
 Reversion и будущих модулей.
@@ -48,6 +48,24 @@ mdd   = min(previousMdd, dd, 0)
 даже если следующие точки положительные. При укрупнении таймфрейма последующие
 периоды получают `diff=0`, а не `NaN` от деления нуля на ноль.
 
+## Расчет пресета
+
+`PresetCalculationEngine` строит общий ряд из версионных portfolio sources и
+сохраненных strategy-result sources.
+Вес хранится как decimal (`0.25 = 25%`), а суммарный вес не ограничен: плечо
+разрешено. Для одного portfolio source периоды не пересекаются и действуют как
+`[startsAt, endsAt)`; `endsAt = null` означает открытый период.
+
+Движок выбирает самый мелкий fixed source timeframe, суммирует на сетке
+активные `diff * weight`, а затем вызывает это же базовое ядро и конвертацию
+таймфрейма. Между собственными точками более крупного source он вносит ноль,
+не формируя предупреждение. Реально отсутствующая точка на собственном source
+grid заменяется нулем и учитывается в warnings.
+
+Shared fixture `preset_calculation.json` проверяет Node.js reference и C# core
+на одинаковом сценарии. Полный контракт и production API описаны в
+`docs/PRESETS.md`.
+
 ## Проверки
 
 `MetaEngine.DomainTests` читает тот же `test/fixtures/golden/base_metrics.json`,
@@ -64,6 +82,5 @@ npm test
 - HTTP endpoint запуска расчета;
 - сохранение `calculation_run` и artifact;
 - очередь и выполнение в Worker;
-- расчет пресетов;
 - production-модули RSI и MDD Mean Reversion;
 - Plotly payload и production UI.

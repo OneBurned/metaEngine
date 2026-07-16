@@ -154,6 +154,10 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("preset_id");
 
+                    b.Property<Guid?>("SourceCalculationRunId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("source_calculation_run_id");
+
                     b.Property<DateTimeOffset?>("StartedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("started_at");
@@ -208,6 +212,9 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.HasIndex("PresetId")
                         .HasDatabaseName("ix_calculation_runs_preset_id");
 
+                    b.HasIndex("SourceCalculationRunId")
+                        .HasDatabaseName("ix_calculation_runs_source_calculation_run_id");
+
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_calculation_runs_status_created_at");
 
@@ -222,7 +229,7 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_calculation_runs_period", "period_end >= period_start");
 
-                            t.HasCheckConstraint("ck_calculation_runs_strategy", "(kind = 'Base' AND strategy_type IS NULL AND strategy_schema_version IS NULL AND strategy_parameters_json IS NULL) OR (kind = 'Strategy' AND strategy_type IS NOT NULL AND strategy_schema_version IS NOT NULL AND strategy_parameters_json IS NOT NULL)");
+                            t.HasCheckConstraint("ck_calculation_runs_strategy", "(kind = 'Base' AND source_calculation_run_id IS NULL AND strategy_type IS NULL AND strategy_schema_version IS NULL AND strategy_parameters_json IS NULL) OR (kind = 'Strategy' AND source_calculation_run_id IS NOT NULL AND strategy_type IS NOT NULL AND strategy_schema_version IS NOT NULL AND strategy_parameters_json IS NOT NULL)");
                         });
                 });
 
@@ -1179,6 +1186,12 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_calculation_runs_presets_preset_id");
 
+                    b.HasOne("MetaEngine.Domain.Model.CalculationRun", "SourceCalculationRun")
+                        .WithMany()
+                        .HasForeignKey("SourceCalculationRunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_calculation_runs_calculation_runs_source_calculation_run_id");
+
                     b.HasOne("MetaEngine.Domain.Model.Workspace", "Workspace")
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
@@ -1191,6 +1204,8 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.Navigation("Portfolio");
 
                     b.Navigation("Preset");
+
+                    b.Navigation("SourceCalculationRun");
 
                     b.Navigation("Workspace");
                 });

@@ -30,14 +30,18 @@ docs/PRODUCTION_DATABASE.md
 docs/PRODUCTION_AUTH.md    вход, bootstrap владельца и защита workspace
 docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
 docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
+docs/PRESETS.md            production-пресеты: версии, API и расчетное ядро
+docs/CALCULATION_RUNS.md   production-очередь расчетов и Worker
+docs/PRODUCTION_UI.md      production React UI: вход, импорт и расчеты
 ```
 
 После функциональных изменений нужно обновлять релевантные документы, чтобы новый чат или новый разработчик быстро понимал актуальное состояние проекта.
 
 > Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
 > Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
-> Базовые формулы уже перенесены и сверены с golden fixture; стратегии,
-> асинхронный запуск расчетов и пользовательский интерфейс еще не перенесены.
+> Базовые формулы, versioned preset API, асинхронный базовый расчет через
+> Worker, production UI, ручные RSI/MDD strategy runs и экран пресетов уже
+> перенесены. В UI пока нет production-оптимизатора.
 
 ## Что уже умеет локальная версия
 
@@ -224,14 +228,30 @@ GitHub Actions запускает build, migrations, .NET/Node.js tests и secur
 PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
 
 Production API уже принимает canonical portfolio CSV `timestamp,diff`, хранит
-неизменяемые версии и отдает metadata/points только внутри workspace. UI пока
-остается в Node.js local lab. Контракт импорта и примеры запросов находятся в
-`docs/PORTFOLIO_IMPORT.md`.
+неизменяемые версии и отдает metadata/points только внутри workspace. Новый
+React UI разделяет импорт и библиотеку данных от запусков расчета, поддерживает
+создание пресета из портфелей и сохраненных стратегий, запуск и просмотр
+базового расчета, а также сравнение сохраненных рядов;
+контракт импорта и детали находятся в `docs/PORTFOLIO_IMPORT.md` и
+`docs/PRODUCTION_UI.md`.
 
 Базовое C#-ядро уже считает `diff/accum/hwm/dd/mdd`, заполняет пропуски нулевой
-доходностью и укрупняет таймфрейм с golden parity. Публичного endpoint запуска и
-сохранения calculation run пока нет. Контракт ядра описан в
-`docs/CALCULATION_ENGINE.md`.
+доходностью и укрупняет таймфрейм с golden parity. Публичный endpoint и Worker
+сохраняют calculation run, а production UI показывает его статус и результат.
+Контракт ядра описан в `docs/CALCULATION_ENGINE.md`.
+
+### Запустить production UI
+
+После запуска API и Worker в третьем терминале:
+
+```bash
+cd src/MetaEngine.Web
+npm install
+npm run dev
+```
+
+В GitHub Codespaces открой порт `3000`. UI использует локальный proxy к API на
+`5080`; подробный пользовательский сценарий — в `docs/PRODUCTION_UI.md`.
 
 ### Проверить синтаксис основных файлов
 
@@ -706,13 +726,14 @@ samples/runs              результаты расчетов
 ## Что пока не сделано
 
 Node.js-часть остается локальным файловым прототипом. Production foundation уже
-имеет PostgreSQL, пользователей, роли, авторизацию и импорт портфелей, но пока
-нет:
+имеет PostgreSQL, пользователей, роли, авторизацию, импорт портфелей,
+versioned presets и асинхронные базовые расчеты портфолио/пресетов через API и
+Worker. Пока нет:
 
-- API и очереди для запуска и сохранения расчетов;
-- расчетов пресетов и production-модулей RSI/MDD Mean Reversion;
+- production-модулей RSI/MDD Mean Reversion, их оптимизации и расчетов пресетов
+  с источниками-стратегиями;
 - управления участниками, восстановления пароля и 2FA/OIDC;
-- production UI;
+- UI пресетов, production-стратегий и оптимизатора;
 - Plotly-compatible `data/layout/config` для production-фронтенда.
 
 ## Важные ограничения текущей версии

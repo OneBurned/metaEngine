@@ -20,11 +20,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MetaEngine.Domain\MetaEngine.Domain.csproj" />
+    <ProjectReference Include="..\..\src\MetaEngine.Strategies.Abstractions\MetaEngine.Strategies.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\MetaEngine.Strategies.Rsi\MetaEngine.Strategies.Rsi.csproj" />
+    <ProjectReference Include="..\..\src\MetaEngine.Strategies.MddMeanReversion\MetaEngine.Strategies.MddMeanReversion.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\..\test\fixtures\golden\base_metrics.json"
-          Link="Fixtures\Golden\base_metrics.json"
+    <None Include="..\..\test\fixtures\golden\*.json"
+          Link="Fixtures\Golden\%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 

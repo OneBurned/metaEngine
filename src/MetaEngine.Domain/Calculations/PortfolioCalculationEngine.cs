@@ -11,19 +11,11 @@ public sealed class PortfolioCalculationEngine
         CalculationTimeframes.ValidatePeriod(request.PeriodStart, request.PeriodEnd);
 
         var sourceDefinition = CalculationTimeframes.GetRequired(request.SourceTimeframe);
-        var targetDefinition = CalculationTimeframes.GetRequired(request.TargetTimeframe);
         if (sourceDefinition.FixedMilliseconds is not long sourceStep)
         {
             throw new CalculationValidationException(
                 "unsupported_source_timeframe",
                 "Portfolio source timeframe must have a fixed duration.");
-        }
-
-        if (targetDefinition.Rank < sourceDefinition.Rank)
-        {
-            throw new CalculationValidationException(
-                "target_timeframe_too_small",
-                $"Cannot build {request.TargetTimeframe} from {request.SourceTimeframe}.");
         }
 
         var pointsByTimestamp = BuildPointLookup(request.Points);
@@ -55,10 +47,11 @@ public sealed class PortfolioCalculationEngine
         }
 
         var sourceSeries = BaseMetricsCalculator.Calculate(sourcePoints);
-        var targetSeries = ConvertToTimeframe(
+        var targetSeries = CalculationTimeframeConverter.Convert(
             sourceSeries,
             request.PeriodStart,
             request.PeriodEnd,
+            request.SourceTimeframe,
             request.TargetTimeframe);
         return new PortfolioCalculationResult(
             targetSeries.Rows,
@@ -71,9 +64,10 @@ public sealed class PortfolioCalculationEngine
             missingPointCount > warnings.Count);
     }
 
-    private static IReadOnlyDictionary<long, double> BuildPointLookup(
+    internal static IReadOnlyDictionary<long, double> BuildPointLookup(
         IReadOnlyList<ReturnPoint> points)
     {
+        ArgumentNullException.ThrowIfNull(points);
         var lookup = new Dictionary<long, double>(points.Count);
         foreach (var point in points)
         {
@@ -88,13 +82,26 @@ public sealed class PortfolioCalculationEngine
 
         return lookup;
     }
+}
 
-    private static CalculationSeries ConvertToTimeframe(
+internal static class CalculationTimeframeConverter
+{
+    public static CalculationSeries Convert(
         CalculationSeries source,
         long periodStart,
         long periodEnd,
+        string sourceTimeframe,
         string targetTimeframe)
     {
+        var sourceDefinition = CalculationTimeframes.GetRequired(sourceTimeframe);
+        var targetDefinition = CalculationTimeframes.GetRequired(targetTimeframe);
+        if (targetDefinition.Rank < sourceDefinition.Rank)
+        {
+            throw new CalculationValidationException(
+                "target_timeframe_too_small",
+                $"Cannot build {targetTimeframe} from {sourceTimeframe}.");
+        }
+
         var boundaries = CalculationTimeframes.BuildBoundaries(
             periodStart,
             periodEnd,
