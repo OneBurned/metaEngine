@@ -32,6 +32,7 @@ docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
 docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
 docs/PRESETS.md            production-пресеты: версии, API и расчетное ядро
 docs/CALCULATION_RUNS.md   production-очередь расчетов и Worker
+docs/QUEUE_RELIABILITY.md  lease, recovery и безопасный параллелизм Worker
 docs/PRODUCTION_OPTIMIZATION.md
                            production-оптимизация RSI и MDD, API и Worker
 docs/PRODUCTION_UI.md      production React UI: вход, импорт и расчеты

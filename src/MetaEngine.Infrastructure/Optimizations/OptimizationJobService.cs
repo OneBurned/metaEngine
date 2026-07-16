@@ -3,6 +3,7 @@ using System.Text.Json;
 using MetaEngine.Application.Calculations;
 using MetaEngine.Application.Optimizations;
 using MetaEngine.Domain.Model;
+using MetaEngine.Infrastructure.Processing;
 using MetaEngine.Infrastructure.Persistence;
 using MetaEngine.Strategies.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,7 @@ namespace MetaEngine.Infrastructure.Optimizations;
 internal sealed class OptimizationJobService(
     MetaEngineDbContext dbContext,
     ILogger<OptimizationJobService> logger,
+    JobProcessingPolicy jobProcessingPolicy,
     ICalculationRunService calculationRunService,
     IEnumerable<IStrategyModule> strategyModules) : IOptimizationJobService, IOptimizationJobProcessor
 {
@@ -131,6 +133,9 @@ internal sealed class OptimizationJobService(
                 job.TotalCandidates,
                 job.ProcessedCandidates,
                 job.Status,
+                job.AttemptCount,
+                job.RetryNotBefore,
+                job.LastHeartbeatAt,
                 job.StopRequestedAt,
                 job.ErrorCode,
                 job.CreatedAt,
@@ -166,9 +171,11 @@ internal sealed class OptimizationJobService(
         Guid jobId,
         CancellationToken cancellationToken)
     {
-        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
-            candidate.Id == jobId && candidate.WorkspaceId == workspaceId,
-            cancellationToken);
+        var job = await dbContext.OptimizationJobs
+            .Include(candidate => candidate.Results)
+            .SingleOrDefaultAsync(candidate =>
+                candidate.Id == jobId && candidate.WorkspaceId == workspaceId,
+                cancellationToken);
         if (job is null)
         {
             return null;
@@ -204,6 +211,45 @@ internal sealed class OptimizationJobService(
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
+        return ToSummary(job);
+    }
+
+    public async Task<OptimizationJobSummary?> RequestRetryAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid jobId,
+        CancellationToken cancellationToken)
+    {
+        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
+            candidate.Id == jobId && candidate.WorkspaceId == workspaceId,
+            cancellationToken);
+        if (job is null)
+        {
+            return null;
+        }
+        if (job.Status is not (JobStatus.Failed or JobStatus.Interrupted))
+        {
+            throw new OptimizationJobValidationException(
+                "optimization_retry_not_available", "Only failed or interrupted optimizations can be retried.");
+        }
+
+        var previousErrorCode = job.ErrorCode;
+        job.Status = JobStatus.Queued;
+        job.AttemptCount = 0;
+        job.LeaseId = null;
+        job.LastHeartbeatAt = null;
+        job.RetryNotBefore = null;
+        job.StartedAt = null;
+        job.StopRequestedAt = null;
+        job.CompletedAt = null;
+        job.ErrorCode = null;
+        job.ProcessedCandidates = 0;
+        if (job.Results.Count > 0)
+        {
+            dbContext.OptimizationResults.RemoveRange(job.Results);
+        }
+        dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_retry_requested", new { previousErrorCode }));
+        await dbContext.SaveChangesAsync(cancellationToken);
         return ToSummary(job);
     }
 
@@ -250,36 +296,86 @@ internal sealed class OptimizationJobService(
 
     public async Task<bool> ProcessNextAsync(CancellationToken cancellationToken)
     {
-        var jobId = await ClaimNextAsync(cancellationToken);
-        if (jobId is null)
+        var claim = await ClaimNextAsync(cancellationToken);
+        if (claim is null)
         {
             return false;
         }
 
         try
         {
-            await ProcessClaimedAsync(jobId.Value, cancellationToken);
+            await ProcessClaimedAsync(claim.Value, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
             return true;
         }
         catch (OptimizationJobValidationException exception)
         {
-            await MarkFailedAsync(jobId.Value, exception.Code, cancellationToken);
+            await MarkFailedAsync(claim.Value, exception.Code, cancellationToken);
             return true;
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Optimization job {OptimizationJobId} failed unexpectedly.", jobId.Value);
-            await MarkFailedAsync(jobId.Value, "optimization_failed", cancellationToken);
+            logger.LogError(exception, "Optimization job {OptimizationJobId} failed unexpectedly.", claim.Value.Id);
+            if (JobProcessingPolicy.IsTransientDatabaseFailure(exception))
+            {
+                await ScheduleRetryAsync(claim.Value, "transient_database_error", cancellationToken);
+            }
+            else
+            {
+                await MarkFailedAsync(claim.Value, "optimization_failed", cancellationToken);
+            }
             return true;
         }
     }
 
-    private async Task ProcessClaimedAsync(Guid jobId, CancellationToken cancellationToken)
+    public async Task RecoverExpiredLeasesAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var cutoff = now - jobProcessingPolicy.LeaseDuration;
+        if (IsPostgreSql)
+        {
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            var lockedJobs = await dbContext.OptimizationJobs
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM optimization_jobs
+                    WHERE status IN ('Running', 'Stopping')
+                      AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
+                    ORDER BY last_heartbeat_at NULLS FIRST, created_at
+                    FOR UPDATE SKIP LOCKED
+                    """)
+                .ToArrayAsync(cancellationToken);
+            RecoverJobs(lockedJobs, now);
+            if (lockedJobs.Length > 0)
+            {
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+            await transaction.CommitAsync(cancellationToken);
+            return;
+        }
+
+        var jobs = await dbContext.OptimizationJobs
+            .Where(job =>
+                (job.Status == JobStatus.Running || job.Status == JobStatus.Stopping) &&
+                (job.LastHeartbeatAt == null || job.LastHeartbeatAt <= cutoff))
+            .ToArrayAsync(cancellationToken);
+        RecoverJobs(jobs, now);
+        if (jobs.Length > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task ProcessClaimedAsync(ClaimedJob claim, CancellationToken cancellationToken)
     {
         var job = await dbContext.OptimizationJobs
             .AsNoTracking()
             .SingleOrDefaultAsync(candidate =>
-                candidate.Id == jobId &&
+                candidate.Id == claim.Id &&
+                candidate.LeaseId == claim.LeaseId &&
                 (candidate.Status == JobStatus.Running || candidate.Status == JobStatus.Stopping),
                 cancellationToken)
             ?? throw new OptimizationJobValidationException("optimization_not_found", "Claimed optimization job was not found.");
@@ -303,8 +399,8 @@ internal sealed class OptimizationJobService(
         }
 
         var best = new List<CandidateEvaluation>(job.TopCount);
-        var processed = job.ProcessedCandidates;
-        var stopped = await IsStopRequestedAsync(jobId, cancellationToken);
+        var processed = 0L;
+        var stopped = await IsStopRequestedAsync(claim, cancellationToken);
         var progressTimer = Stopwatch.StartNew();
         await foreach (var parameters in module.GenerateCandidatesAsync(settings.Parameters, job.Seed, cancellationToken))
         {
@@ -320,55 +416,63 @@ internal sealed class OptimizationJobService(
                 KeepBest(best, evaluation, job.TopCount);
             }
 
-            stopped = await IsStopRequestedAsync(jobId, cancellationToken);
+            stopped = await IsStopRequestedAsync(claim, cancellationToken);
             if (processed % 25 == 0 || progressTimer.Elapsed >= TimeSpan.FromSeconds(1) || stopped)
             {
-                await UpdateProgressAsync(jobId, processed, cancellationToken);
+                if (!await UpdateProgressAsync(claim, processed, cancellationToken))
+                {
+                    return;
+                }
                 progressTimer.Restart();
             }
         }
 
-        await CompleteAsync(jobId, processed, best, stopped, cancellationToken);
+        await CompleteAsync(claim, processed, best, stopped, cancellationToken);
     }
 
-    private async Task<Guid?> ClaimNextAsync(CancellationToken cancellationToken)
+    private async Task<ClaimedJob?> ClaimNextAsync(CancellationToken cancellationToken)
     {
-        var candidateId = await dbContext.OptimizationJobs
-            .AsNoTracking()
-            .Where(job => job.Status == JobStatus.Queued)
-            .OrderBy(job => job.CreatedAt)
-            .Select(job => (Guid?)job.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (candidateId is null)
-        {
-            return null;
-        }
-
         var now = DateTimeOffset.UtcNow;
-        if (dbContext.Database.IsRelational())
+        var leaseId = Guid.CreateVersion7();
+        if (IsPostgreSql)
         {
-            var claimed = await dbContext.OptimizationJobs
-                .Where(job => job.Id == candidateId.Value && job.Status == JobStatus.Queued)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(job => job.Status, JobStatus.Running)
-                        .SetProperty(job => job.StartedAt, now),
-                    cancellationToken);
-            return claimed == 1 ? candidateId : null;
+            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+            var lockedJob = await dbContext.OptimizationJobs
+                .FromSqlInterpolated($"""
+                    SELECT *
+                    FROM optimization_jobs
+                    WHERE status = 'Queued'
+                      AND (retry_not_before IS NULL OR retry_not_before <= {now})
+                    ORDER BY created_at
+                    FOR UPDATE SKIP LOCKED
+                    LIMIT 1
+                    """)
+                .SingleOrDefaultAsync(cancellationToken);
+            if (lockedJob is null)
+            {
+                await transaction.CommitAsync(cancellationToken);
+                return null;
+            }
+
+            AssignLease(lockedJob, leaseId, now);
+            await dbContext.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+            dbContext.ChangeTracker.Clear();
+            return new ClaimedJob(lockedJob.Id, leaseId);
         }
 
         var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
-            candidate.Id == candidateId.Value && candidate.Status == JobStatus.Queued,
+            candidate.Status == JobStatus.Queued &&
+            (candidate.RetryNotBefore == null || candidate.RetryNotBefore <= now),
             cancellationToken);
         if (job is null)
         {
             return null;
         }
 
-        job.Status = JobStatus.Running;
-        job.StartedAt = now;
+        AssignLease(job, leaseId, now);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return candidateId;
+        return new ClaimedJob(job.Id, leaseId);
     }
 
     private async Task<IReadOnlyList<StrategySourcePoint>> LoadSourceAsync(
@@ -488,35 +592,51 @@ internal sealed class OptimizationJobService(
         return byMdd != 0 ? byMdd : string.CompareOrdinal(left.ParametersJson, right.ParametersJson);
     }
 
-    private async Task<bool> IsStopRequestedAsync(Guid jobId, CancellationToken cancellationToken) =>
+    private async Task<bool> IsStopRequestedAsync(ClaimedJob claim, CancellationToken cancellationToken) =>
         await dbContext.OptimizationJobs
             .AsNoTracking()
-            .Where(job => job.Id == jobId)
-            .Select(job => job.Status == JobStatus.Stopping || job.Status == JobStatus.Stopped)
+            .Where(job => job.Id == claim.Id)
+            .Select(job => job.LeaseId != claim.LeaseId ||
+                job.Status == JobStatus.Stopping ||
+                job.Status == JobStatus.Stopped)
             .SingleOrDefaultAsync(cancellationToken);
 
-    private async Task UpdateProgressAsync(Guid jobId, long processed, CancellationToken cancellationToken)
+    private async Task<bool> UpdateProgressAsync(ClaimedJob claim, long processed, CancellationToken cancellationToken)
     {
+        var now = DateTimeOffset.UtcNow;
         if (dbContext.Database.IsRelational())
         {
-            await dbContext.OptimizationJobs
+            var updated = await dbContext.OptimizationJobs
                 .Where(job =>
-                    job.Id == jobId &&
+                    job.Id == claim.Id &&
+                    job.LeaseId == claim.LeaseId &&
                     (job.Status == JobStatus.Running || job.Status == JobStatus.Stopping))
                 .ExecuteUpdateAsync(
-                    setters => setters.SetProperty(job => job.ProcessedCandidates, processed),
+                    setters => setters
+                        .SetProperty(job => job.ProcessedCandidates, processed)
+                        .SetProperty(job => job.LastHeartbeatAt, now),
                     cancellationToken);
-            return;
+            return updated == 1;
         }
 
         dbContext.ChangeTracker.Clear();
-        var job = await dbContext.OptimizationJobs.SingleAsync(job => job.Id == jobId, cancellationToken);
+        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(job =>
+            job.Id == claim.Id &&
+            job.LeaseId == claim.LeaseId &&
+            (job.Status == JobStatus.Running || job.Status == JobStatus.Stopping),
+            cancellationToken);
+        if (job is null)
+        {
+            return false;
+        }
         job.ProcessedCandidates = processed;
+        job.LastHeartbeatAt = now;
         await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
     }
 
     private async Task CompleteAsync(
-        Guid jobId,
+        ClaimedJob claim,
         long processed,
         IReadOnlyList<CandidateEvaluation> best,
         bool stopped,
@@ -525,7 +645,16 @@ internal sealed class OptimizationJobService(
         dbContext.ChangeTracker.Clear();
         var job = await dbContext.OptimizationJobs
             .Include(candidate => candidate.Results)
-            .SingleAsync(candidate => candidate.Id == jobId, cancellationToken);
+            .SingleOrDefaultAsync(candidate =>
+                candidate.Id == claim.Id &&
+                candidate.LeaseId == claim.LeaseId &&
+                (candidate.Status == JobStatus.Running || candidate.Status == JobStatus.Stopping),
+                cancellationToken);
+        if (job is null)
+        {
+            logger.LogWarning("Optimization job {OptimizationJobId} lease was lost before completion.", claim.Id);
+            return;
+        }
         var isStopped = stopped || job.Status is JobStatus.Stopping or JobStatus.Stopped;
         if (job.Results.Count > 0)
         {
@@ -551,7 +680,10 @@ internal sealed class OptimizationJobService(
         }
         job.ProcessedCandidates = processed;
         job.Status = isStopped ? JobStatus.Stopped : JobStatus.Completed;
-        job.CompletedAt = DateTimeOffset.UtcNow;
+        job.LeaseId = null;
+        job.LastHeartbeatAt = DateTimeOffset.UtcNow;
+        job.RetryNotBefore = null;
+        job.CompletedAt = job.LastHeartbeatAt;
         job.ErrorCode = null;
         dbContext.AuditEvents.Add(new AuditEvent
         {
@@ -570,29 +702,163 @@ internal sealed class OptimizationJobService(
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private async Task MarkFailedAsync(Guid jobId, string errorCode, CancellationToken cancellationToken)
+    private async Task ScheduleRetryAsync(
+        ClaimedJob claim,
+        string errorCode,
+        CancellationToken cancellationToken)
     {
         dbContext.ChangeTracker.Clear();
-        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate => candidate.Id == jobId, cancellationToken);
-        if (job is null || job.Status == JobStatus.Stopped)
+        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
+            candidate.Id == claim.Id &&
+            candidate.LeaseId == claim.LeaseId &&
+            (candidate.Status == JobStatus.Running || candidate.Status == JobStatus.Stopping),
+            cancellationToken);
+        if (job is null)
         {
             return;
         }
 
-        job.Status = JobStatus.Failed;
-        job.ErrorCode = errorCode;
-        job.CompletedAt = DateTimeOffset.UtcNow;
-        dbContext.AuditEvents.Add(new AuditEvent
+        var now = DateTimeOffset.UtcNow;
+        if (job.Status == JobStatus.Stopping)
         {
-            WorkspaceId = job.WorkspaceId,
-            UserId = job.CreatedByUserId,
-            Action = "optimization_failed",
-            EntityType = "optimization_job",
-            EntityId = job.Id,
-            DetailsJson = JsonSerializer.Serialize(new { errorCode, job.ProcessedCandidates })
-        });
+            MarkStopped(job, now);
+            dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_stopped", new { job.ProcessedCandidates }));
+        }
+        else if (jobProcessingPolicy.CanRetryAutomatically(job.AttemptCount))
+        {
+            RequeueForRetry(job, now, errorCode);
+            dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_retry_scheduled", new
+            {
+                errorCode,
+                job.AttemptCount,
+                job.RetryNotBefore
+            }));
+        }
+        else
+        {
+            MarkInterrupted(job, now, errorCode);
+            dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_interrupted", new { errorCode, job.AttemptCount }));
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    private async Task MarkFailedAsync(
+        ClaimedJob claim,
+        string errorCode,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
+            candidate.Id == claim.Id &&
+            candidate.LeaseId == claim.LeaseId &&
+            (candidate.Status == JobStatus.Running || candidate.Status == JobStatus.Stopping),
+            cancellationToken);
+        if (job is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        if (job.Status == JobStatus.Stopping)
+        {
+            MarkStopped(job, now);
+            dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_stopped", new { job.ProcessedCandidates }));
+        }
+        else
+        {
+            job.Status = JobStatus.Failed;
+            job.LeaseId = null;
+            job.LastHeartbeatAt = now;
+            job.RetryNotBefore = null;
+            job.ErrorCode = errorCode;
+            job.CompletedAt = now;
+            dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_failed", new { errorCode, job.ProcessedCandidates, job.AttemptCount }));
+        }
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private void RecoverJobs(IReadOnlyList<OptimizationJob> jobs, DateTimeOffset now)
+    {
+        foreach (var job in jobs)
+        {
+            if (job.Status == JobStatus.Stopping)
+            {
+                MarkStopped(job, now);
+                dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_stopped", new { job.ProcessedCandidates }));
+            }
+            else if (jobProcessingPolicy.CanRetryAutomatically(job.AttemptCount))
+            {
+                RequeueForRetry(job, now, "worker_lease_expired");
+                dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_recovered", new
+                {
+                    job.AttemptCount,
+                    job.RetryNotBefore
+                }));
+            }
+            else
+            {
+                MarkInterrupted(job, now, "worker_lease_expired");
+                dbContext.AuditEvents.Add(CreateAuditEvent(job, "optimization_interrupted", new { job.AttemptCount }));
+            }
+        }
+    }
+
+    private void RequeueForRetry(OptimizationJob job, DateTimeOffset now, string errorCode)
+    {
+        job.Status = JobStatus.Queued;
+        job.LeaseId = null;
+        job.LastHeartbeatAt = now;
+        job.RetryNotBefore = jobProcessingPolicy.GetRetryNotBefore(now, job.AttemptCount);
+        job.ErrorCode = errorCode;
+        job.CompletedAt = null;
+        job.ProcessedCandidates = 0;
+    }
+
+    private static void MarkStopped(OptimizationJob job, DateTimeOffset now)
+    {
+        job.Status = JobStatus.Stopped;
+        job.LeaseId = null;
+        job.LastHeartbeatAt = now;
+        job.RetryNotBefore = null;
+        job.ErrorCode = null;
+        job.CompletedAt = now;
+    }
+
+    private static void MarkInterrupted(OptimizationJob job, DateTimeOffset now, string errorCode)
+    {
+        job.Status = JobStatus.Interrupted;
+        job.LeaseId = null;
+        job.LastHeartbeatAt = now;
+        job.RetryNotBefore = null;
+        job.ErrorCode = errorCode;
+        job.CompletedAt = now;
+    }
+
+    private static void AssignLease(OptimizationJob job, Guid leaseId, DateTimeOffset now)
+    {
+        job.Status = JobStatus.Running;
+        job.AttemptCount++;
+        job.LeaseId = leaseId;
+        job.LastHeartbeatAt = now;
+        job.RetryNotBefore = null;
+        job.ErrorCode = null;
+        job.StartedAt = now;
+        job.CompletedAt = null;
+        job.ProcessedCandidates = 0;
+    }
+
+    private static AuditEvent CreateAuditEvent(OptimizationJob job, string action, object details) => new()
+    {
+        WorkspaceId = job.WorkspaceId,
+        UserId = job.CreatedByUserId,
+        Action = action,
+        EntityType = "optimization_job",
+        EntityId = job.Id,
+        DetailsJson = JsonSerializer.Serialize(details)
+    };
+
+    private bool IsPostgreSql =>
+        string.Equals(dbContext.Database.ProviderName, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal);
 
     private IStrategyModule GetOptimizationModule(string strategyType)
     {
@@ -706,6 +972,9 @@ internal sealed class OptimizationJobService(
         job.TotalCandidates,
         job.ProcessedCandidates,
         job.Status,
+        job.AttemptCount,
+        job.RetryNotBefore,
+        job.LastHeartbeatAt,
         job.StopRequestedAt,
         job.ErrorCode,
         job.CreatedAt,

@@ -15,15 +15,16 @@ After signing in, the user can:
 3. choose a portfolio or preset directly in **Calculations**;
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;
-6. follow `queued`, `running`, `completed` or `failed` status in the five most
-   recent runs, and open the full history when needed;
+6. follow `queued`, `running`, `completed`, `failed` or `interrupted` status in
+   the five most recent runs, retry a failed/interrupted run when appropriate,
+   and open the full history when needed;
 7. open a completed result under its source/type title, inspect summary metrics
    and explore the equity/drawdown chart with the mouse range brush;
 8. open the point table only when needed and continue loading rows in batches;
 9. select a completed base run, calculate RSI or MDD Mean Reversion, and save
    the resulting strategy configuration.
 10. optimize RSI or MDD Mean Reversion across several sequential samples,
-    follow or stop the job, compare sortable top results and queue one
+    follow, stop or retry the job, compare sortable top results and queue one
     configuration as a normal strategy run before saving it.
 11. create a preset from portfolio and saved-strategy sources, then select that
    preset as the source for a base calculation.
@@ -41,9 +42,10 @@ controls.
 
 ## Client boundaries
 
-The UI supports RSI and MDD Mean Reversion optimization. Retry for failed jobs,
-user management and CSV export remain future work or are governed by their API
-and domain contracts.
+The UI supports RSI and MDD Mean Reversion optimization. Retry actions are
+available for failed or interrupted calculation and optimization jobs. User
+management and CSV export remain future work or are governed by their API and
+domain contracts.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only

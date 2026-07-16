@@ -67,6 +67,8 @@ export type PresetDetails = {
   items: PresetItem[]
 }
 
+export type CalculationRunStatus = "queued" | "running" | "completed" | "failed" | "interrupted"
+
 export type CalculationRun = {
   id: string
   kind: "base" | "strategy"
@@ -79,7 +81,10 @@ export type CalculationRun = {
   periodStart: string
   periodEnd: string
   timeframe: Timeframe
-  status: "queued" | "running" | "completed" | "failed"
+  status: CalculationRunStatus
+  attemptCount: number
+  retryNotBefore: string | null
+  lastHeartbeatAt: string | null
   pointCount: number
   tradeCount: number
   finalAccum: number | null
@@ -100,7 +105,7 @@ export type StrategyType = {
   isProductionOptimizationAvailable: boolean
 }
 
-export type OptimizationJobStatus = "queued" | "running" | "stopping" | "stopped" | "completed" | "failed"
+export type OptimizationJobStatus = "queued" | "running" | "stopping" | "stopped" | "completed" | "failed" | "interrupted"
 
 export type OptimizationJob = {
   id: string
@@ -119,6 +124,9 @@ export type OptimizationJob = {
   totalCandidates: number | null
   processedCandidates: number
   status: OptimizationJobStatus
+  attemptCount: number
+  retryNotBefore: string | null
+  lastHeartbeatAt: string | null
   stopRequestedAt: string | null
   errorCode: string | null
   createdAt: string
@@ -506,6 +514,13 @@ export async function stopOptimizationJob(workspaceId: string, jobId: string) {
   )
 }
 
+export async function retryOptimizationJob(workspaceId: string, jobId: string) {
+  return request<OptimizationJob>(
+    `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}/retry`,
+    { method: "POST" },
+  )
+}
+
 export async function queueStrategyFromOptimization(
   workspaceId: string,
   jobId: string,
@@ -528,6 +543,13 @@ export async function listCalculationRuns(workspaceId: string) {
 export async function getCalculationRun(workspaceId: string, runId: string) {
   return request<CalculationRunDetails>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}`,
+  )
+}
+
+export async function retryCalculationRun(workspaceId: string, runId: string) {
+  return request<CalculationRun>(
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/retry`,
+    { method: "POST" },
   )
 }
 

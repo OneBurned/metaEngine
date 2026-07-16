@@ -41,6 +41,9 @@ public sealed record OptimizationJobSummary(
     long? TotalCandidates,
     long ProcessedCandidates,
     JobStatus Status,
+    int AttemptCount,
+    DateTimeOffset? RetryNotBefore,
+    DateTimeOffset? LastHeartbeatAt,
     DateTimeOffset? StopRequestedAt,
     string? ErrorCode,
     DateTimeOffset CreatedAt,
@@ -96,6 +99,12 @@ public interface IOptimizationJobService
         Guid jobId,
         CancellationToken cancellationToken);
 
+    Task<OptimizationJobSummary?> RequestRetryAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid jobId,
+        CancellationToken cancellationToken);
+
     Task<CalculationRunSummary> QueueStrategyRunAsync(
         Guid workspaceId,
         Guid userId,
@@ -107,6 +116,8 @@ public interface IOptimizationJobService
 public interface IOptimizationJobProcessor
 {
     Task<bool> ProcessNextAsync(CancellationToken cancellationToken);
+
+    Task RecoverExpiredLeasesAsync(CancellationToken cancellationToken);
 }
 
 public sealed class OptimizationJobValidationException(string code, string message)

@@ -37,6 +37,9 @@ public sealed record CalculationRunSummary(
     DateTimeOffset PeriodEnd,
     string Timeframe,
     JobStatus Status,
+    int AttemptCount,
+    DateTimeOffset? RetryNotBefore,
+    DateTimeOffset? LastHeartbeatAt,
     int PointCount,
     int TradeCount,
     double? FinalAccum,
@@ -84,6 +87,12 @@ public interface ICalculationRunService
         QueueStrategyCalculationCommand command,
         CancellationToken cancellationToken);
 
+    Task<CalculationRunSummary?> RequestRetryAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid runId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CalculationRunSummary>> ListAsync(
         Guid workspaceId,
         CancellationToken cancellationToken);
@@ -104,6 +113,8 @@ public interface ICalculationRunService
 public interface ICalculationRunProcessor
 {
     Task<bool> ProcessNextAsync(CancellationToken cancellationToken);
+
+    Task RecoverExpiredLeasesAsync(CancellationToken cancellationToken);
 }
 
 public sealed class CalculationRunValidationException(string code, string message)

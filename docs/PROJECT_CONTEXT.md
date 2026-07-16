@@ -46,6 +46,7 @@ docs/PRODUCTION_SCAFFOLD.md
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
+docs/QUEUE_RELIABILITY.md  Lease-based recovery, retry and parallel Worker safety
 docs/PRODUCTION_OPTIMIZATION.md
                            Production RSI optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
@@ -133,6 +134,19 @@ DD delta and nondecreasing target weights. Detailed mode provides an independent
 DD/weight range for every entry. Random search has a finite requested candidate
 count; full search remains streamed and intentionally avoids counting the whole
 space before running.
+
+## Production P8: reliable queue foundation
+
+Calculation and optimization jobs are claimed with a PostgreSQL row lock and a
+unique lease. A second Worker cannot claim the same task, and a late Worker
+cannot overwrite a result after its lease has expired. The Worker recovers
+expired leases, automatically retries transient database failures with a small
+exponential delay, and leaves an `interrupted` task after the configured retry
+budget. Failed or interrupted tasks can be retried deliberately from the UI.
+A stopping optimization is finalized as `stopped` during recovery. This makes
+several Worker processes safe to run against one database; configuring replica
+count and production capacity is the next operational stage. See
+`docs/QUEUE_RELIABILITY.md`.
 
 ## 2. User communication rules
 

@@ -91,6 +91,14 @@ public sealed class CalculationRun
 
     public JobStatus Status { get; set; } = JobStatus.Queued;
 
+    public int AttemptCount { get; set; }
+
+    public Guid? LeaseId { get; set; }
+
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
+    public DateTimeOffset? RetryNotBefore { get; set; }
+
     public int PointCount { get; set; }
 
     public int TradeCount { get; set; }
@@ -167,6 +175,14 @@ public sealed class OptimizationJob
     public long ProcessedCandidates { get; set; }
 
     public JobStatus Status { get; set; } = JobStatus.Queued;
+
+    public int AttemptCount { get; set; }
+
+    public Guid? LeaseId { get; set; }
+
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
+    public DateTimeOffset? RetryNotBefore { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

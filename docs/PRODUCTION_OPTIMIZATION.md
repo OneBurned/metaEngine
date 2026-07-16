@@ -60,6 +60,7 @@ POST /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/optimizations
 GET  /api/v1/workspaces/{workspaceId}/optimization-jobs
 GET  /api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}
 POST /api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/stop
+POST /api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/retry
 POST /api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/results/{resultId}/strategy-runs
 ```
 
@@ -107,4 +108,9 @@ deliberate final action after its canonical result is calculated.
 
 `MetaEngine.Worker` checks calculation runs first and optimizer jobs second. A
 Worker process must be running for queued RSI or MDD optimization to progress.
-Automatic retry and restart recovery remain future reliability work.
+Each claim carries a database lease. A transient database failure or an expired
+lease is automatically requeued with exponential delay until the retry budget
+is exhausted, then becomes `interrupted` and can be retried manually. An
+expired job in `stopping` becomes `stopped`, so a stop request never revives it.
+See `docs/QUEUE_RELIABILITY.md` for the shared queue rules and safe operation
+of several Worker processes.

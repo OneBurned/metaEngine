@@ -16,6 +16,8 @@ public static class OptimizationEndpoints
         workspaces.MapGet("/{workspaceId:guid}/optimization-jobs/{jobId:guid}", FindAsync);
         workspaces.MapPost("/{workspaceId:guid}/optimization-jobs/{jobId:guid}/stop", RequestStopAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/optimization-jobs/{jobId:guid}/retry", RequestRetryAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost(
                 "/{workspaceId:guid}/optimization-jobs/{jobId:guid}/results/{resultId:guid}/strategy-runs",
                 QueueStrategyRunAsync)
@@ -128,6 +130,32 @@ public static class OptimizationEndpoints
                 resultId,
                 cancellationToken);
             return Results.Accepted($"/api/v1/workspaces/{workspaceId}/calculation-runs/{run.Id}", run);
+        }
+        catch (OptimizationJobValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
+    }
+
+    private static async Task<IResult> RequestRetryAsync(
+        Guid workspaceId,
+        Guid jobId,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        IOptimizationJobService optimizationJobService,
+        CancellationToken cancellationToken)
+    {
+        var access = await FindWriteAccessAsync(httpContext, workspaceAccessService, workspaceId, cancellationToken);
+        if (access.Result is not null) return access.Result;
+        try
+        {
+            var job = await optimizationJobService.RequestRetryAsync(
+                workspaceId,
+                access.UserId!.Value,
+                jobId,
+                cancellationToken);
+            return job is null ? Results.NotFound() : Results.Accepted(
+                $"/api/v1/workspaces/{workspaceId}/optimization-jobs/{job.Id}", job);
         }
         catch (OptimizationJobValidationException exception)
         {

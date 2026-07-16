@@ -9,6 +9,7 @@ using MetaEngine.Infrastructure.Optimizations;
 using MetaEngine.Infrastructure.Portfolios;
 using MetaEngine.Infrastructure.Presets;
 using MetaEngine.Infrastructure.Strategies;
+using MetaEngine.Infrastructure.Processing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -25,8 +26,13 @@ public static class MetaEnginePersistenceExtensions
         services.AddDbContext<MetaEngineDbContext>(options =>
             options
                 .UseNpgsql(connectionString, npgsql =>
-                    npgsql.MigrationsAssembly(typeof(MetaEngineDbContext).Assembly.FullName))
+                    npgsql
+                        .MigrationsAssembly(typeof(MetaEngineDbContext).Assembly.FullName)
+                        .EnableRetryOnFailure())
                 .UseSnakeCaseNamingConvention());
+        services.AddOptions<JobProcessingOptions>()
+            .BindConfiguration("JobProcessing");
+        services.AddSingleton<JobProcessingPolicy>();
         services.AddScoped<IWorkspaceAccessService, WorkspaceAccessService>();
         services.AddScoped<PortfolioCsvNormalizer>();
         services.AddScoped<IPortfolioService, PortfolioService>();

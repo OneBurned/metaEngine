@@ -10,9 +10,11 @@ public sealed class Worker(
     IServiceScopeFactory serviceScopeFactory) : BackgroundService
 {
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan RecoveryInterval = TimeSpan.FromSeconds(10);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var nextRecoveryAt = DateTimeOffset.MinValue;
         logger.LogInformation(
             "MetaEngine Worker started with {StrategyCount} registered strategy descriptors: {StrategyTypes}",
             strategyCatalog.Descriptors.Count,
@@ -24,12 +26,18 @@ public sealed class Worker(
             {
                 await using var scope = serviceScopeFactory.CreateAsyncScope();
                 var calculationProcessor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
+                var optimizationProcessor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
+                if (DateTimeOffset.UtcNow >= nextRecoveryAt)
+                {
+                    await calculationProcessor.RecoverExpiredLeasesAsync(stoppingToken);
+                    await optimizationProcessor.RecoverExpiredLeasesAsync(stoppingToken);
+                    nextRecoveryAt = DateTimeOffset.UtcNow.Add(RecoveryInterval);
+                }
                 if (await calculationProcessor.ProcessNextAsync(stoppingToken))
                 {
                     continue;
                 }
 
-                var optimizationProcessor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
                 if (await optimizationProcessor.ProcessNextAsync(stoppingToken))
                 {
                     continue;

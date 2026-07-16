@@ -11,6 +11,7 @@ import {
   listOptimizationJobs,
   queueOptimization,
   queueStrategyFromOptimization,
+  retryOptimizationJob,
   stopOptimizationJob,
   type CalculationRun,
   type MddOptimizationSearchSpace,
@@ -21,7 +22,7 @@ import {
   type OptimizationResult,
 } from "@/lib/api"
 import { formatDateTime, formatPercent } from "@/lib/metrics"
-import { ArrowDown, ArrowUp, ArrowUpDown, LoaderCircle, Play, Square } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, LoaderCircle, Play, RotateCcw, Square } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { toast } from "sonner"
 
@@ -186,6 +187,21 @@ export function MddOptimizationPanel({
     }
   }
 
+  async function handleRetry() {
+    if (!details) return
+    setIsSubmitting(true)
+    try {
+      const job = await retryOptimizationJob(workspaceId, details.job.id)
+      setDetails((current) => current ? { ...current, job, results: [] } : current)
+      toast.success("Оптимизация снова поставлена в очередь")
+      await refreshJobs()
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
   async function handleUseResult(result: OptimizationResult) {
     if (!details) return
     const parameters = parseMddParameters(result.parametersJson)
@@ -231,9 +247,9 @@ export function MddOptimizationPanel({
 
     <div className="flex flex-wrap items-center gap-3"><Button onClick={() => void handleQueue()} disabled={!canWrite || !sourceRunId || isSubmitting}><Play />Запустить оптимизацию MDD</Button></div>
 
-    <section className="border-t border-slate-200 pt-6" aria-labelledby="mdd-optimization-progress"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="mdd-optimization-progress" className="text-sm font-semibold text-slate-950">Текущая оптимизация</h3><p className="mt-1 text-sm text-slate-500">{details ? `${optimizationStatusLabel(details.job.status)} · ${formatDateTime(details.job.createdAt)}` : "Выберите оптимизацию из списка ниже."}</p></div>{details && activeStatuses.has(details.job.status) ? <Button variant="outline" onClick={() => void handleStop()} disabled={!canWrite || isSubmitting}><Square />Остановить оптимизацию</Button> : null}</div>{details ? <div className="mt-4 space-y-2"><div className="flex justify-between gap-4 text-sm tabular-nums text-slate-600"><span>{details.job.processedCandidates.toLocaleString("ru-RU")} обработано</span><span>{details.job.totalCandidates === null ? "Полный перебор" : `${details.job.totalCandidates.toLocaleString("ru-RU")} кандидатов`}</span></div><Progress value={progress} /><p className="text-sm text-slate-500">Семплов: {details.job.sampleCount}. Результаты сохраняются и после остановки.</p></div> : null}</section>
+    <section className="border-t border-slate-200 pt-6" aria-labelledby="mdd-optimization-progress"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="mdd-optimization-progress" className="text-sm font-semibold text-slate-950">Текущая оптимизация</h3><p className="mt-1 text-sm text-slate-500">{details ? `${optimizationStatusLabel(details.job.status)} · ${formatDateTime(details.job.createdAt)}` : "Выберите оптимизацию из списка ниже."}</p></div><div className="flex gap-2">{details && isRetryable(details.job) ? <Button variant="outline" onClick={() => void handleRetry()} disabled={!canWrite || isSubmitting}><RotateCcw />Повторить</Button> : null}{details && activeStatuses.has(details.job.status) ? <Button variant="outline" onClick={() => void handleStop()} disabled={!canWrite || isSubmitting}><Square />Остановить оптимизацию</Button> : null}</div></div>{details ? <div className="mt-4 space-y-2"><div className="flex justify-between gap-4 text-sm tabular-nums text-slate-600"><span>{details.job.processedCandidates.toLocaleString("ru-RU")} обработано</span><span>{details.job.totalCandidates === null ? "Полный перебор" : `${details.job.totalCandidates.toLocaleString("ru-RU")} кандидатов`}</span></div><Progress value={progress} /><p className="text-sm text-slate-500">Семплов: {details.job.sampleCount}. {optimizationQueueNote(details.job) ?? "Результаты сохраняются и после остановки."}</p></div> : null}</section>
 
-    <section className="border-t border-slate-200 pt-6" aria-labelledby="mdd-optimization-results"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="mdd-optimization-results" className="text-sm font-semibold text-slate-950">Лучшие результаты</h3><p className="mt-1 text-sm text-slate-500">Нажмите «Рассчитать стратегию», чтобы поставить конкретную настройку в обычную очередь и затем сохранить ее.</p></div>{details ? <Badge variant="outline">Показано: {details.results.length}</Badge> : null}</div>{details && sortedResults.length > 0 ? <MddResultsTable results={sortedResults} sort={sort} onSort={toggleSort} canUse={canWrite && (details.job.status === "completed" || details.job.status === "stopped")} isSubmitting={isSubmitting} onUse={handleUseResult} /> : <div className="mt-4 rounded-md border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">{details?.job.status === "failed" ? `Оптимизация завершилась с ошибкой: ${details.job.errorCode ?? "optimization_failed"}.` : "После завершения оптимизации здесь появятся лучшие комбинации."}</div>}</section>
+    <section className="border-t border-slate-200 pt-6" aria-labelledby="mdd-optimization-results"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 id="mdd-optimization-results" className="text-sm font-semibold text-slate-950">Лучшие результаты</h3><p className="mt-1 text-sm text-slate-500">Нажмите «Рассчитать стратегию», чтобы поставить конкретную настройку в обычную очередь и затем сохранить ее.</p></div>{details ? <Badge variant="outline">Показано: {details.results.length}</Badge> : null}</div>{details && sortedResults.length > 0 ? <MddResultsTable results={sortedResults} sort={sort} onSort={toggleSort} canUse={canWrite && (details.job.status === "completed" || details.job.status === "stopped")} isSubmitting={isSubmitting} onUse={handleUseResult} /> : <div className="mt-4 rounded-md border border-dashed border-slate-300 px-5 py-8 text-center text-sm text-slate-500">{details && isRetryable(details.job) ? `Оптимизация не завершилась: ${details.job.errorCode ?? "optimization_failed"}. Попыток: ${details.job.attemptCount}.` : "После завершения оптимизации здесь появятся лучшие комбинации."}</div>}</section>
 
     <section className="border-t border-slate-200 pt-6" aria-labelledby="mdd-optimization-history"><div className="flex flex-wrap items-center justify-between gap-3"><h3 id="mdd-optimization-history" className="text-sm font-semibold text-slate-950">Последние оптимизации</h3>{jobs.length > 5 ? <Button variant="ghost" size="sm" onClick={() => setShowAllJobs((current) => !current)}>{showAllJobs ? "Свернуть историю" : `Вся история (${jobs.length})`}</Button> : null}</div><div className="mt-3 overflow-hidden rounded-md border border-slate-200"><Table><TableHeader><TableRow><TableHead>Источник</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Семплов</TableHead><TableHead className="hidden lg:table-cell">Прогресс</TableHead><TableHead className="w-24 text-right">Детали</TableHead></TableRow></TableHeader><TableBody>{visibleJobs.length === 0 ? <TableRow><TableCell colSpan={5} className="py-8 text-center text-sm text-slate-500">Оптимизаций MDD пока нет.</TableCell></TableRow> : visibleJobs.map((job) => <TableRow key={job.id} data-state={job.id === selectedJobId ? "selected" : undefined}><TableCell><div className="font-medium">MDD Mean Reversion</div><div className="text-xs text-slate-500">{formatDateTime(job.createdAt)}</div></TableCell><TableCell><OptimizationStatus status={job.status} /></TableCell><TableCell className="hidden md:table-cell">{job.sampleCount}</TableCell><TableCell className="hidden lg:table-cell tabular-nums">{job.processedCandidates.toLocaleString("ru-RU")} / {job.totalCandidates?.toLocaleString("ru-RU") ?? "?"}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => setSelectedJobId(job.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div></section>
   </div>
@@ -245,8 +261,10 @@ function MddResultsTable({ results, sort, onSort, canUse, isSubmitting, onUse }:
 }
 
 function SortableHead({ label, sortKey, sort, onSort }: { label: string; sortKey: SortKey; sort: { key: SortKey; order: SortOrder }; onSort: (key: SortKey) => void }) { const Icon = sort.key === sortKey ? (sort.order === "asc" ? ArrowUp : ArrowDown) : ArrowUpDown; return <TableHead><Button variant="ghost" size="sm" className="h-8 px-1" onClick={() => onSort(sortKey)}>{label}<Icon /></Button></TableHead> }
-function OptimizationStatus({ status }: { status: OptimizationJobStatus }) { const classes = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", stopping: "border-orange-200 bg-orange-50 text-orange-800", stopped: "border-slate-200 bg-slate-50 text-slate-700", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800" }; return <Badge variant="outline" className={classes[status]}>{optimizationStatusLabel(status)}</Badge> }
-function optimizationStatusLabel(status: OptimizationJobStatus) { return { queued: "В очереди", running: "Считается", stopping: "Останавливается", stopped: "Остановлена", completed: "Готово", failed: "Ошибка" }[status] }
+function OptimizationStatus({ status }: { status: OptimizationJobStatus }) { const classes = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", stopping: "border-orange-200 bg-orange-50 text-orange-800", stopped: "border-slate-200 bg-slate-50 text-slate-700", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800", interrupted: "border-orange-200 bg-orange-50 text-orange-800" }; return <Badge variant="outline" className={classes[status]}>{optimizationStatusLabel(status)}</Badge> }
+function optimizationStatusLabel(status: OptimizationJobStatus) { return { queued: "В очереди", running: "Считается", stopping: "Останавливается", stopped: "Остановлена", completed: "Готово", failed: "Ошибка", interrupted: "Прервана" }[status] }
+function isRetryable(job: OptimizationJob) { return job.status === "failed" || job.status === "interrupted" }
+function optimizationQueueNote(job: OptimizationJob) { if (job.status === "queued" && job.retryNotBefore) return `Автоповтор после ${formatDateTime(job.retryNotBefore)}.`; if (job.status === "running" && job.attemptCount > 1) return `Попытка ${job.attemptCount}.`; return null }
 function RangeFields({ label, value, onChange, min, max }: { label: string; value: OptimizationNumericRange; onChange: (value: OptimizationNumericRange) => void; min?: number; max?: number }) { return <div className="grid gap-2 rounded-md border border-slate-200 p-3 sm:grid-cols-[minmax(0,1fr)_104px_104px_104px]"><p className="text-sm font-medium text-slate-900 sm:self-center">{label}</p><NumberField label="От" value={value.from} onChange={(from) => onChange({ ...value, from })} min={min} max={max} /><NumberField label="До" value={value.to} onChange={(to) => onChange({ ...value, to })} min={min} max={max} /><NumberField label="Шаг" value={value.step} onChange={(step) => onChange({ ...value, step })} min={0.000001} /></div> }
 function NumberField({ label, value, onChange, min, max, disabled }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number; disabled?: boolean }) { return <Field label={label}><Input type="number" value={value} min={min} max={max} step="any" disabled={disabled} onChange={(event) => onChange(Number(event.target.value))} /></Field> }
 function OptionalNumberField({ label, value, onChange, min, max, placeholder }: { label: string; value: string; onChange: (value: string) => void; min?: number; max?: number; placeholder: string }) { return <Field label={label}><Input type="number" value={value} min={min} max={max} step="any" placeholder={placeholder} onChange={(event) => onChange(event.target.value)} /></Field> }
