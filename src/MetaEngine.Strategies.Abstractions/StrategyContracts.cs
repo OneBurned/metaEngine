@@ -117,4 +117,10 @@ public interface IStrategyModule : IStrategyModuleDescriptorProvider
         IStrategyPreparedData preparedData,
         JsonElement parameters,
         CancellationToken cancellationToken);
+
+    async ValueTask<StrategyRunSummary> CalculateSummaryAsync(
+        IStrategyPreparedData preparedData,
+        JsonElement parameters,
+        CancellationToken cancellationToken) =>
+        (await CalculateAsync(preparedData, parameters, cancellationToken)).Summary;
 }

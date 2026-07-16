@@ -431,8 +431,7 @@ internal sealed class OptimizationJobService(
         var tradeCount = 0;
         for (var index = 0; index < samples.Count; index++)
         {
-            var result = await module.CalculateAsync(preparedSamples[index], parameters, cancellationToken);
-            var summary = result.Summary;
+            var summary = await module.CalculateSummaryAsync(preparedSamples[index], parameters, cancellationToken);
             compounded *= 1 + summary.FinalAccum;
             var trades = summary.BuyCount + summary.SellCount;
             tradeCount += trades;

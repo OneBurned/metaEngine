@@ -11,9 +11,14 @@ screen in the React client. It is separate from the local Node.js optimizer.
 - The source is divided into consecutive, non-overlapping samples before
   candidates are evaluated. RSI is prepared independently for each sample, so
   indicator state never crosses a sample boundary.
+- RSI candidates are grouped by period. For each sample, the RSI series for the
+  current period is calculated once and reused for every buy/sell pair before
+  the next period replaces it. The cache is bounded to the current period, so
+  a wide period range does not retain every indicator row in memory.
 - Search is streamed: combinations are generated one at a time and only top-N
   aggregate results are stored. Full rows for every candidate are never written
-  to the database.
+  to the database or materialized in process; the optimizer evaluates summary
+  metrics only.
 - The Worker records progress and honours a stop request after the candidate
   currently being calculated has completed.
 - A result can queue a normal RSI strategy run against the same base calculation.

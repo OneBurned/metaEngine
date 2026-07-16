@@ -52,8 +52,38 @@ public sealed class StrategyModuleTests
         Assert.Equal(4, candidates.Count);
         Assert.Equal(5, candidates[0].GetProperty("rsiPeriod").GetInt32());
         Assert.Equal(20, candidates[0].GetProperty("buyLevel").GetDouble());
+        Assert.Equal(5, candidates[1].GetProperty("rsiPeriod").GetInt32());
+        Assert.Equal(6, candidates[2].GetProperty("rsiPeriod").GetInt32());
+        Assert.Equal(20, candidates[2].GetProperty("buyLevel").GetDouble());
         Assert.Equal(6, candidates[^1].GetProperty("rsiPeriod").GetInt32());
         Assert.Equal(30, candidates[^1].GetProperty("buyLevel").GetDouble());
+    }
+
+    [Fact]
+    public async Task Rsi_summary_matches_full_calculation_after_the_cached_period_changes()
+    {
+        var module = new RsiStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, 0.15),
+            new StrategySourcePoint(3, -0.25),
+            new StrategySourcePoint(4, 0.08),
+            new StrategySourcePoint(5, 0.12),
+            new StrategySourcePoint(6, -0.18),
+            new StrategySourcePoint(7, 0.06)
+        };
+        using var firstParameters = JsonDocument.Parse("{\"rsiPeriod\":1,\"buyLevel\":35,\"sellLevel\":65}");
+        using var secondParameters = JsonDocument.Parse("{\"rsiPeriod\":2,\"buyLevel\":35,\"sellLevel\":65}");
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var firstSummary = await module.CalculateSummaryAsync(prepared, firstParameters.RootElement, CancellationToken.None);
+        _ = await module.CalculateSummaryAsync(prepared, secondParameters.RootElement, CancellationToken.None);
+        var firstSummaryAfterPeriodChange = await module.CalculateSummaryAsync(prepared, firstParameters.RootElement, CancellationToken.None);
+        var fullResult = await module.CalculateAsync(prepared, firstParameters.RootElement, CancellationToken.None);
+
+        AssertSummaryEqual(firstSummary, firstSummaryAfterPeriodChange);
+        AssertSummaryEqual(firstSummary, fullResult.Summary);
     }
 
     [Fact]
@@ -78,4 +108,13 @@ public sealed class StrategyModuleTests
 
     private static void AssertClose(double expected, double actual) =>
         Assert.InRange(actual, expected - 1e-12, expected + 1e-12);
+
+    private static void AssertSummaryEqual(StrategyRunSummary expected, StrategyRunSummary actual)
+    {
+        AssertClose(expected.FinalAccum, actual.FinalAccum);
+        AssertClose(expected.HighWaterMark, actual.HighWaterMark);
+        AssertClose(expected.MaxDrawdown, actual.MaxDrawdown);
+        Assert.Equal(expected.BuyCount, actual.BuyCount);
+        Assert.Equal(expected.SellCount, actual.SellCount);
+    }
 }

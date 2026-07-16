@@ -129,13 +129,48 @@ public sealed class RsiStrategyModule : IStrategyModule
         var period = ReadInt(parameters, "rsiPeriod", 14);
         var buyLevel = ReadDouble(parameters, "buyLevel", 30);
         var sellLevel = ReadDouble(parameters, "sellLevel", 70);
-        var rsi = CalculateRsi(prepared.BaseMetrics.Rows, period);
-        var diffs = new double[prepared.Source.Count];
         var rows = new StrategyResultPoint[prepared.Source.Count];
+        var summary = CalculateSummary(prepared, period, buyLevel, sellLevel, rows, cancellationToken);
+
+        return ValueTask.FromResult(new StrategyCalculationResult(rows, summary));
+    }
+
+    public ValueTask<StrategyRunSummary> CalculateSummaryAsync(
+        IStrategyPreparedData preparedData,
+        JsonElement parameters,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var prepared = preparedData as PreparedData
+            ?? throw new InvalidOperationException("RSI was given incompatible prepared data.");
+        var validation = ValidateParameters(parameters);
+        if (!validation.IsValid)
+        {
+            throw new StrategyParameterException(validation.Errors);
+        }
+
+        var period = ReadInt(parameters, "rsiPeriod", 14);
+        var buyLevel = ReadDouble(parameters, "buyLevel", 30);
+        var sellLevel = ReadDouble(parameters, "sellLevel", 70);
+        return ValueTask.FromResult(CalculateSummary(prepared, period, buyLevel, sellLevel, null, cancellationToken));
+    }
+
+    private static StrategyRunSummary CalculateSummary(
+        PreparedData prepared,
+        int period,
+        double buyLevel,
+        double sellLevel,
+        StrategyResultPoint[]? rows,
+        CancellationToken cancellationToken)
+    {
+        var rsi = prepared.GetRsi(period);
         var position = 0d;
         var pendingExecution = string.Empty;
         var buyCount = 0;
         var sellCount = 0;
+        var accum = 0d;
+        var highWaterMark = 0d;
+        var maxDrawdown = 0d;
 
         for (var index = 0; index < prepared.Source.Count; index++)
         {
@@ -144,40 +179,40 @@ public sealed class RsiStrategyModule : IStrategyModule
             pendingExecution = string.Empty;
             if (execution == "buy") position = 1;
             if (execution == "sell") position = 0;
-            diffs[index] = position > 0 ? prepared.Source[index].Diff : 0;
+            var diff = position > 0 ? prepared.Source[index].Diff : 0;
 
-            var signal = string.Empty;
             if (index > 0 && rsi[index - 1] is double previous && rsi[index] is double current)
             {
                 if (previous > buyLevel && current <= buyLevel && position == 0)
                 {
-                    signal = "buy";
                     pendingExecution = "buy";
                     buyCount++;
                 }
                 else if (previous < sellLevel && current >= sellLevel && position > 0)
                 {
-                    signal = "sell";
                     pendingExecution = "sell";
                     sellCount++;
                 }
             }
 
-            rows[index] = new StrategyResultPoint(
-                prepared.Source[index].Timestamp,
-                diffs[index],
-                new Dictionary<string, JsonElement>());
+            if (index > 0)
+            {
+                accum = (1 + diff) * (1 + accum) - 1;
+            }
+            highWaterMark = Math.Max(highWaterMark, accum);
+            var drawdown = (1 + accum) / (1 + highWaterMark) - 1;
+            maxDrawdown = Math.Min(maxDrawdown, drawdown);
+
+            if (rows is not null)
+            {
+                rows[index] = new StrategyResultPoint(
+                    prepared.Source[index].Timestamp,
+                    diff,
+                    new Dictionary<string, JsonElement>());
+            }
         }
 
-        var metrics = BaseMetricsCalculator.Calculate(rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray());
-        return ValueTask.FromResult(new StrategyCalculationResult(
-            rows,
-            new StrategyRunSummary(
-                metrics.Summary.FinalAccum,
-                metrics.Summary.HighWaterMark,
-                metrics.Summary.MaxDrawdown,
-                buyCount,
-                sellCount)));
+        return new StrategyRunSummary(accum, highWaterMark, maxDrawdown, buyCount, sellCount);
     }
 
     private static double?[] CalculateRsi(IReadOnlyList<CalculationPoint> rows, int period)
@@ -269,5 +304,25 @@ public sealed class RsiStrategyModule : IStrategyModule
         }
     }
 
-    private sealed record PreparedData(IReadOnlyList<StrategySourcePoint> Source, CalculationSeries BaseMetrics) : IStrategyPreparedData;
+    private sealed class PreparedData(
+        IReadOnlyList<StrategySourcePoint> source,
+        CalculationSeries baseMetrics) : IStrategyPreparedData
+    {
+        private int cachedRsiPeriod = -1;
+        private double?[]? cachedRsi;
+
+        public IReadOnlyList<StrategySourcePoint> Source { get; } = source;
+        public CalculationSeries BaseMetrics { get; } = baseMetrics;
+
+        public double?[] GetRsi(int period)
+        {
+            if (cachedRsiPeriod != period)
+            {
+                cachedRsi = CalculateRsi(BaseMetrics.Rows, period);
+                cachedRsiPeriod = period;
+            }
+
+            return cachedRsi!;
+        }
+    }
 }

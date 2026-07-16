@@ -122,6 +122,11 @@ sample metrics and a command to queue the chosen candidate as a standard
 strategy run. Production MDD optimization remains a later stage. See
 `docs/PRODUCTION_OPTIMIZATION.md`.
 
+For RSI performance, candidates are enumerated period-first. Each sample keeps
+only the current period's prepared RSI series and reuses it for all buy/sell
+pairs; it then discards that series when the period changes. Optimizer
+evaluations use summary metrics without allocating full candidate result rows.
+
 ## 2. User communication rules
 
 The user is not a coder. Communicate simply. Do not explain implementation details with variable names, object fields, or code-like assignments unless the user explicitly asks for code-level detail. Explain behavior in product/UI terms instead.
