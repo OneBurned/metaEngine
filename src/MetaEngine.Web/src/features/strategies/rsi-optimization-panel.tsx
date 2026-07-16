@@ -71,7 +71,7 @@ export function RsiOptimizationPanel({
 
   const refreshJobs = useCallback(async () => {
     try {
-      const items = await listOptimizationJobs(workspaceId)
+      const items = (await listOptimizationJobs(workspaceId)).filter((item) => item.strategyType === "rsi")
       setJobs(items)
       setSelectedJobId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ""))
       setError(null)
@@ -192,7 +192,7 @@ export function RsiOptimizationPanel({
     {error ? <Alert variant="destructive" className="rounded-md"><AlertTitle>Оптимизация не запущена</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     <div className="grid gap-4 border-b border-slate-200 pb-6 lg:grid-cols-3">
       <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={onSourceRunIdChange} disabled={isLoading || !sourceRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{sourceRuns.map((run) => <SelectItem key={run.id} value={run.id}>{sourceRunLabel(run)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
-      <div className="lg:col-span-2"><p className="text-sm font-medium text-slate-900">Оптимизация MDD Mean Reversion</p><p className="mt-1 text-sm text-slate-500">Следующий этап. Сейчас в production доступен полный цикл оптимизации RSI.</p></div>
+      <div className="lg:col-span-2"><p className="text-sm font-medium text-slate-900">Оптимизация RSI</p></div>
     </div>
 
     <div className="space-y-5">

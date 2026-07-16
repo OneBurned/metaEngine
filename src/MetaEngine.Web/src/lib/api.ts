@@ -169,6 +169,21 @@ export type RsiOptimizationSearchSpace = {
   sellLevel: { from: number; to: number; step: number }
 }
 
+export type OptimizationNumericRange = { from: number; to: number; step: number }
+
+export type MddOptimizationSearchSpace = {
+  parameterMode: "simple" | "detailed"
+  levelCount: number
+  minEntryDelta: number
+  maxTotalWeight: number
+  drawdown?: OptimizationNumericRange
+  weight?: OptimizationNumericRange
+  levels?: Array<{ drawdown: OptimizationNumericRange; weight: OptimizationNumericRange }>
+  takeProfit: OptimizationNumericRange
+  searchMode: "random" | "full"
+  maxCandidates: number
+}
+
 export type SavedStrategy = {
   id: string
   strategyKey: string
@@ -449,8 +464,8 @@ export async function queueOptimization(
   workspaceId: string,
   sourceRunId: string,
   input: {
-    strategyType: "rsi"
-    searchSpace: RsiOptimizationSearchSpace
+    strategyType: "rsi" | "mdd_mean_reversion"
+    searchSpace: RsiOptimizationSearchSpace | MddOptimizationSearchSpace
     sampleCount: number
     seed: number
     topCount: number

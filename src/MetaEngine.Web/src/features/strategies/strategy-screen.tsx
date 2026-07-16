@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MddOptimizationPanel, type MddOptimizationParameters } from "@/features/strategies/mdd-optimization-panel"
 import { RsiOptimizationPanel } from "@/features/strategies/rsi-optimization-panel"
 import {
   getAllCalculationResult,
@@ -208,6 +209,17 @@ export function StrategyScreen() {
     void refresh()
   }
 
+  function handleMddOptimizationStrategyQueued(queued: CalculationRun, parameters: MddOptimizationParameters) {
+    setStrategyType("mdd_mean_reversion")
+    setLevels(parameters.levels.map((level) => ({ drawdown: Math.abs(level.drawdown) * 100, weight: level.weight * 100 })))
+    setTakeProfit(parameters.takeProfit * 100)
+    setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
+    setSelectedRunId(queued.id)
+    setSaveName("")
+    setStrategyMode("manual")
+    void refresh()
+  }
+
   return (
     <AppShell onSignOut={() => void signOut().then(() => navigate({ to: "/login" }))}>
       <div>
@@ -231,7 +243,7 @@ export function StrategyScreen() {
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
-              <TabsContent value="optimization" className="mt-5"><RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} /></TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>

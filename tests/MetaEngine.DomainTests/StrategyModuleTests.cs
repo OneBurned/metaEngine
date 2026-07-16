@@ -106,6 +106,136 @@ public sealed class StrategyModuleTests
         Assert.Equal(1, result.Summary.BuyCount);
     }
 
+    [Fact]
+    public async Task Mdd_summary_matches_full_calculation()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.15),
+            new StrategySourcePoint(3, -0.1),
+            new StrategySourcePoint(4, 0.2),
+            new StrategySourcePoint(5, 0.05),
+            new StrategySourcePoint(6, -0.18),
+            new StrategySourcePoint(7, 0.25)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {"levels":[{"drawdown":-0.1,"weight":0.25},{"drawdown":-0.2,"weight":0.5}],"takeProfit":0.01}
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var summary = await module.CalculateSummaryAsync(prepared, parameters.RootElement, CancellationToken.None);
+        var fullResult = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        AssertSummaryEqual(summary, fullResult.Summary);
+    }
+
+    [Fact]
+    public async Task Mdd_generates_random_candidates_with_ordered_levels_and_target_weights()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "parameterMode": "simple",
+              "levelCount": 3,
+              "minEntryDelta": 5,
+              "maxTotalWeight": 40,
+              "drawdown": { "from": 5, "to": 25, "step": 5 },
+              "weight": { "from": 10, "to": 50, "step": 10 },
+              "takeProfit": { "from": 0, "to": 2, "step": 1 },
+              "searchMode": "random",
+              "maxCandidates": 4
+            }
+            """);
+
+        Assert.True(module.ValidateSearchSpace(searchSpace.RootElement).IsValid);
+        Assert.Equal(4, module.EstimateCandidateCount(searchSpace.RootElement));
+
+        var candidates = new List<JsonElement>();
+        await foreach (var candidate in module.GenerateCandidatesAsync(searchSpace.RootElement, 42, CancellationToken.None))
+        {
+            candidates.Add(candidate);
+        }
+
+        Assert.Equal(4, candidates.Count);
+        foreach (var candidate in candidates)
+        {
+            var levels = candidate.GetProperty("levels").EnumerateArray().ToArray();
+            Assert.Equal(3, levels.Length);
+            var previousDrawdown = 0d;
+            var previousWeight = double.NegativeInfinity;
+            foreach (var level in levels)
+            {
+                var drawdown = level.GetProperty("drawdown").GetDouble();
+                var weight = level.GetProperty("weight").GetDouble();
+                Assert.True(drawdown < previousDrawdown);
+                Assert.True(Math.Abs(drawdown - previousDrawdown) >= 0.05 - 1e-12);
+                Assert.InRange(weight, previousWeight, 0.4);
+                previousDrawdown = drawdown;
+                previousWeight = weight;
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Mdd_detailed_full_search_streams_valid_candidates_without_a_total_estimate()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "parameterMode": "detailed",
+              "levelCount": 2,
+              "minEntryDelta": 5,
+              "maxTotalWeight": 30,
+              "levels": [
+                { "drawdown": { "from": 5, "to": 5, "step": 1 }, "weight": { "from": 10, "to": 10, "step": 1 } },
+                { "drawdown": { "from": 10, "to": 10, "step": 1 }, "weight": { "from": 20, "to": 20, "step": 1 } }
+              ],
+              "takeProfit": { "from": 1, "to": 2, "step": 1 },
+              "searchMode": "full",
+              "maxCandidates": 1
+            }
+            """);
+
+        Assert.True(module.ValidateSearchSpace(searchSpace.RootElement).IsValid);
+        Assert.Null(module.EstimateCandidateCount(searchSpace.RootElement));
+
+        var candidates = new List<JsonElement>();
+        await foreach (var candidate in module.GenerateCandidatesAsync(searchSpace.RootElement, 42, CancellationToken.None))
+        {
+            candidates.Add(candidate);
+        }
+
+        Assert.Equal(2, candidates.Count);
+        Assert.Equal(-0.05, candidates[0].GetProperty("levels")[0].GetProperty("drawdown").GetDouble(), 10);
+        Assert.Equal(0.2, candidates[0].GetProperty("levels")[1].GetProperty("weight").GetDouble(), 10);
+    }
+
+    [Fact]
+    public void Mdd_search_space_rejects_duplicate_drawdown_levels_when_delta_is_zero()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "parameterMode": "simple",
+              "levelCount": 2,
+              "minEntryDelta": 0,
+              "maxTotalWeight": 100,
+              "drawdown": { "from": 5, "to": 5, "step": 1 },
+              "weight": { "from": 10, "to": 10, "step": 1 },
+              "takeProfit": { "from": 0, "to": 0, "step": 1 },
+              "searchMode": "random",
+              "maxCandidates": 1
+            }
+            """);
+
+        var validation = module.ValidateSearchSpace(searchSpace.RootElement);
+
+        Assert.False(validation.IsValid);
+        Assert.Contains(validation.Errors, error => error.Path == "drawdown");
+    }
+
     private static void AssertClose(double expected, double actual) =>
         Assert.InRange(actual, expected - 1e-12, expected + 1e-12);
 

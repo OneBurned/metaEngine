@@ -22,9 +22,9 @@ After signing in, the user can:
 8. open the point table only when needed and continue loading rows in batches;
 9. select a completed base run, calculate RSI or MDD Mean Reversion, and save
    the resulting strategy configuration.
-10. optimize RSI across several sequential samples, follow or stop the job,
-    compare sortable top results and queue one configuration as a normal RSI
-    strategy run before saving it.
+10. optimize RSI or MDD Mean Reversion across several sequential samples,
+    follow or stop the job, compare sortable top results and queue one
+    configuration as a normal strategy run before saving it.
 11. create a preset from portfolio and saved-strategy sources, then select that
    preset as the source for a base calculation.
 12. compare up to five portfolio, saved-strategy or completed-run series in one
@@ -41,9 +41,9 @@ controls.
 
 ## Client boundaries
 
-The UI currently optimizes RSI only. Production MDD optimization, retry for
-failed jobs, user management and CSV export remain future work or are governed
-by their API and domain contracts.
+The UI supports RSI and MDD Mean Reversion optimization. Retry for failed jobs,
+user management and CSV export remain future work or are governed by their API
+and domain contracts.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only

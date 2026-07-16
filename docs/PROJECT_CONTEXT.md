@@ -107,25 +107,32 @@ immutable preset. A preset calculation combines their canonical `timestamp,diff`
 rows with the configured weights and periods. The production UI exposes a
 **Presets** page and allows a saved preset to be chosen for a base calculation.
 
-## Production P6: RSI optimizer
+## Production P6: strategy optimizers
 
-The platform can queue an RSI optimization job from a completed immutable base
-calculation. The Worker splits that source into consecutive samples, prepares
-RSI independently for each sample, streams candidates and persists only top-N
-aggregate metrics. The job exposes progress, filters and a stop request that
-finishes the current candidate before publishing accumulated results. A selected
-row queues a normal RSI run on the same base calculation; saving that run creates
-the usual immutable saved strategy with a link back to the optimization result.
-The **Strategies** screen provides separate manual and optimization tabs,
-including range/filter controls, live progress, stop, recent jobs, sortable
-sample metrics and a command to queue the chosen candidate as a standard
-strategy run. Production MDD optimization remains a later stage. See
+The platform can queue an RSI or MDD Mean Reversion optimization job from a
+completed immutable base calculation. The Worker splits that source into
+consecutive samples, prepares each strategy independently for every sample,
+streams candidates and persists only top-N aggregate metrics. The job exposes
+progress, filters and a stop request that finishes the current candidate before
+publishing accumulated results. A selected row queues a normal strategy run on
+the same base calculation; saving that run creates the usual immutable saved
+strategy with a link back to the optimization result. The **Strategies** screen
+provides separate manual and optimization tabs, including range/filter controls,
+live progress, stop, recent jobs, sortable sample metrics and a command to queue
+the chosen candidate as a standard strategy run. See
 `docs/PRODUCTION_OPTIMIZATION.md`.
 
 For RSI performance, candidates are enumerated period-first. Each sample keeps
 only the current period's prepared RSI series and reuses it for all buy/sell
 pairs; it then discards that series when the period changes. Optimizer
 evaluations use summary metrics without allocating full candidate result rows.
+
+MDD uses the same bounded result workflow. Its simple mode expands a common DD
+and weight range into the chosen number of entries while enforcing the minimum
+DD delta and nondecreasing target weights. Detailed mode provides an independent
+DD/weight range for every entry. Random search has a finite requested candidate
+count; full search remains streamed and intentionally avoids counting the whole
+space before running.
 
 ## 2. User communication rules
 
