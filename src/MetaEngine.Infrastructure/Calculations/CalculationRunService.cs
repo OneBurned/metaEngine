@@ -325,23 +325,27 @@ internal sealed class CalculationRunService(
         var cutoff = now - jobProcessingPolicy.LeaseDuration;
         if (IsPostgreSql)
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            var lockedRuns = await dbContext.CalculationRuns
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM calculation_runs
-                    WHERE status = 'Running'
-                      AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
-                    ORDER BY last_heartbeat_at NULLS FIRST, created_at
-                    FOR UPDATE SKIP LOCKED
-                    """)
-                .ToArrayAsync(cancellationToken);
-            RecoverRuns(lockedRuns, now);
-            if (lockedRuns.Length > 0)
+            await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            await transaction.CommitAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var lockedRuns = await dbContext.CalculationRuns
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM calculation_runs
+                        WHERE status = 'Running'
+                          AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
+                        ORDER BY last_heartbeat_at NULLS FIRST, created_at
+                        FOR UPDATE SKIP LOCKED
+                        """)
+                    .ToArrayAsync(cancellationToken);
+                RecoverRuns(lockedRuns, now);
+                if (lockedRuns.Length > 0)
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                await transaction.CommitAsync(cancellationToken);
+            });
             return;
         }
 
@@ -362,29 +366,33 @@ internal sealed class CalculationRunService(
         var leaseId = Guid.CreateVersion7();
         if (IsPostgreSql)
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            var run = await dbContext.CalculationRuns
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM calculation_runs
-                    WHERE status = 'Queued'
-                      AND (retry_not_before IS NULL OR retry_not_before <= {now})
-                    ORDER BY created_at
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                    """)
-                .SingleOrDefaultAsync(cancellationToken);
-            if (run is null)
+            return await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                await transaction.CommitAsync(cancellationToken);
-                return null;
-            }
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var run = await dbContext.CalculationRuns
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM calculation_runs
+                        WHERE status = 'Queued'
+                          AND (retry_not_before IS NULL OR retry_not_before <= {now})
+                        ORDER BY created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                        """)
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (run is null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    return (ClaimedJob?)null;
+                }
 
-            AssignLease(run, leaseId, now);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            dbContext.ChangeTracker.Clear();
-            return new ClaimedJob(run.Id, leaseId);
+                AssignLease(run, leaseId, now);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                return new ClaimedJob(run.Id, leaseId);
+            });
         }
 
         var runInMemory = await dbContext.CalculationRuns

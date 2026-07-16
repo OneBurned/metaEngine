@@ -337,23 +337,27 @@ internal sealed class OptimizationJobService(
         var cutoff = now - jobProcessingPolicy.LeaseDuration;
         if (IsPostgreSql)
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            var lockedJobs = await dbContext.OptimizationJobs
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM optimization_jobs
-                    WHERE status IN ('Running', 'Stopping')
-                      AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
-                    ORDER BY last_heartbeat_at NULLS FIRST, created_at
-                    FOR UPDATE SKIP LOCKED
-                    """)
-                .ToArrayAsync(cancellationToken);
-            RecoverJobs(lockedJobs, now);
-            if (lockedJobs.Length > 0)
+            await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            await transaction.CommitAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var lockedJobs = await dbContext.OptimizationJobs
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM optimization_jobs
+                        WHERE status IN ('Running', 'Stopping')
+                          AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
+                        ORDER BY last_heartbeat_at NULLS FIRST, created_at
+                        FOR UPDATE SKIP LOCKED
+                        """)
+                    .ToArrayAsync(cancellationToken);
+                RecoverJobs(lockedJobs, now);
+                if (lockedJobs.Length > 0)
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                await transaction.CommitAsync(cancellationToken);
+            });
             return;
         }
 
@@ -436,29 +440,33 @@ internal sealed class OptimizationJobService(
         var leaseId = Guid.CreateVersion7();
         if (IsPostgreSql)
         {
-            await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
-            var lockedJob = await dbContext.OptimizationJobs
-                .FromSqlInterpolated($"""
-                    SELECT *
-                    FROM optimization_jobs
-                    WHERE status = 'Queued'
-                      AND (retry_not_before IS NULL OR retry_not_before <= {now})
-                    ORDER BY created_at
-                    FOR UPDATE SKIP LOCKED
-                    LIMIT 1
-                    """)
-                .SingleOrDefaultAsync(cancellationToken);
-            if (lockedJob is null)
+            return await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
             {
-                await transaction.CommitAsync(cancellationToken);
-                return null;
-            }
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var lockedJob = await dbContext.OptimizationJobs
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM optimization_jobs
+                        WHERE status = 'Queued'
+                          AND (retry_not_before IS NULL OR retry_not_before <= {now})
+                        ORDER BY created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                        """)
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (lockedJob is null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    return (ClaimedJob?)null;
+                }
 
-            AssignLease(lockedJob, leaseId, now);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            await transaction.CommitAsync(cancellationToken);
-            dbContext.ChangeTracker.Clear();
-            return new ClaimedJob(lockedJob.Id, leaseId);
+                AssignLease(lockedJob, leaseId, now);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                return new ClaimedJob(lockedJob.Id, leaseId);
+            });
         }
 
         var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
