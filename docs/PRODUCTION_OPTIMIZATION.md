@@ -29,7 +29,8 @@ separate from the local Node.js optimizer.
   unknown total, avoiding a pre-count that could itself exhaust memory.
 - The Worker records progress and honours a stop request after the candidate
   currently being calculated has completed.
-- A result can queue a normal RSI strategy run against the same base calculation.
+- A result can queue the corresponding normal RSI or MDD strategy run against
+  the same base calculation.
   After that run completes, the existing save workflow creates a reusable saved
   strategy and preserves a link to the selected optimization result.
 

@@ -57,7 +57,7 @@ keeping audit events for the earlier failure.
 ## Several Workers
 
 Several identical Worker processes may now be started for the same connection
-string. They do not execute the same claimed task. This is a correctness
-foundation, not yet a capacity policy: the next deployment step will choose the
-number of replicas, resource limits and monitoring thresholds for each
-environment.
+string. They do not execute the same claimed task. Root Docker Compose already
+sets the replica count and per-Worker CPU/RAM limits through `.env`; see
+`docs/PRODUCTION_DEPLOYMENT.md`. Capacity values and monitoring thresholds still
+need to be chosen for each staging or public-production environment.

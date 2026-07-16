@@ -63,19 +63,19 @@ version. The same calculated result cannot be saved twice.
 A saved strategy can be selected as a source while creating a preset. The
 preset reads its exact saved `StrategyResult`; it does not rerun the strategy.
 
-## RSI optimization handoff
+## Optimizer handoff
 
-P6 can optimize RSI against a completed base calculation. It stores aggregate
-top-N results only; the user chooses ranges, samples and optional filters in the
-**Optimization** tab, then applies one row to queue a normal RSI run. The user
-saves that completed run through the workflow above. The saved strategy records
-the selected optimization result for reproducibility. Job details and API are in
-`docs/PRODUCTION_OPTIMIZATION.md`.
+P6 can optimize RSI or MDD Mean Reversion against a completed base calculation.
+It stores aggregate top-N results only; the user chooses ranges, samples and
+optional filters in the **Optimization** tab, then applies one row to queue the
+corresponding normal strategy run. The user saves that completed run through the
+workflow above. The saved strategy records the selected optimization result for
+reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 
 ## UI
 
 The **Strategies** page selects only completed base runs, exposes manual RSI
 and MDD parameters, follows queued/running status, displays the saved strategy
 result and saves its configuration. Its **Optimization** tab provides the full
-production RSI workflow: queue, progress, stop, sort and apply. The **Presets**
-page can use that saved result alongside portfolio sources.
+production RSI/MDD workflow: queue, progress, stop, sort and apply. The
+**Presets** page can use that saved result alongside portfolio sources.
