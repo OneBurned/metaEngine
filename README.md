@@ -40,8 +40,8 @@ docs/PRODUCTION_UI.md      production React UI: вход, импорт и рас
 > Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
 > Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
 > Базовые формулы, versioned preset API, асинхронный базовый расчет через
-> Worker, production UI и ручные RSI/MDD strategy runs уже перенесены. В UI
-> пока нет оптимизатора и экранов пресетов.
+> Worker, production UI, ручные RSI/MDD strategy runs и экран пресетов уже
+> перенесены. В UI пока нет production-оптимизатора.
 
 ## Что уже умеет локальная версия
 
@@ -229,7 +229,8 @@ PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
 
 Production API уже принимает canonical portfolio CSV `timestamp,diff`, хранит
 неизменяемые версии и отдает metadata/points только внутри workspace. Новый
-React UI покрывает вход, импорт портфолио, запуск и просмотр базового расчета;
+React UI покрывает вход, импорт портфолио, создание пресета из портфелей и
+сохраненных стратегий, запуск и просмотр базового расчета;
 контракт импорта и детали находятся в `docs/PORTFOLIO_IMPORT.md` и
 `docs/PRODUCTION_UI.md`.
 

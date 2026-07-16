@@ -19,21 +19,23 @@ After signing in, the user can:
    equity/drawdown chart with the mouse range brush.
 8. select a completed base run, calculate RSI or MDD Mean Reversion, and save
    the resulting strategy configuration.
+9. create a preset from portfolio and saved-strategy sources, then select that
+   preset as the source for a base calculation.
 
 The first accessible workspace is selected automatically. The production API
 uses `workspaces[].id` and `workspaces[].name`; all portfolio and calculation
 requests use that immutable workspace id. An account without a workspace sees
 an explicit access message instead of a perpetual loading state.
 
-The form fills the source start/end from the selected portfolio automatically.
-The user may narrow the period. A `Viewer` can inspect data but does not get
-active import or calculation controls.
+The forms fill source start/end automatically. The user may narrow the period.
+A `Viewer` can inspect data but does not get active import or calculation
+controls.
 
 ## Client boundaries
 
-The UI does not yet create or run presets, optimize strategies, cancel/retry
-jobs, manage users or export CSV. Those behaviours remain future work or are
-governed by their API and domain contracts.
+The UI does not yet optimize strategies, cancel/retry jobs, manage users or
+export CSV. Those behaviours remain future work or are governed by their API
+and domain contracts.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only

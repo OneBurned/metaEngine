@@ -21,6 +21,10 @@ public sealed record SavedStrategySummary(
     Guid? SourcePortfolioId,
     Guid? SourcePresetId,
     Guid ResultArtifactId,
+    Guid ResultCalculationRunId,
+    DateTimeOffset ResultPeriodStart,
+    DateTimeOffset ResultPeriodEnd,
+    string ResultTimeframe,
     DateTimeOffset CreatedAt);
 
 public interface ISavedStrategyService

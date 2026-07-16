@@ -17,7 +17,7 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
 
         var name = ValidateName(command.Name);
         ValidateItems(command.Items);
-        var portfoliosById = await LoadPortfoliosAsync(
+        var sourcesByKey = await LoadSourcesAsync(
             command.WorkspaceId,
             command.Items,
             cancellationToken);
@@ -39,8 +39,9 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
             preset.Items.Add(new PresetItem
             {
                 SortOrder = index,
-                SourceType = PresetItemSourceType.Portfolio,
-                PortfolioId = item.PortfolioId,
+                SourceType = item.SourceType,
+                PortfolioId = item.SourceType == PresetItemSourceType.Portfolio ? item.SourceId : null,
+                StrategyId = item.SourceType == PresetItemSourceType.Strategy ? item.SourceId : null,
                 Weight = item.Weight,
                 StartsAt = item.StartsAt.ToUniversalTime(),
                 EndsAt = item.EndsAt?.ToUniversalTime()
@@ -60,12 +61,15 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
                 preset.PresetKey,
                 preset.Version,
                 ItemCount = command.Items.Count,
-                PortfolioIds = command.Items.Select(item => item.PortfolioId).Distinct().ToArray()
+                Sources = command.Items
+                    .Select(item => new { item.SourceType, item.SourceId })
+                    .Distinct()
+                    .ToArray()
             })
         });
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ToDetails(preset, portfoliosById);
+        return ToDetails(preset, sourcesByKey);
     }
 
     public async Task<IReadOnlyList<PresetSummary>> ListAsync(
@@ -88,33 +92,87 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
         var preset = await dbContext.Presets
             .AsNoTracking()
             .Include(candidate => candidate.Items)
-            .ThenInclude(item => item.Portfolio)
             .SingleOrDefaultAsync(
                 candidate => candidate.WorkspaceId == workspaceId && candidate.Id == presetId,
                 cancellationToken);
-        return preset is null ? null : ToDetails(preset, null);
+        if (preset is null)
+        {
+            return null;
+        }
+
+        var sourcesByKey = await LoadSourcesAsync(
+            workspaceId,
+            preset.Items.Select(ToInput).ToArray(),
+            cancellationToken);
+        return ToDetails(preset, sourcesByKey);
     }
 
-    private async Task<IReadOnlyDictionary<Guid, PortfolioVersion>> LoadPortfoliosAsync(
+    private async Task<IReadOnlyDictionary<PresetSourceKey, PresetSource>> LoadSourcesAsync(
         Guid workspaceId,
-        IReadOnlyList<PresetPortfolioItemInput> items,
+        IReadOnlyList<PresetItemInput> items,
         CancellationToken cancellationToken)
     {
-        var portfolioIds = items.Select(item => item.PortfolioId).Distinct().ToArray();
+        var result = new Dictionary<PresetSourceKey, PresetSource>();
+        var portfolioIds = items
+            .Where(item => item.SourceType == PresetItemSourceType.Portfolio)
+            .Select(item => item.SourceId)
+            .Distinct()
+            .ToArray();
         var portfolios = await dbContext.Portfolios
             .AsNoTracking()
             .Where(portfolio =>
                 portfolio.WorkspaceId == workspaceId &&
                 portfolioIds.Contains(portfolio.Id))
-            .ToDictionaryAsync(portfolio => portfolio.Id, cancellationToken);
-        if (portfolios.Count != portfolioIds.Length)
+            .Select(portfolio => new PresetSource(
+                new PresetSourceKey(PresetItemSourceType.Portfolio, portfolio.Id),
+                portfolio.Name,
+                portfolio.Timeframe,
+                portfolio.Points.Min(point => point.Timestamp),
+                portfolio.Points.Max(point => point.Timestamp)))
+            .ToArrayAsync(cancellationToken);
+        if (portfolios.Length != portfolioIds.Length)
         {
             throw new PresetValidationException(
                 "portfolio_not_found",
                 "Each preset item must reference a portfolio version in this workspace.");
         }
 
-        return portfolios;
+        foreach (var portfolio in portfolios)
+        {
+            result.Add(portfolio.Key, portfolio);
+        }
+
+        var strategyIds = items
+            .Where(item => item.SourceType == PresetItemSourceType.Strategy)
+            .Select(item => item.SourceId)
+            .Distinct()
+            .ToArray();
+        var strategies = await dbContext.Strategies
+            .AsNoTracking()
+            .Where(strategy =>
+                strategy.WorkspaceId == workspaceId &&
+                strategyIds.Contains(strategy.Id) &&
+                strategy.ResultArtifact.Kind == RunArtifactKind.StrategyResult)
+            .Select(strategy => new PresetSource(
+                new PresetSourceKey(PresetItemSourceType.Strategy, strategy.Id),
+                strategy.Name,
+                strategy.ResultArtifact.CalculationRun.Timeframe,
+                strategy.ResultArtifact.CalculationRun.PeriodStart,
+                strategy.ResultArtifact.CalculationRun.PeriodEnd))
+            .ToArrayAsync(cancellationToken);
+        if (strategies.Length != strategyIds.Length)
+        {
+            throw new PresetValidationException(
+                "strategy_not_found",
+                "Each preset strategy item must reference a saved strategy in this workspace.");
+        }
+
+        foreach (var strategy in strategies)
+        {
+            result.Add(strategy.Key, strategy);
+        }
+
+        return result;
     }
 
     private async Task<(Guid PresetKey, int Version)> ResolveVersionAsync(
@@ -143,7 +201,7 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
         return (requestedPresetKey.Value, checked(latestVersion.Value + 1));
     }
 
-    private static void ValidateItems(IReadOnlyList<PresetPortfolioItemInput> items)
+    private static void ValidateItems(IReadOnlyList<PresetItemInput> items)
     {
         if (items.Count == 0)
         {
@@ -154,6 +212,14 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
 
         foreach (var item in items)
         {
+            if (item.SourceType is not (PresetItemSourceType.Portfolio or PresetItemSourceType.Strategy) ||
+                item.SourceId == Guid.Empty)
+            {
+                throw new PresetValidationException(
+                    "invalid_preset_source",
+                    "Preset item must reference a portfolio or saved strategy.");
+            }
+
             if (!double.IsFinite(item.Weight) || item.Weight < 0)
             {
                 throw new PresetValidationException(
@@ -169,9 +235,9 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
             }
         }
 
-        foreach (var portfolioItems in items.GroupBy(item => item.PortfolioId))
+        foreach (var sourceItems in items.GroupBy(item => new PresetSourceKey(item.SourceType, item.SourceId)))
         {
-            var sorted = portfolioItems
+            var sorted = sourceItems
                 .OrderBy(item => item.StartsAt)
                 .ThenBy(item => item.EndsAt ?? DateTimeOffset.MaxValue)
                 .ToArray();
@@ -181,8 +247,8 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
                 if (sorted[index].StartsAt < previousEnd)
                 {
                     throw new PresetValidationException(
-                        "overlapping_portfolio_periods",
-                        "The same portfolio version cannot have overlapping periods in one preset.");
+                        "overlapping_preset_source_periods",
+                        "The same preset source cannot have overlapping periods in one preset.");
                 }
             }
         }
@@ -218,33 +284,57 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
 
     private static PresetDetails ToDetails(
         PresetVersion preset,
-        IReadOnlyDictionary<Guid, PortfolioVersion>? portfoliosById)
+        IReadOnlyDictionary<PresetSourceKey, PresetSource> sourcesByKey)
     {
         var items = preset.Items
             .OrderBy(item => item.SortOrder)
-            .Select(item => ToItemSummary(item, portfoliosById))
+            .Select(item => ToItemSummary(item, sourcesByKey))
             .ToArray();
         return new PresetDetails(ToSummary(preset), items);
     }
 
     private static PresetItemSummary ToItemSummary(
         PresetItem item,
-        IReadOnlyDictionary<Guid, PortfolioVersion>? portfoliosById)
+        IReadOnlyDictionary<PresetSourceKey, PresetSource> sourcesByKey)
     {
-        var portfolio = item.Portfolio ??
-            (item.PortfolioId is Guid portfolioId && portfoliosById is not null
-                ? portfoliosById[portfolioId]
-                : throw new InvalidOperationException("Preset portfolio source is not available."));
+        var sourceId = item.SourceType switch
+        {
+            PresetItemSourceType.Portfolio when item.PortfolioId is Guid portfolioId => portfolioId,
+            PresetItemSourceType.Strategy when item.StrategyId is Guid strategyId => strategyId,
+            _ => throw new InvalidOperationException("Preset source is not available.")
+        };
+        var source = sourcesByKey.TryGetValue(new PresetSourceKey(item.SourceType, sourceId), out var value)
+            ? value
+            : throw new InvalidOperationException("Preset source is not available.");
         return new PresetItemSummary(
             item.Id,
             item.SortOrder,
-            portfolio.Id,
-            portfolio.PortfolioKey,
-            portfolio.Version,
-            portfolio.Name,
-            portfolio.Timeframe,
+            item.SourceType,
+            sourceId,
+            source.Name,
+            source.Timeframe,
+            source.PeriodStart,
+            source.PeriodEnd,
             item.Weight,
             item.StartsAt,
             item.EndsAt);
     }
+
+    private static PresetItemInput ToInput(PresetItem item) => new(
+        item.SourceType,
+        item.SourceType == PresetItemSourceType.Portfolio
+            ? item.PortfolioId ?? Guid.Empty
+            : item.StrategyId ?? Guid.Empty,
+        item.Weight,
+        item.StartsAt,
+        item.EndsAt);
+
+    private readonly record struct PresetSourceKey(PresetItemSourceType Type, Guid Id);
+
+    private sealed record PresetSource(
+        PresetSourceKey Key,
+        string Name,
+        string Timeframe,
+        DateTimeOffset PeriodStart,
+        DateTimeOffset PeriodEnd);
 }

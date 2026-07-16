@@ -43,7 +43,7 @@ public sealed record PortfolioCalculationResult(
     bool WarningsTruncated);
 
 public sealed record PresetCalculationItem(
-    Guid PortfolioId,
+    Guid SourceId,
     IReadOnlyList<ReturnPoint> Points,
     string SourceTimeframe,
     double Weight,

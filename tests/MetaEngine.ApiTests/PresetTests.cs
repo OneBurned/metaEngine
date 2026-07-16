@@ -43,9 +43,9 @@ public sealed class PresetTests(MetaEngineApiFactory factory) : IClassFixture<Me
                 "Leveraged allocation",
                 null,
                 [
-                    new CreatePresetItemRequest(primary.Portfolio.Id, 0.25, start, rebalancedAt),
-                    new CreatePresetItemRequest(primary.Portfolio.Id, 0.75, rebalancedAt, null),
-                    new CreatePresetItemRequest(secondary.Portfolio.Id, 0.5, start, null)
+                    new CreatePresetItemRequest(PresetItemSourceType.Portfolio, primary.Portfolio.Id, 0.25, start, rebalancedAt),
+                    new CreatePresetItemRequest(PresetItemSourceType.Portfolio, primary.Portfolio.Id, 0.75, rebalancedAt, null),
+                    new CreatePresetItemRequest(PresetItemSourceType.Portfolio, secondary.Portfolio.Id, 0.5, start, null)
                 ]));
         var first = await firstResponse.Content.ReadFromJsonAsync<PresetDetails>(JsonOptions);
 
@@ -53,12 +53,12 @@ public sealed class PresetTests(MetaEngineApiFactory factory) : IClassFixture<Me
         Assert.NotNull(first);
         Assert.Equal(1, first.Preset.Version);
         Assert.Equal(3, first.Preset.ItemCount);
-        Assert.Equal(primary.Portfolio.Id, first.Items[0].PortfolioId);
-        Assert.Equal(primary.Portfolio.Version, first.Items[0].PortfolioVersion);
+        Assert.Equal(PresetItemSourceType.Portfolio, first.Items[0].SourceType);
+        Assert.Equal(primary.Portfolio.Id, first.Items[0].SourceId);
         Assert.Equal(0.25, first.Items[0].Weight);
         Assert.Equal(rebalancedAt, first.Items[0].EndsAt);
-        Assert.Equal(primary.Portfolio.Id, first.Items[1].PortfolioId);
-        Assert.Equal(secondary.Portfolio.Id, first.Items[2].PortfolioId);
+        Assert.Equal(primary.Portfolio.Id, first.Items[1].SourceId);
+        Assert.Equal(secondary.Portfolio.Id, first.Items[2].SourceId);
 
         var secondResponse = await CreateAsync(
             client,
@@ -66,7 +66,7 @@ public sealed class PresetTests(MetaEngineApiFactory factory) : IClassFixture<Me
             new CreatePresetRequest(
                 "Leveraged allocation revised",
                 first.Preset.PresetKey,
-                [new CreatePresetItemRequest(secondary.Portfolio.Id, 1.5, start, null)]));
+                [new CreatePresetItemRequest(PresetItemSourceType.Portfolio, secondary.Portfolio.Id, 1.5, start, null)]));
         var second = await secondResponse.Content.ReadFromJsonAsync<PresetDetails>(JsonOptions);
         var list = await client.GetFromJsonAsync<JsonElement>(
             $"/api/v1/workspaces/{owner.WorkspaceId}/presets");
@@ -100,13 +100,13 @@ public sealed class PresetTests(MetaEngineApiFactory factory) : IClassFixture<Me
                 "Invalid rebalancing",
                 null,
                 [
-                    new CreatePresetItemRequest(portfolio.Portfolio.Id, 0.5, start, start.AddHours(2)),
-                    new CreatePresetItemRequest(portfolio.Portfolio.Id, 0.5, start.AddHours(1), null)
+                    new CreatePresetItemRequest(PresetItemSourceType.Portfolio, portfolio.Portfolio.Id, 0.5, start, start.AddHours(2)),
+                    new CreatePresetItemRequest(PresetItemSourceType.Portfolio, portfolio.Portfolio.Id, 0.5, start.AddHours(1), null)
                 ]));
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
-        Assert.Equal("overlapping_portfolio_periods", body.GetProperty("code").GetString());
+        Assert.Equal("overlapping_preset_source_periods", body.GetProperty("code").GetString());
     }
 
     [Fact]

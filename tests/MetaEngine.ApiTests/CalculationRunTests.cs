@@ -85,7 +85,7 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
             new CreatePresetRequest(
                 "Half exposure",
                 null,
-                [new CreatePresetItemRequest(portfolio.Portfolio.Id, 0.5, start, null)]));
+                [new CreatePresetItemRequest(PresetItemSourceType.Portfolio, portfolio.Portfolio.Id, 0.5, start, null)]));
         var queued = await QueueAsync(
             client,
             owner.WorkspaceId,
@@ -184,6 +184,38 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         Assert.Equal("rsi", saved.StrategyType);
         Assert.Equal(1, saved.Version);
         Assert.Equal(1, savedStrategies.GetProperty("items").GetArrayLength());
+
+        var strategyPreset = await CreatePresetAsync(
+            client,
+            owner.WorkspaceId,
+            new CreatePresetRequest(
+                "RSI allocation",
+                null,
+                [new CreatePresetItemRequest(
+                    PresetItemSourceType.Strategy,
+                    saved.Id,
+                    1,
+                    DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                    DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L))]));
+        Assert.Equal(PresetItemSourceType.Strategy, strategyPreset.Items[0].SourceType);
+        Assert.Equal(saved.Id, strategyPreset.Items[0].SourceId);
+
+        var presetRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                null,
+                strategyPreset.Preset.Id,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var presetResult = await client.GetFromJsonAsync<CalculationResultPage>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/calculation-runs/{presetRun.Run.Id}/result",
+            JsonOptions);
+        Assert.NotNull(presetResult);
+        Assert.Equal(3, presetResult.Items.Count);
     }
 
     [Fact]

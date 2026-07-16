@@ -1,3 +1,5 @@
+using MetaEngine.Domain.Model;
+
 namespace MetaEngine.Api.Contracts;
 
 public sealed record CreatePresetRequest(
@@ -6,7 +8,8 @@ public sealed record CreatePresetRequest(
     IReadOnlyList<CreatePresetItemRequest>? Items);
 
 public sealed record CreatePresetItemRequest(
-    Guid PortfolioId,
+    PresetItemSourceType SourceType,
+    Guid SourceId,
     double Weight,
     DateTimeOffset StartsAt,
     DateTimeOffset? EndsAt);

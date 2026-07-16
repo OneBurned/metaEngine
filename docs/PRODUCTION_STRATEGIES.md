@@ -60,9 +60,12 @@ Save body example:
 `strategyKey: null` creates version 1. A known key creates the next immutable
 version. The same calculated result cannot be saved twice.
 
+A saved strategy can be selected as a source while creating a preset. The
+preset reads its exact saved `StrategyResult`; it does not rerun the strategy.
+
 ## UI
 
 The **Strategies** page selects only completed base runs, exposes manual RSI
 and MDD parameters, follows queued/running status, displays the saved strategy
-result and saves its configuration. It does not yet expose optimization or use
-saved strategies as preset sources; those belong to P5b.
+result and saves its configuration. The **Presets** page can use that saved
+result alongside portfolio sources. Optimization remains a later stage.

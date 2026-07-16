@@ -104,7 +104,7 @@ public sealed class PresetCalculationEngineTests
             start + 2 * Hour,
             CalculationTimeframes.OneHour)));
 
-        Assert.Equal("overlapping_portfolio_periods", exception.Code);
+        Assert.Equal("overlapping_source_periods", exception.Code);
     }
 
     [Fact]

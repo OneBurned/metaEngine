@@ -36,6 +36,37 @@ export type PortfolioPoint = {
   diff: number
 }
 
+export type PresetSourceType = "portfolio" | "strategy"
+
+export type Preset = {
+  id: string
+  presetKey: string
+  version: number
+  name: string
+  itemCount: number
+  createdAt: string
+  createdByUserId: string | null
+}
+
+export type PresetItem = {
+  id: string
+  sortOrder: number
+  sourceType: PresetSourceType
+  sourceId: string
+  sourceName: string
+  sourceTimeframe: Timeframe
+  sourcePeriodStart: string
+  sourcePeriodEnd: string
+  weight: number
+  startsAt: string
+  endsAt: string | null
+}
+
+export type PresetDetails = {
+  preset: Preset
+  items: PresetItem[]
+}
+
 export type CalculationRun = {
   id: string
   kind: "base" | "strategy"
@@ -80,6 +111,10 @@ export type SavedStrategy = {
   sourcePortfolioId: string | null
   sourcePresetId: string | null
   resultArtifactId: string
+  resultCalculationRunId: string
+  resultPeriodStart: string
+  resultPeriodEnd: string
+  resultTimeframe: Timeframe
   createdAt: string
 }
 
@@ -223,10 +258,69 @@ export async function getPortfolioBounds(workspaceId: string, portfolioId: strin
   }
 }
 
-export async function queueCalculation(
+export async function listPresets(workspaceId: string) {
+  const response = await request<{ items: Preset[] }>(`/api/v1/workspaces/${workspaceId}/presets`)
+  return response.items
+}
+
+export async function getPreset(workspaceId: string, presetId: string) {
+  return request<PresetDetails>(`/api/v1/workspaces/${workspaceId}/presets/${presetId}`)
+}
+
+export async function createPreset(
   workspaceId: string,
   input: {
+    name: string
+    presetKey?: string
+    items: Array<{
+      sourceType: PresetSourceType
+      sourceId: string
+      weight: number
+      startsAt: string
+      endsAt: string | null
+    }>
+  },
+) {
+  return request<PresetDetails>(
+    `/api/v1/workspaces/${workspaceId}/presets`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...input, presetKey: input.presetKey ?? null }),
+    },
+    true,
+  )
+}
+
+export async function getPresetBounds(workspaceId: string, presetId: string) {
+  const details = await getPreset(workspaceId, presetId)
+  if (!details.items.length) {
+    throw new ApiError("The preset has no items.", "preset_empty", 400)
+  }
+
+  const startsAt = details.items
+    .map((item) => item.startsAt)
+    .sort()[0]
+  const endsAt = details.items
+    .map((item) => item.endsAt ?? item.sourcePeriodEnd)
+    .sort()
+    .at(-1)
+  const sourceTimeframe = details.items
+    .map((item) => item.sourceTimeframe)
+    .sort((left, right) => timeframeOptions.indexOf(left) - timeframeOptions.indexOf(right))[0]
+
+  return { startsAt, endsAt, timeframe: sourceTimeframe }
+}
+
+export async function queueCalculation(
+  workspaceId: string,
+  input: ({
     portfolioId: string
+    presetId?: never
+  } | {
+    portfolioId?: never
+    presetId: string
+  }) & {
     periodStart: string
     periodEnd: string
     timeframe: Timeframe
@@ -237,7 +331,7 @@ export async function queueCalculation(
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...input, presetId: null }),
+      body: JSON.stringify(input),
     },
     true,
   )

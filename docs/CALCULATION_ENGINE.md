@@ -50,7 +50,8 @@ mdd   = min(previousMdd, dd, 0)
 
 ## Расчет пресета
 
-`PresetCalculationEngine` строит общий ряд из версионных portfolio sources.
+`PresetCalculationEngine` строит общий ряд из версионных portfolio sources и
+сохраненных strategy-result sources.
 Вес хранится как decimal (`0.25 = 25%`), а суммарный вес не ограничен: плечо
 разрешено. Для одного portfolio source периоды не пересекаются и действуют как
 `[startsAt, endsAt)`; `endsAt = null` означает открытый период.

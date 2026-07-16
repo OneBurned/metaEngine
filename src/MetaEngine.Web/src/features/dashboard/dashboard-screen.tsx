@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Tooltip,
   TooltipContent,
@@ -32,15 +33,18 @@ import {
   getAllCalculationResult,
   getCalculationRun,
   getPortfolioBounds,
+  getPresetBounds,
   importPortfolio,
   listCalculationRuns,
   listPortfolios,
+  listPresets,
   queueCalculation,
   timeframeOptions,
   type CalculationRun,
   type CalculationRunDetails,
   type Portfolio,
   type PortfolioPoint,
+  type Preset,
   type Timeframe,
 } from "@/lib/api"
 import {
@@ -78,6 +82,7 @@ export function DashboardScreen() {
   const { workspace, signOut } = useSession()
   const navigate = useNavigate({ from: "/" })
   const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [presets, setPresets] = useState<Preset[]>([])
   const [runs, setRuns] = useState<CalculationRun[]>([])
   const [selectedPortfolioId, setSelectedPortfolioId] = useState<string | null>(null)
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
@@ -90,17 +95,20 @@ export function DashboardScreen() {
   const refreshOverview = useCallback(async () => {
     if (!workspace) {
       setPortfolios([])
+      setPresets([])
       setRuns([])
       setIsLoading(false)
       return
     }
 
     try {
-      const [nextPortfolios, nextRuns] = await Promise.all([
+      const [nextPortfolios, nextPresets, nextRuns] = await Promise.all([
         listPortfolios(workspace.id),
+        listPresets(workspace.id),
         listCalculationRuns(workspace.id),
       ])
       setPortfolios(nextPortfolios)
+      setPresets(nextPresets)
       setRuns(nextRuns)
       setSelectedPortfolioId((current) => current ?? nextPortfolios[0]?.id ?? null)
       setSelectedRunId((current) => current ?? nextRuns[0]?.id ?? null)
@@ -173,8 +181,13 @@ export function DashboardScreen() {
     await refreshOverview()
   }
 
-  async function handleQueue(input: {
+  async function handleQueue(input: ({
     portfolioId: string
+    presetId?: never
+  } | {
+    portfolioId?: never
+    presetId: string
+  }) & {
     periodStart: string
     periodEnd: string
     timeframe: Timeframe
@@ -232,6 +245,7 @@ export function DashboardScreen() {
             <CalculationPanel
               canWrite={workspace.canWrite}
               portfolio={selectedPortfolio}
+              presets={presets}
               workspaceId={workspace.id}
               onQueue={handleQueue}
             />
@@ -358,20 +372,29 @@ function ImportPortfolioPanel({
 function CalculationPanel({
   canWrite,
   portfolio,
+  presets,
   workspaceId,
   onQueue,
 }: {
   canWrite: boolean
   portfolio: Portfolio | null
+  presets: Preset[]
   workspaceId: string | null
-  onQueue: (input: {
+  onQueue: (input: ({
     portfolioId: string
+    presetId?: never
+  } | {
+    portfolioId?: never
+    presetId: string
+  }) & {
     periodStart: string
     periodEnd: string
     timeframe: Timeframe
   }) => Promise<void>
 }) {
-  const [bounds, setBounds] = useState<{ startsAt: string; endsAt: string } | null>(null)
+  const [sourceType, setSourceType] = useState<"portfolio" | "preset">("portfolio")
+  const [presetId, setPresetId] = useState("")
+  const [bounds, setBounds] = useState<{ startsAt: string; endsAt: string; timeframe: Timeframe } | null>(null)
   const [periodStart, setPeriodStart] = useState("")
   const [periodEnd, setPeriodEnd] = useState("")
   const [timeframe, setTimeframe] = useState<Timeframe>("1h")
@@ -380,7 +403,13 @@ function CalculationPanel({
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!workspaceId || !portfolio) {
+    if (sourceType === "portfolio" && (!workspaceId || !portfolio)) {
+      setBounds(null)
+      setPeriodStart("")
+      setPeriodEnd("")
+      return
+    }
+    if (sourceType === "preset" && (!workspaceId || !presetId)) {
       setBounds(null)
       setPeriodStart("")
       setPeriodEnd("")
@@ -389,37 +418,54 @@ function CalculationPanel({
 
     setIsLoadingBounds(true)
     setError(null)
-    void getPortfolioBounds(workspaceId, portfolio.id)
+    const request = sourceType === "portfolio"
+      ? getPortfolioBounds(workspaceId!, portfolio!.id).then((nextBounds) => ({ ...nextBounds, timeframe: portfolio!.timeframe }))
+      : getPresetBounds(workspaceId!, presetId)
+    void request
       .then((nextBounds) => {
         setBounds(nextBounds)
         setPeriodStart(toDateTimeLocal(nextBounds.startsAt))
         setPeriodEnd(toDateTimeLocal(nextBounds.endsAt))
-        setTimeframe(portfolio.timeframe)
+        setTimeframe(nextBounds.timeframe)
       })
       .catch((requestError) => setError(toDisplayMessage(requestError)))
       .finally(() => setIsLoadingBounds(false))
-  }, [portfolio, workspaceId])
+  }, [portfolio, presetId, sourceType, workspaceId])
 
-  const allowedTimeframes = portfolio
-    ? timeframeOptions.slice(timeframeOptions.indexOf(portfolio.timeframe))
+  useEffect(() => {
+    setPresetId((current) => presets.some((preset) => preset.id === current) ? current : (presets[0]?.id ?? ""))
+  }, [presets])
+
+  const allowedTimeframes = bounds
+    ? timeframeOptions.slice(timeframeOptions.indexOf(bounds.timeframe))
     : []
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!portfolio || !periodStart || !periodEnd) {
-      setError("Выберите портфолио и период.")
+    const hasSource = sourceType === "portfolio" ? portfolio : presetId
+    if (!hasSource || !periodStart || !periodEnd) {
+      setError("Выберите источник и период.")
       return
     }
 
     setIsSubmitting(true)
     setError(null)
     try {
-      await onQueue({
-        portfolioId: portfolio.id,
-        periodStart: toIsoDateTime(periodStart),
-        periodEnd: toIsoDateTime(periodEnd),
-        timeframe,
-      })
+      if (sourceType === "portfolio" && portfolio) {
+        await onQueue({
+          portfolioId: portfolio.id,
+          periodStart: toIsoDateTime(periodStart),
+          periodEnd: toIsoDateTime(periodEnd),
+          timeframe,
+        })
+      } else if (sourceType === "preset" && presetId) {
+        await onQueue({
+          presetId,
+          periodStart: toIsoDateTime(periodStart),
+          periodEnd: toIsoDateTime(periodEnd),
+          timeframe,
+        })
+      }
     } catch (requestError) {
       setError(toDisplayMessage(requestError))
     } finally {
@@ -434,16 +480,9 @@ function CalculationPanel({
       </CardHeader>
       <CardContent>
         <form className="grid gap-4 sm:grid-cols-2" onSubmit={handleSubmit}>
-          <Field label="Портфолио" htmlFor="selected-portfolio">
-            <Input
-              id="selected-portfolio"
-              value={portfolio ? `${portfolio.name} · v${portfolio.version}` : "Выберите портфолио в таблице"}
-              readOnly
-              disabled
-            />
-          </Field>
+          <div className="grid gap-2 sm:col-span-2"><Label>Источник</Label><Tabs value={sourceType} onValueChange={(value) => setSourceType(value as "portfolio" | "preset")}><TabsList><TabsTrigger value="portfolio">Портфолио</TabsTrigger><TabsTrigger value="preset">Пресет</TabsTrigger></TabsList></Tabs>{sourceType === "portfolio" ? <Input value={portfolio ? `${portfolio.name} · v${portfolio.version}` : "Выберите портфолио в таблице"} readOnly disabled /> : <Select value={presetId} onValueChange={setPresetId} disabled={!presets.length}><SelectTrigger><SelectValue placeholder="Выберите пресет" /></SelectTrigger><SelectContent>{presets.map((preset) => <SelectItem key={preset.id} value={preset.id}>{preset.name} · v{preset.version}</SelectItem>)}</SelectContent></Select>}</div>
           <Field label="Таймфрейм" htmlFor="calculation-timeframe">
-            <Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)} disabled={!portfolio || isLoadingBounds}>
+            <Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)} disabled={!bounds || isLoadingBounds}>
               <SelectTrigger id="calculation-timeframe" className="w-full bg-white">
                 <SelectValue />
               </SelectTrigger>
@@ -462,7 +501,7 @@ function CalculationPanel({
               min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined}
               max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined}
               onChange={(event) => setPeriodStart(event.target.value)}
-              disabled={!portfolio || isLoadingBounds || isSubmitting}
+              disabled={!bounds || isLoadingBounds || isSubmitting}
             />
           </Field>
           <Field label="Период по" htmlFor="period-end">
@@ -473,13 +512,13 @@ function CalculationPanel({
               min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined}
               max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined}
               onChange={(event) => setPeriodEnd(event.target.value)}
-              disabled={!portfolio || isLoadingBounds || isSubmitting}
+              disabled={!bounds || isLoadingBounds || isSubmitting}
             />
           </Field>
           {isLoadingBounds ? <Progress className="sm:col-span-2" value={55} /> : null}
           {error ? <p className="sm:col-span-2 text-sm text-rose-700">{error}</p> : null}
           <div className="flex sm:col-span-2">
-            <Button type="submit" disabled={!canWrite || !portfolio || isLoadingBounds || isSubmitting}>
+            <Button type="submit" disabled={!canWrite || !bounds || isLoadingBounds || isSubmitting}>
               {isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}
               Рассчитать
             </Button>

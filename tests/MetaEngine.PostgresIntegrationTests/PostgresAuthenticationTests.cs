@@ -8,6 +8,7 @@ using MetaEngine.Api.Contracts;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Strategies;
 using MetaEngine.Domain.Model;
 using MetaEngine.Infrastructure.Identity;
 using MetaEngine.Infrastructure.Persistence;
@@ -94,7 +95,8 @@ public sealed class PostgresAuthenticationTests
         Assert.Equal(2, page.Items.Count);
         Assert.Equal(1, preset.Preset.Version);
         Assert.Single(preset.Items);
-        Assert.Equal(import.Portfolio.Id, preset.Items[0].PortfolioId);
+        Assert.Equal(PresetItemSourceType.Portfolio, preset.Items[0].SourceType);
+        Assert.Equal(import.Portfolio.Id, preset.Items[0].SourceId);
         Assert.Contains(
             presets.GetProperty("items").EnumerateArray(),
             item => item.GetProperty("id").GetGuid() == preset.Preset.Id);
@@ -134,6 +136,32 @@ public sealed class PostgresAuthenticationTests
         Assert.NotNull(longStrategyDetails);
         Assert.Equal(JobStatus.Completed, longStrategyDetails.Run.Status);
         Assert.Equal(LongStrategySourcePointCount, longStrategyDetails.Run.PointCount);
+
+        var savedStrategy = await SaveStrategyAsync(
+            client,
+            workspaceId,
+            longStrategyRun.Id);
+        var strategyPreset = await CreateStrategyPresetAsync(
+            client,
+            workspaceId,
+            savedStrategy.Id,
+            longPeriodStart,
+            longPeriodStart.AddHours(LongStrategySourcePointCount - 1));
+        var strategyPresetRun = await QueueCalculationAsync(
+            client,
+            workspaceId,
+            null,
+            strategyPreset.Preset.Id,
+            longPeriodStart,
+            longPeriodStart.AddHours(LongStrategySourcePointCount - 1));
+        await ProcessOneCalculationAsync(factory);
+        var strategyPresetDetails = await client.GetFromJsonAsync<CalculationRunDetails>(
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{strategyPresetRun.Id}",
+            JsonOptions);
+
+        Assert.NotNull(strategyPresetDetails);
+        Assert.Equal(JobStatus.Completed, strategyPresetDetails.Run.Status);
+        Assert.Equal(LongStrategySourcePointCount, strategyPresetDetails.Run.PointCount);
 
         await using var auditScope = factory.Services.CreateAsyncScope();
         var auditDbContext = auditScope.ServiceProvider.GetRequiredService<MetaEngineDbContext>();
@@ -208,13 +236,69 @@ public sealed class PostgresAuthenticationTests
             Content = JsonContent.Create(new CreatePresetRequest(
                 "Integration preset",
                 null,
-                [new CreatePresetItemRequest(portfolioId, 1.25, start, null)]))
+                [new CreatePresetItemRequest(PresetItemSourceType.Portfolio, portfolioId, 1.25, start, null)]))
         };
         request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
         var response = await client.SendAsync(request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 
         var result = await response.Content.ReadFromJsonAsync<PresetDetails>(JsonOptions);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static async Task<PresetDetails> CreateStrategyPresetAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid strategyId,
+        DateTimeOffset startsAt,
+        DateTimeOffset endsAt)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/presets")
+        {
+            Content = JsonContent.Create(new CreatePresetRequest(
+                "Strategy preset",
+                null,
+                [new CreatePresetItemRequest(
+                    PresetItemSourceType.Strategy,
+                    strategyId,
+                    1,
+                    startsAt,
+                    endsAt)]))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<PresetDetails>(JsonOptions);
+        Assert.NotNull(result);
+        return result;
+    }
+
+    private static async Task<SavedStrategySummary> SaveStrategyAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid strategyRunId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/strategies")
+        {
+            Content = JsonContent.Create(new SaveStrategyRequest("Long RSI", strategyRunId, null))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+
+        var result = await response.Content.ReadFromJsonAsync<SavedStrategySummary>(JsonOptions);
         Assert.NotNull(result);
         return result;
     }
@@ -342,8 +426,11 @@ public sealed class PostgresAuthenticationTests
                 auditEvent.Action == "calculation_failed" ||
                 auditEvent.Action == "strategy_calculation_queued" ||
                 auditEvent.Action == "strategy_calculation_completed" ||
-                auditEvent.Action == "strategy_calculation_failed")
+                auditEvent.Action == "strategy_calculation_failed" ||
+                auditEvent.Action == "strategy_saved")
             .ExecuteDeleteAsync();
+        await dbContext.PresetItems.ExecuteDeleteAsync();
+        await dbContext.Strategies.ExecuteDeleteAsync();
         await dbContext.CalculationRuns.ExecuteDeleteAsync();
         await dbContext.Presets.ExecuteDeleteAsync();
         await dbContext.Portfolios.ExecuteDeleteAsync();

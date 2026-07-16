@@ -13,6 +13,7 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as AuthenticatedStrategiesRouteImport } from './routes/_authenticated/strategies'
+import { Route as AuthenticatedPresetsRouteImport } from './routes/_authenticated/presets'
 
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
@@ -33,14 +34,21 @@ const AuthenticatedStrategiesRoute = AuthenticatedStrategiesRouteImport.update({
   path: '/strategies',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedPresetsRoute = AuthenticatedPresetsRouteImport.update({
+  id: '/presets',
+  path: '/presets',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/login': typeof LoginRoute
+  '/presets': typeof AuthenticatedPresetsRoute
   '/strategies': typeof AuthenticatedStrategiesRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/presets': typeof AuthenticatedPresetsRoute
   '/strategies': typeof AuthenticatedStrategiesRoute
   '/': typeof AuthenticatedIndexRoute
 }
@@ -48,18 +56,20 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/login': typeof LoginRoute
+  '/_authenticated/presets': typeof AuthenticatedPresetsRoute
   '/_authenticated/strategies': typeof AuthenticatedStrategiesRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/strategies'
+  fullPaths: '/' | '/login' | '/presets' | '/strategies'
   fileRoutesByTo: FileRoutesByTo
-  to: '/login' | '/strategies' | '/'
+  to: '/login' | '/presets' | '/strategies' | '/'
   id:
     | '__root__'
     | '/_authenticated'
     | '/login'
+    | '/_authenticated/presets'
     | '/_authenticated/strategies'
     | '/_authenticated/'
   fileRoutesById: FileRoutesById
@@ -99,15 +109,24 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedStrategiesRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/presets': {
+      id: '/_authenticated/presets'
+      path: '/presets'
+      fullPath: '/presets'
+      preLoaderRoute: typeof AuthenticatedPresetsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
 interface AuthenticatedRouteChildren {
+  AuthenticatedPresetsRoute: typeof AuthenticatedPresetsRoute
   AuthenticatedStrategiesRoute: typeof AuthenticatedStrategiesRoute
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedPresetsRoute: AuthenticatedPresetsRoute,
   AuthenticatedStrategiesRoute: AuthenticatedStrategiesRoute,
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
 }

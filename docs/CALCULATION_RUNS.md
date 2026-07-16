@@ -10,7 +10,7 @@ result in PostgreSQL.
 The request selects exactly one existing source in the current workspace:
 
 - one exact `PortfolioVersion`;
-- one exact `PresetVersion` made from portfolio sources.
+- one exact `PresetVersion` made from portfolio and/or saved strategy sources.
 
 The selected source, period and timeframe are captured in a `calculation_run`.
 Changing a portfolio or creating a newer preset later never changes an already
@@ -18,8 +18,8 @@ queued or completed run.
 
 P5a adds **strategy calculations**. A strategy always takes one completed base
 run as an immutable input and produces a separate canonical artifact. RSI and
-MDD Mean Reversion are available; optimizer jobs, cancel/retry and saved
-strategy sources inside presets are later stages.
+MDD Mean Reversion are available; optimizer jobs and cancel/retry are later
+stages.
 
 For a strategy run, the Worker reads only the completed base artifact in a
 separate series query. It does not join the base artifact points to the

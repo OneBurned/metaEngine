@@ -370,8 +370,6 @@ internal sealed class CalculationRunService(
             CalculationInputType.Preset => await dbContext.CalculationRuns
                 .Include(candidate => candidate.Preset)
                 .ThenInclude(preset => preset!.Items)
-                .ThenInclude(item => item.Portfolio)
-                .ThenInclude(portfolio => portfolio!.Points)
                 .AsSplitQuery()
                 .SingleAsync(
                     candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
@@ -386,7 +384,7 @@ internal sealed class CalculationRunService(
         CalculationRunKind.Base => run.InputType switch
         {
             CalculationInputType.Portfolio => CalculatePortfolio(run),
-            CalculationInputType.Preset => CalculatePreset(run),
+            CalculationInputType.Preset => await CalculatePresetAsync(run, cancellationToken),
             _ => throw new CalculationValidationException("unsupported_input_type", "Calculation input type is not supported.")
         },
         CalculationRunKind.Strategy => await CalculateStrategyAsync(run, cancellationToken),
@@ -411,29 +409,14 @@ internal sealed class CalculationRunService(
             0);
     }
 
-    private static CalculatedRunOutput CalculatePreset(CalculationRun run)
+    private async Task<CalculatedRunOutput> CalculatePresetAsync(
+        CalculationRun run,
+        CancellationToken cancellationToken)
     {
         var preset = run.Preset ?? throw new CalculationValidationException(
             "preset_not_found",
             "Preset source is not available for this calculation run.");
-        var items = new List<PresetCalculationItem>(preset.Items.Count);
-        foreach (var item in preset.Items.OrderBy(item => item.SortOrder))
-        {
-            if (item.SourceType != PresetItemSourceType.Portfolio || item.Portfolio is null)
-            {
-                throw new CalculationValidationException(
-                    "unsupported_preset_source",
-                    "This preset contains a source type that is not available for production calculation yet.");
-            }
-
-            items.Add(new PresetCalculationItem(
-                item.Portfolio.Id,
-                ToReturnPoints(item.Portfolio),
-                item.Portfolio.Timeframe,
-                item.Weight,
-                item.StartsAt.ToUnixTimeMilliseconds(),
-                item.EndsAt?.ToUnixTimeMilliseconds()));
-        }
+        var items = await LoadPresetCalculationItemsAsync(run.WorkspaceId, preset, cancellationToken);
 
         var result = new PresetCalculationEngine().Calculate(new PresetCalculationRequest(
             items,
@@ -445,6 +428,108 @@ internal sealed class CalculationRunService(
             result.Summary,
             result.Warnings,
             0);
+    }
+
+    private async Task<IReadOnlyList<PresetCalculationItem>> LoadPresetCalculationItemsAsync(
+        Guid workspaceId,
+        PresetVersion preset,
+        CancellationToken cancellationToken)
+    {
+        var portfolioIds = preset.Items
+            .Where(item => item.SourceType == PresetItemSourceType.Portfolio)
+            .Select(item => item.PortfolioId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToArray();
+        var portfolios = await dbContext.Portfolios
+            .AsNoTracking()
+            .Where(portfolio => portfolio.WorkspaceId == workspaceId && portfolioIds.Contains(portfolio.Id))
+            .Select(portfolio => new PortfolioPresetSource(portfolio.Id, portfolio.Timeframe))
+            .ToArrayAsync(cancellationToken);
+        if (portfolios.Length != portfolioIds.Length)
+        {
+            throw new CalculationValidationException(
+                "preset_source_not_found", "A portfolio source in this preset is not available.");
+        }
+
+        var portfolioPoints = await dbContext.PortfolioPoints
+            .AsNoTracking()
+            .Where(point => portfolioIds.Contains(point.PortfolioId))
+            .OrderBy(point => point.Timestamp)
+            .Select(point => new SourcePoint(point.PortfolioId, point.Timestamp, point.Diff))
+            .ToArrayAsync(cancellationToken);
+        var portfolioPointsById = portfolioPoints
+            .GroupBy(point => point.SourceId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<ReturnPoint>)group
+                    .Select(point => new ReturnPoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
+                    .ToArray());
+        var portfoliosById = portfolios.ToDictionary(portfolio => portfolio.Id);
+
+        var strategyIds = preset.Items
+            .Where(item => item.SourceType == PresetItemSourceType.Strategy)
+            .Select(item => item.StrategyId)
+            .OfType<Guid>()
+            .Distinct()
+            .ToArray();
+        var strategies = await dbContext.Strategies
+            .AsNoTracking()
+            .Where(strategy =>
+                strategy.WorkspaceId == workspaceId &&
+                strategyIds.Contains(strategy.Id) &&
+                strategy.ResultArtifact.Kind == RunArtifactKind.StrategyResult)
+            .Select(strategy => new StrategyPresetSource(
+                strategy.Id,
+                strategy.ResultArtifactId,
+                strategy.ResultArtifact.CalculationRun.Timeframe))
+            .ToArrayAsync(cancellationToken);
+        if (strategies.Length != strategyIds.Length)
+        {
+            throw new CalculationValidationException(
+                "preset_source_not_found", "A saved strategy source in this preset is not available.");
+        }
+
+        var strategyArtifactIds = strategies.Select(strategy => strategy.ResultArtifactId).ToArray();
+        var strategyPoints = await dbContext.RunArtifactPoints
+            .AsNoTracking()
+            .Where(point => strategyArtifactIds.Contains(point.RunArtifactId))
+            .OrderBy(point => point.Timestamp)
+            .Select(point => new SourcePoint(point.RunArtifactId, point.Timestamp, point.Diff))
+            .ToArrayAsync(cancellationToken);
+        var strategyPointsByArtifactId = strategyPoints
+            .GroupBy(point => point.SourceId)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyList<ReturnPoint>)group
+                    .Select(point => new ReturnPoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
+                    .ToArray());
+        var strategiesById = strategies.ToDictionary(strategy => strategy.Id);
+
+        return preset.Items
+            .OrderBy(item => item.SortOrder)
+            .Select(item => item.SourceType switch
+            {
+                PresetItemSourceType.Portfolio when item.PortfolioId is Guid portfolioId &&
+                    portfoliosById.TryGetValue(portfolioId, out var portfolio) => new PresetCalculationItem(
+                    portfolioId,
+                    portfolioPointsById.GetValueOrDefault(portfolioId, []),
+                    portfolio.Timeframe,
+                    item.Weight,
+                    item.StartsAt.ToUnixTimeMilliseconds(),
+                    item.EndsAt?.ToUnixTimeMilliseconds()),
+                PresetItemSourceType.Strategy when item.StrategyId is Guid strategyId &&
+                    strategiesById.TryGetValue(strategyId, out var strategy) => new PresetCalculationItem(
+                    strategyId,
+                    strategyPointsByArtifactId.GetValueOrDefault(strategy.ResultArtifactId, []),
+                    strategy.Timeframe,
+                    item.Weight,
+                    item.StartsAt.ToUnixTimeMilliseconds(),
+                    item.EndsAt?.ToUnixTimeMilliseconds()),
+                _ => throw new CalculationValidationException(
+                    "preset_source_not_found", "A preset source is not available.")
+            })
+            .ToArray();
     }
 
     private async Task<CalculatedRunOutput> CalculateStrategyAsync(CalculationRun run, CancellationToken cancellationToken)
@@ -517,6 +602,12 @@ internal sealed class CalculationRunService(
             .OrderBy(point => point.Timestamp)
             .Select(point => new ReturnPoint(point.Timestamp.ToUnixTimeMilliseconds(), point.Diff))
             .ToArray();
+
+    private sealed record SourcePoint(Guid SourceId, DateTimeOffset Timestamp, double Diff);
+
+    private sealed record PortfolioPresetSource(Guid Id, string Timeframe);
+
+    private sealed record StrategyPresetSource(Guid Id, Guid ResultArtifactId, string Timeframe);
 
     private async Task MarkFailedAsync(Guid runId, string errorCode, CancellationToken cancellationToken)
     {

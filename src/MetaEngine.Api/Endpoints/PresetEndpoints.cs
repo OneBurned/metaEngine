@@ -46,11 +46,12 @@ public static class PresetEndpoints
                 new CreatePresetCommand(
                     workspaceId,
                     userId,
-                    request.Name ?? string.Empty,
-                    request.PresetKey,
-                    (request.Items ?? [])
-                        .Select(item => new PresetPortfolioItemInput(
-                            item.PortfolioId,
+                        request.Name ?? string.Empty,
+                        request.PresetKey,
+                        (request.Items ?? [])
+                        .Select(item => new PresetItemInput(
+                            item.SourceType,
+                            item.SourceId,
                             item.Weight,
                             item.StartsAt,
                             item.EndsAt))

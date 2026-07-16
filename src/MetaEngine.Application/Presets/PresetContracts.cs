@@ -1,7 +1,10 @@
+using MetaEngine.Domain.Model;
+
 namespace MetaEngine.Application.Presets;
 
-public sealed record PresetPortfolioItemInput(
-    Guid PortfolioId,
+public sealed record PresetItemInput(
+    PresetItemSourceType SourceType,
+    Guid SourceId,
     double Weight,
     DateTimeOffset StartsAt,
     DateTimeOffset? EndsAt);
@@ -11,7 +14,7 @@ public sealed record CreatePresetCommand(
     Guid UserId,
     string Name,
     Guid? PresetKey,
-    IReadOnlyList<PresetPortfolioItemInput> Items);
+    IReadOnlyList<PresetItemInput> Items);
 
 public sealed record PresetSummary(
     Guid Id,
@@ -25,11 +28,12 @@ public sealed record PresetSummary(
 public sealed record PresetItemSummary(
     Guid Id,
     int SortOrder,
-    Guid PortfolioId,
-    Guid PortfolioKey,
-    int PortfolioVersion,
-    string PortfolioName,
-    string PortfolioTimeframe,
+    PresetItemSourceType SourceType,
+    Guid SourceId,
+    string SourceName,
+    string SourceTimeframe,
+    DateTimeOffset SourcePeriodStart,
+    DateTimeOffset SourcePeriodEnd,
     double Weight,
     DateTimeOffset StartsAt,
     DateTimeOffset? EndsAt);

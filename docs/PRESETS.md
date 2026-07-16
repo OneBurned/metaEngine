@@ -1,33 +1,31 @@
 # Production presets
 
-P2c adds the first production workflow for a preset. A preset is an immutable,
-versioned recipe that combines exact imported portfolio versions. The
-calculation-run endpoint is now available; P4 adds UI for portfolio calculations
-only, while preset UI remains future work. This document describes the database
-API and the domain calculation core.
+P5b makes presets a production workflow. A preset is an immutable, versioned
+recipe that combines exact imported portfolio versions and saved strategy
+results. The UI can create a preset and queue it for calculation.
 
 ## What a preset stores
 
 Each saved item has:
 
-- one exact `PortfolioVersion` ID, not a portfolio name or its latest version;
+- one exact source: a `PortfolioVersion` or a `SavedStrategyVersion` result;
 - a decimal weight: `0.25` means 25%, `1.5` means 150%; total weight is not
   capped and may therefore use leverage;
 - an inclusive start timestamp;
 - an exclusive end timestamp, or `null` for “until the end”.
 
-Weights must be finite and non-negative. The same portfolio version can appear
-more than once for rebalancing, but its periods must not overlap. Touching
+Weights must be finite and non-negative. The same source can appear more than
+once for rebalancing, but its periods must not overlap. Touching
 periods are valid: an item ending at `12:00` and the next one starting at
-`12:00` do not overlap. Different portfolios may be active at the same time.
+`12:00` do not overlap. Different sources may be active at the same time.
 
 Creating a new preset creates version 1 with a new `presetKey`. Supplying an
 existing `presetKey` creates its next immutable version. The older version is
 never changed.
 
-Saved meta-strategies are deliberately not sources in P2c. The database model
-already reserves that relation, and it will be enabled after strategy results
-are saved as canonical `timestamp,diff` artifacts.
+A strategy item references the exact saved strategy version and its immutable
+`StrategyResult` artifact. Creating a new strategy run or later strategy
+version never changes an existing preset.
 
 ## Workspace API
 
@@ -50,13 +48,15 @@ Example create body:
   "presetKey": null,
   "items": [
     {
-      "portfolioId": "11111111-1111-1111-1111-111111111111",
+      "sourceType": "portfolio",
+      "sourceId": "11111111-1111-1111-1111-111111111111",
       "weight": 0.25,
       "startsAt": "2024-01-01T00:00:00Z",
       "endsAt": "2025-01-01T00:00:00Z"
     },
     {
-      "portfolioId": "22222222-2222-2222-2222-222222222222",
+      "sourceType": "strategy",
+      "sourceId": "22222222-2222-2222-2222-222222222222",
       "weight": 1.0,
       "startsAt": "2024-01-01T00:00:00Z",
       "endsAt": null
@@ -65,13 +65,13 @@ Example create body:
 }
 ```
 
-The response returns the new preset ID/key/version and each resolved portfolio
-key/version/name/timeframe. An audit event `preset_created` is written in the
-same database transaction.
+The response returns the new preset ID/key/version and each resolved source
+name, type, timeframe and source period. An audit event `preset_created` is
+written in the same database transaction.
 
 ## Calculation core
 
-`PresetCalculationEngine` receives portfolio rows as canonical
+`PresetCalculationEngine` receives source rows as canonical
 `timestamp,diff`, the item weight/period, the requested calculation period and
 the target timeframe. It:
 
@@ -80,11 +80,11 @@ the target timeframe. It:
 3. considers an item only inside its `[startsAt, endsAt)` period;
 4. on the item’s own source timestamps, replaces a missing `diff` with `0` and
    reports it as a warning;
-5. sums `portfolioDiff * weight` from all active items;
+5. sums `sourceDiff * weight` from all active items;
 6. runs the common `diff -> accum -> hwm -> dd -> mdd` core and optional
    timeframe conversion.
 
-A coarser portfolio contributes zero between its native timestamps; those
+A coarser source contributes zero between its native timestamps; those
 between-step timestamps are not treated as missing data. At most 100 warning
 details are returned while the full missing-point count is retained.
 
@@ -92,10 +92,10 @@ If leveraged aggregation produces a return below `-100%` on one timestamp, the
 calculation is rejected by the common `return_below_minus_one` guard. This
 prevents a non-finite equity curve from entering an artifact.
 
-P3 now loads a saved preset through an asynchronous job/Worker workflow and
-persists its canonical result as a `run_artifact`. The production UI can render
-portfolio-run metrics and charts; preset creation and execution are the next UI
-slice. The current run API is documented in `docs/CALCULATION_RUNS.md`.
+The Worker loads portfolio points and saved strategy artifacts in separate
+queries before calculating a preset. This prevents a long strategy artifact
+from multiplying portfolio rows in one database query. The result is persisted
+as a canonical `run_artifact`; the production UI can queue and inspect it.
 
 ## Shared contract
 

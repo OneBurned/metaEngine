@@ -15,7 +15,7 @@ public sealed class PresetCalculationEngine
         {
             throw new CalculationValidationException(
                 "preset_items_required",
-                "Preset calculation requires at least one portfolio item.");
+                "Preset calculation requires at least one source item.");
         }
 
         var items = request.Items
@@ -69,7 +69,7 @@ public sealed class PresetCalculationEngine
                         warnings.Add(new CalculationWarning(
                             "missing_diff_zero",
                             timestamp,
-                            $"Portfolio {item.PortfolioId} point is missing; calculation used diff = 0."));
+                            $"Preset source {item.SourceId} point is missing; calculation used diff = 0."));
                     }
                 }
 
@@ -129,7 +129,7 @@ public sealed class PresetCalculationEngine
             ? 0
             : Modulo(pointsByTimestamp.Keys.Min(), sourceStep);
         return new PreparedItem(
-            item.PortfolioId,
+            item.SourceId,
             pointsByTimestamp,
             sourceDefinition,
             item.SourceTimeframe,
@@ -142,9 +142,9 @@ public sealed class PresetCalculationEngine
 
     private static void ValidatePeriodsDoNotOverlap(IReadOnlyList<PreparedItem> items)
     {
-        foreach (var portfolioItems in items.GroupBy(item => item.PortfolioId))
+        foreach (var sourceItems in items.GroupBy(item => item.SourceId))
         {
-            var sorted = portfolioItems
+            var sorted = sourceItems
                 .OrderBy(item => item.StartsAt)
                 .ThenBy(item => item.EndsAt ?? long.MaxValue)
                 .ToArray();
@@ -154,8 +154,8 @@ public sealed class PresetCalculationEngine
                 if (sorted[index].StartsAt < previousEnd)
                 {
                     throw new CalculationValidationException(
-                        "overlapping_portfolio_periods",
-                        $"Portfolio {portfolioItems.Key} has overlapping preset item periods.");
+                        "overlapping_source_periods",
+                        $"Preset source {sourceItems.Key} has overlapping preset item periods.");
                 }
             }
         }
@@ -168,7 +168,7 @@ public sealed class PresetCalculationEngine
     }
 
     private sealed record PreparedItem(
-        Guid PortfolioId,
+        Guid SourceId,
         IReadOnlyDictionary<long, double> PointsByTimestamp,
         CalculationTimeframes.Definition SourceDefinition,
         string SourceTimeframe,

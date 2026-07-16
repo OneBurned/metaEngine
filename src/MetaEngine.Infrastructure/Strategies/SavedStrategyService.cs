@@ -71,7 +71,7 @@ internal sealed class SavedStrategyService(MetaEngineDbContext dbContext) : ISav
             })
         });
         await dbContext.SaveChangesAsync(cancellationToken);
-        return ToSummary(strategy);
+        return ToSummary(strategy, run);
     }
 
     public async Task<IReadOnlyList<SavedStrategySummary>> ListAsync(Guid workspaceId, CancellationToken cancellationToken) =>
@@ -91,10 +91,16 @@ internal sealed class SavedStrategyService(MetaEngineDbContext dbContext) : ISav
                 strategy.SourcePortfolioId,
                 strategy.SourcePresetId,
                 strategy.ResultArtifactId,
+                strategy.ResultArtifact.CalculationRunId,
+                strategy.ResultArtifact.CalculationRun.PeriodStart,
+                strategy.ResultArtifact.CalculationRun.PeriodEnd,
+                strategy.ResultArtifact.CalculationRun.Timeframe,
                 strategy.CreatedAt))
             .ToArrayAsync(cancellationToken);
 
-    private static SavedStrategySummary ToSummary(SavedStrategyVersion strategy) => new(
+    private static SavedStrategySummary ToSummary(
+        SavedStrategyVersion strategy,
+        CalculationRun resultRun) => new(
         strategy.Id,
         strategy.StrategyKey,
         strategy.Version,
@@ -106,5 +112,9 @@ internal sealed class SavedStrategyService(MetaEngineDbContext dbContext) : ISav
         strategy.SourcePortfolioId,
         strategy.SourcePresetId,
         strategy.ResultArtifactId,
+        resultRun.Id,
+        resultRun.PeriodStart,
+        resultRun.PeriodEnd,
+        resultRun.Timeframe,
         strategy.CreatedAt);
 }
