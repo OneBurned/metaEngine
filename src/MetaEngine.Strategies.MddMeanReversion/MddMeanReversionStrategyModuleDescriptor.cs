@@ -52,5 +52,6 @@ public sealed class MddMeanReversionStrategyModuleDescriptor : IStrategyModuleDe
             new("signal", "Сигнал", StrategyOutputKind.Signal),
             new("execution", "Исполнение", StrategyOutputKind.Signal),
             new("position", "Вес", StrategyOutputKind.Position, "decimal")
-        ]);
+        ],
+        IsProductionOptimizationAvailable: true);
 }

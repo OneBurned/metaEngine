@@ -53,7 +53,8 @@ public sealed record StrategyDescriptor(
     bool IsProductionCalculationAvailable,
     IReadOnlyList<StrategyParameterDescriptor> Parameters,
     StrategyOptimizationDescriptor Optimization,
-    IReadOnlyList<StrategyOutputDescriptor> Outputs);
+    IReadOnlyList<StrategyOutputDescriptor> Outputs,
+    bool IsProductionOptimizationAvailable = false);
 
 public interface IStrategyModuleDescriptorProvider
 {
@@ -103,6 +104,10 @@ public interface IStrategyModule : IStrategyModuleDescriptorProvider
         IReadOnlyList<StrategySourcePoint> source,
         CancellationToken cancellationToken);
 
+    StrategyValidationResult ValidateSearchSpace(JsonElement searchSpace) => StrategyValidationResult.Valid;
+
+    long? EstimateCandidateCount(JsonElement searchSpace) => null;
+
     IAsyncEnumerable<JsonElement> GenerateCandidatesAsync(
         JsonElement searchSpace,
         int seed,
@@ -112,4 +117,10 @@ public interface IStrategyModule : IStrategyModuleDescriptorProvider
         IStrategyPreparedData preparedData,
         JsonElement parameters,
         CancellationToken cancellationToken);
+
+    async ValueTask<StrategyRunSummary> CalculateSummaryAsync(
+        IStrategyPreparedData preparedData,
+        JsonElement parameters,
+        CancellationToken cancellationToken) =>
+        (await CalculateAsync(preparedData, parameters, cancellationToken)).Summary;
 }

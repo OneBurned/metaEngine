@@ -1,4 +1,5 @@
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Optimizations;
 using MetaEngine.Strategies.Abstractions;
 
 namespace MetaEngine.Worker;
@@ -9,11 +10,16 @@ public sealed class Worker(
     IServiceScopeFactory serviceScopeFactory) : BackgroundService
 {
     private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(1);
+    private static readonly TimeSpan RecoveryInterval = TimeSpan.FromSeconds(10);
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        var nextRecoveryAt = DateTimeOffset.MinValue;
+        var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
+        using var logScope = logger.BeginScope(new Dictionary<string, object?> { ["workerId"] = workerId });
         logger.LogInformation(
-            "MetaEngine Worker started with {StrategyCount} registered strategy descriptors: {StrategyTypes}",
+            "MetaEngine Worker {WorkerId} started with {StrategyCount} registered strategy descriptors: {StrategyTypes}",
+            workerId,
             strategyCatalog.Descriptors.Count,
             string.Join(", ", strategyCatalog.Descriptors.Select(descriptor => descriptor.StrategyType)));
 
@@ -22,8 +28,20 @@ public sealed class Worker(
             try
             {
                 await using var scope = serviceScopeFactory.CreateAsyncScope();
-                var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
-                if (await processor.ProcessNextAsync(stoppingToken))
+                var calculationProcessor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
+                var optimizationProcessor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
+                if (DateTimeOffset.UtcNow >= nextRecoveryAt)
+                {
+                    await calculationProcessor.RecoverExpiredLeasesAsync(stoppingToken);
+                    await optimizationProcessor.RecoverExpiredLeasesAsync(stoppingToken);
+                    nextRecoveryAt = DateTimeOffset.UtcNow.Add(RecoveryInterval);
+                }
+                if (await calculationProcessor.ProcessNextAsync(stoppingToken))
+                {
+                    continue;
+                }
+
+                if (await optimizationProcessor.ProcessNextAsync(stoppingToken))
                 {
                     continue;
                 }
@@ -36,11 +54,11 @@ public sealed class Worker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Calculation worker loop failed; retrying after delay.");
+                logger.LogError(exception, "Worker loop failed; retrying after delay.");
                 await Task.Delay(IdleDelay, stoppingToken);
             }
         }
 
-        logger.LogInformation("MetaEngine Worker is stopping.");
+        logger.LogInformation("MetaEngine Worker {WorkerId} is stopping.", workerId);
     }
 }

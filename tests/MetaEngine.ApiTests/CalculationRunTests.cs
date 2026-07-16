@@ -5,11 +5,13 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using MetaEngine.Api.Contracts;
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Optimizations;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
 using MetaEngine.Application.Strategies;
 using MetaEngine.Domain.Model;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.EntityFrameworkCore;
 
 namespace MetaEngine.ApiTests;
 
@@ -249,11 +251,405 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         Assert.Equal(HttpStatusCode.BadRequest, csrfResponse.StatusCode);
     }
 
+    [Fact]
+    public async Task Admin_can_optimize_rsi_and_apply_a_result_as_a_strategy_run()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Optimization source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var optimizationResponse = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "rsi",
+                JsonSerializer.SerializeToElement(new
+                {
+                    rsiPeriod = new { from = 1, to = 2, step = 1 },
+                    buyLevel = new { from = 30, to = 30, step = 1 },
+                    sellLevel = new { from = 70, to = 70, step = 1 }
+                }),
+                SampleCount: 2,
+                Seed: 42,
+                TopCount: 2));
+        var queued = await optimizationResponse.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, optimizationResponse.StatusCode);
+        Assert.NotNull(queued);
+        Assert.Equal(2, queued.TotalCandidates);
+        await ProcessOptimizationAsync();
+
+        var details = await client.GetFromJsonAsync<OptimizationJobDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/optimization-jobs/{queued.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Completed, details.Job.Status);
+        Assert.Equal(2, details.Job.ProcessedCandidates);
+        Assert.Equal(2, details.Results.Count);
+        Assert.All(details.Results, result => Assert.Equal(2, result.Samples.Count));
+
+        var strategyResponse = await SendOptimizationStrategyQueueAsync(
+            client,
+            owner.WorkspaceId,
+            queued.Id,
+            details.Results[0].Id);
+        var strategyRun = await strategyResponse.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+        Assert.Equal(HttpStatusCode.Accepted, strategyResponse.StatusCode);
+        Assert.NotNull(strategyRun);
+        await ProcessOneAsync();
+
+        var saved = await SaveStrategyAsync(
+            client,
+            owner.WorkspaceId,
+            new SaveStrategyRequest("Optimized RSI", strategyRun.Id, null));
+        Assert.Equal("rsi", saved.StrategyType);
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngine.Infrastructure.Persistence.MetaEngineDbContext>();
+        var savedEntity = await dbContext.Strategies.SingleAsync(strategy => strategy.Id == saved.Id);
+        Assert.Equal(details.Results[0].Id, savedEntity.OptimizationResultId);
+    }
+
+    [Fact]
+    public async Task Admin_can_optimize_mdd_and_apply_a_result_as_a_strategy_run()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "MDD optimization source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var optimizationResponse = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "mdd_mean_reversion",
+                JsonSerializer.SerializeToElement(new
+                {
+                    parameterMode = "simple",
+                    levelCount = 1,
+                    minEntryDelta = 0,
+                    maxTotalWeight = 100,
+                    drawdown = new { from = 5, to = 10, step = 5 },
+                    weight = new { from = 100, to = 100, step = 1 },
+                    takeProfit = new { from = 0, to = 0, step = 1 },
+                    searchMode = "random",
+                    maxCandidates = 2
+                }),
+                SampleCount: 2,
+                Seed: 42,
+                TopCount: 2));
+        var queued = await optimizationResponse.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, optimizationResponse.StatusCode);
+        Assert.NotNull(queued);
+        Assert.Equal(2, queued.TotalCandidates);
+        await ProcessOptimizationAsync();
+
+        var details = await client.GetFromJsonAsync<OptimizationJobDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/optimization-jobs/{queued.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Completed, details.Job.Status);
+        Assert.Equal(2, details.Job.ProcessedCandidates);
+        Assert.Equal(2, details.Results.Count);
+        Assert.All(details.Results, result => Assert.Equal(2, result.Samples.Count));
+
+        var strategyResponse = await SendOptimizationStrategyQueueAsync(
+            client,
+            owner.WorkspaceId,
+            queued.Id,
+            details.Results[0].Id);
+        var strategyRun = await strategyResponse.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+        Assert.Equal(HttpStatusCode.Accepted, strategyResponse.StatusCode);
+        Assert.NotNull(strategyRun);
+        Assert.Equal("mdd_mean_reversion", strategyRun.StrategyType);
+        await ProcessOneAsync();
+    }
+
+    [Fact]
+    public async Task Admin_can_stop_a_queued_optimization_before_worker_claims_it()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Stopped optimization source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+
+        var response = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "rsi",
+                JsonSerializer.SerializeToElement(new
+                {
+                    rsiPeriod = new { from = 1, to = 1, step = 1 },
+                    buyLevel = new { from = 30, to = 30, step = 1 },
+                    sellLevel = new { from = 70, to = 70, step = 1 }
+                })));
+        var queued = await response.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+        Assert.NotNull(queued);
+
+        var stopped = await SendOptimizationStopAsync(client, owner.WorkspaceId, queued.Id);
+        var stoppedJob = await stopped.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+        Assert.Equal(HttpStatusCode.OK, stopped.StatusCode);
+        Assert.NotNull(stoppedJob);
+        Assert.Equal(JobStatus.Stopped, stoppedJob.Status);
+        await ProcessOptimizationAsync(expected: false);
+    }
+
+    [Fact]
+    public async Task Admin_can_retry_a_failed_calculation()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Retry calculation source");
+        var queued = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngine.Infrastructure.Persistence.MetaEngineDbContext>();
+            var run = await dbContext.CalculationRuns.SingleAsync(candidate => candidate.Id == queued.Run.Id);
+            run.Status = JobStatus.Failed;
+            run.ErrorCode = "calculation_failed";
+            run.AttemptCount = 3;
+            run.CompletedAt = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync();
+        }
+
+        var retry = await SendCalculationRetryAsync(client, owner.WorkspaceId, queued.Run.Id);
+        var retryRun = await retry.Content.ReadFromJsonAsync<CalculationRunSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.NotNull(retryRun);
+        Assert.Equal(JobStatus.Queued, retryRun.Status);
+        Assert.Equal(0, retryRun.AttemptCount);
+        await ProcessOneAsync();
+
+        var details = await client.GetFromJsonAsync<CalculationRunDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/calculation-runs/{queued.Run.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Completed, details.Run.Status);
+        Assert.Equal(1, details.Run.AttemptCount);
+    }
+
+    [Fact]
+    public async Task Worker_recovers_an_expired_calculation_lease()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Expired lease source");
+        var queued = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngine.Infrastructure.Persistence.MetaEngineDbContext>();
+            var run = await dbContext.CalculationRuns.SingleAsync(candidate => candidate.Id == queued.Run.Id);
+            run.Status = JobStatus.Running;
+            run.AttemptCount = 1;
+            run.LeaseId = Guid.CreateVersion7();
+            run.LastHeartbeatAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+            await dbContext.SaveChangesAsync();
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
+            await processor.RecoverExpiredLeasesAsync(CancellationToken.None);
+        }
+
+        var details = await client.GetFromJsonAsync<CalculationRunDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/calculation-runs/{queued.Run.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Queued, details.Run.Status);
+        Assert.Equal("worker_lease_expired", details.Run.ErrorCode);
+        Assert.NotNull(details.Run.RetryNotBefore);
+    }
+
+    [Fact]
+    public async Task Admin_can_retry_a_failed_optimization()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Retry optimization source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+        var response = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "rsi",
+                JsonSerializer.SerializeToElement(new
+                {
+                    rsiPeriod = new { from = 1, to = 1, step = 1 },
+                    buyLevel = new { from = 30, to = 30, step = 1 },
+                    sellLevel = new { from = 70, to = 70, step = 1 }
+                })));
+        var queued = await response.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+        Assert.NotNull(queued);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngine.Infrastructure.Persistence.MetaEngineDbContext>();
+            var job = await dbContext.OptimizationJobs.SingleAsync(candidate => candidate.Id == queued.Id);
+            job.Status = JobStatus.Failed;
+            job.ErrorCode = "optimization_failed";
+            job.AttemptCount = 3;
+            job.CompletedAt = DateTimeOffset.UtcNow;
+            await dbContext.SaveChangesAsync();
+        }
+
+        var retry = await SendOptimizationRetryAsync(client, owner.WorkspaceId, queued.Id);
+        var retryJob = await retry.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Accepted, retry.StatusCode);
+        Assert.NotNull(retryJob);
+        Assert.Equal(JobStatus.Queued, retryJob.Status);
+        Assert.Equal(0, retryJob.AttemptCount);
+        await ProcessOptimizationAsync();
+
+        var details = await client.GetFromJsonAsync<OptimizationJobDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/optimization-jobs/{queued.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Completed, details.Job.Status);
+        Assert.Equal(1, details.Job.AttemptCount);
+    }
+
+    [Fact]
+    public async Task Worker_stops_an_expired_stopping_optimization_without_requeueing_it()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var portfolio = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Stopped lease source");
+        var baseRun = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            new QueueCalculationRequest(
+                portfolio.Portfolio.Id,
+                null,
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_499_200_000L),
+                DateTimeOffset.FromUnixTimeMilliseconds(1_704_506_400_000L),
+                "1h"));
+        await ProcessOneAsync();
+        var response = await SendOptimizationQueueAsync(
+            client,
+            owner.WorkspaceId,
+            baseRun.Run.Id,
+            new QueueOptimizationRequest(
+                "rsi",
+                JsonSerializer.SerializeToElement(new
+                {
+                    rsiPeriod = new { from = 1, to = 1, step = 1 },
+                    buyLevel = new { from = 30, to = 30, step = 1 },
+                    sellLevel = new { from = 70, to = 70, step = 1 }
+                })));
+        var queued = await response.Content.ReadFromJsonAsync<OptimizationJobSummary>(JsonOptions);
+        Assert.NotNull(queued);
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngine.Infrastructure.Persistence.MetaEngineDbContext>();
+            var job = await dbContext.OptimizationJobs.SingleAsync(candidate => candidate.Id == queued.Id);
+            job.Status = JobStatus.Stopping;
+            job.AttemptCount = 1;
+            job.LeaseId = Guid.CreateVersion7();
+            job.LastHeartbeatAt = DateTimeOffset.UtcNow.AddMinutes(-10);
+            job.StopRequestedAt = DateTimeOffset.UtcNow.AddMinutes(-11);
+            await dbContext.SaveChangesAsync();
+        }
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var processor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
+            await processor.RecoverExpiredLeasesAsync(CancellationToken.None);
+        }
+
+        var details = await client.GetFromJsonAsync<OptimizationJobDetails>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/optimization-jobs/{queued.Id}",
+            JsonOptions);
+        Assert.NotNull(details);
+        Assert.Equal(JobStatus.Stopped, details.Job.Status);
+        Assert.Null(details.Job.RetryNotBefore);
+        Assert.Null(details.Job.ErrorCode);
+        await ProcessOptimizationAsync(expected: false);
+    }
+
     private async Task ProcessOneAsync()
     {
         await using var scope = factory.Services.CreateAsyncScope();
         var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
         Assert.True(await processor.ProcessNextAsync(CancellationToken.None));
+    }
+
+    private async Task ProcessOptimizationAsync(bool expected = true)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var processor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
+        Assert.Equal(expected, await processor.ProcessNextAsync(CancellationToken.None));
     }
 
     private static async Task LoginAsync(HttpClient client, SeededUser user)
@@ -363,6 +759,81 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         {
             Content = JsonContent.Create(requestBody)
         };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendCalculationRetryAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid runId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry");
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendOptimizationQueueAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid sourceRunId,
+        QueueOptimizationRequest requestBody)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs/{sourceRunId}/optimizations")
+        {
+            Content = JsonContent.Create(requestBody)
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendOptimizationStopAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid jobId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/stop");
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendOptimizationRetryAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid jobId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/retry");
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> SendOptimizationStrategyQueueAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid jobId,
+        Guid resultId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/optimization-jobs/{jobId}/results/{resultId}/strategy-runs");
         request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
         return await client.SendAsync(request);
     }

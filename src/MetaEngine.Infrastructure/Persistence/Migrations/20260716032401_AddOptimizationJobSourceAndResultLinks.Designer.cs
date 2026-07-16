@@ -3,6 +3,7 @@ using System;
 using MetaEngine.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MetaEngine.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(MetaEngineDbContext))]
-    partial class MetaEngineDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716032401_AddOptimizationJobSourceAndResultLinks")]
+    partial class AddOptimizationJobSourceAndResultLinks
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -81,10 +84,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempt_count");
-
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("completed_at");
@@ -128,14 +127,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("kind");
 
-                    b.Property<DateTimeOffset?>("LastHeartbeatAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_heartbeat_at");
-
-                    b.Property<Guid?>("LeaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lease_id");
-
                     b.Property<double?>("MaxDrawdown")
                         .HasColumnType("double precision")
                         .HasColumnName("max_drawdown");
@@ -169,10 +160,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.Property<Guid?>("PresetId")
                         .HasColumnType("uuid")
                         .HasColumnName("preset_id");
-
-                    b.Property<DateTimeOffset?>("RetryNotBefore")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("retry_not_before");
 
                     b.Property<Guid?>("SourceCalculationRunId")
                         .HasColumnType("uuid")
@@ -241,19 +228,11 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_calculation_runs_status_created_at");
 
-                    b.HasIndex("Status", "LastHeartbeatAt")
-                        .HasDatabaseName("ix_calculation_runs_status_last_heartbeat_at");
-
                     b.HasIndex("WorkspaceId", "CreatedAt")
                         .HasDatabaseName("ix_calculation_runs_workspace_id_created_at");
 
-                    b.HasIndex("Status", "RetryNotBefore", "CreatedAt")
-                        .HasDatabaseName("ix_calculation_runs_status_retry_not_before_created_at");
-
                     b.ToTable("calculation_runs", null, t =>
                         {
-                            t.HasCheckConstraint("ck_calculation_runs_attempt_count", "attempt_count >= 0");
-
                             t.HasCheckConstraint("ck_calculation_runs_counts", "point_count >= 0 AND trade_count >= 0");
 
                             t.HasCheckConstraint("ck_calculation_runs_input", "(input_type = 'Portfolio' AND portfolio_id IS NOT NULL AND preset_id IS NULL) OR (input_type = 'Preset' AND preset_id IS NOT NULL AND portfolio_id IS NULL)");
@@ -270,10 +249,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
-
-                    b.Property<int>("AttemptCount")
-                        .HasColumnType("integer")
-                        .HasColumnName("attempt_count");
 
                     b.Property<DateTimeOffset?>("CompletedAt")
                         .HasColumnType("timestamp with time zone")
@@ -304,14 +279,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(16)")
                         .HasColumnName("input_type");
 
-                    b.Property<DateTimeOffset?>("LastHeartbeatAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_heartbeat_at");
-
-                    b.Property<Guid?>("LeaseId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("lease_id");
-
                     b.Property<string>("MissingDataRule")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -337,10 +304,6 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.Property<long>("ProcessedCandidates")
                         .HasColumnType("bigint")
                         .HasColumnName("processed_candidates");
-
-                    b.Property<DateTimeOffset?>("RetryNotBefore")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("retry_not_before");
 
                     b.Property<int>("SampleCount")
                         .HasColumnType("integer")
@@ -419,19 +382,11 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                     b.HasIndex("Status", "CreatedAt")
                         .HasDatabaseName("ix_optimization_jobs_status_created_at");
 
-                    b.HasIndex("Status", "LastHeartbeatAt")
-                        .HasDatabaseName("ix_optimization_jobs_status_last_heartbeat_at");
-
                     b.HasIndex("WorkspaceId", "CreatedAt")
                         .HasDatabaseName("ix_optimization_jobs_workspace_id_created_at");
 
-                    b.HasIndex("Status", "RetryNotBefore", "CreatedAt")
-                        .HasDatabaseName("ix_optimization_jobs_status_retry_not_before_created_at");
-
                     b.ToTable("optimization_jobs", null, t =>
                         {
-                            t.HasCheckConstraint("ck_optimization_jobs_attempt_count", "attempt_count >= 0");
-
                             t.HasCheckConstraint("ck_optimization_jobs_input", "(input_type = 'Portfolio' AND portfolio_id IS NOT NULL AND preset_id IS NULL) OR (input_type = 'Preset' AND preset_id IS NOT NULL AND portfolio_id IS NULL)");
 
                             t.HasCheckConstraint("ck_optimization_jobs_period", "period_end >= period_start");

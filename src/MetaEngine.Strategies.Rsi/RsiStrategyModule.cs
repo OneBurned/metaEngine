@@ -45,14 +45,71 @@ public sealed class RsiStrategyModule : IStrategyModule
         return ValueTask.FromResult<IStrategyPreparedData>(new PreparedData(source, metrics));
     }
 
+    public StrategyValidationResult ValidateSearchSpace(JsonElement searchSpace)
+    {
+        var errors = new List<StrategyValidationError>();
+        if (searchSpace.ValueKind != JsonValueKind.Object)
+        {
+            return new StrategyValidationResult([new("searchSpace", "Search space must be an object.")]);
+        }
+
+        ValidateRange(searchSpace, "rsiPeriod", integer: true, minimum: 1, maximum: 1000, errors);
+        ValidateRange(searchSpace, "buyLevel", integer: false, minimum: 0, maximum: 100, errors);
+        ValidateRange(searchSpace, "sellLevel", integer: false, minimum: 0, maximum: 100, errors);
+        return errors.Count == 0 ? StrategyValidationResult.Valid : new StrategyValidationResult(errors);
+    }
+
+    public long? EstimateCandidateCount(JsonElement searchSpace)
+    {
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
+        {
+            return null;
+        }
+
+        try
+        {
+            checked
+            {
+                return CountValues(searchSpace, "rsiPeriod") *
+                    CountValues(searchSpace, "buyLevel") *
+                    CountValues(searchSpace, "sellLevel");
+            }
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+    }
+
     public async IAsyncEnumerable<JsonElement> GenerateCandidatesAsync(
         JsonElement searchSpace,
         int seed,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.CompletedTask;
-        cancellationToken.ThrowIfCancellationRequested();
-        yield break;
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
+        {
+            throw new StrategyParameterException(validation.Errors);
+        }
+
+        foreach (var rsiPeriod in ExpandRange(searchSpace, "rsiPeriod", integer: true))
+        {
+            foreach (var buyLevel in ExpandRange(searchSpace, "buyLevel", integer: false))
+            {
+                foreach (var sellLevel in ExpandRange(searchSpace, "sellLevel", integer: false))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    yield return JsonSerializer.SerializeToElement(new
+                    {
+                        rsiPeriod = (int)rsiPeriod,
+                        buyLevel,
+                        sellLevel
+                    });
+                }
+            }
+        }
     }
 
     public ValueTask<StrategyCalculationResult> CalculateAsync(
@@ -72,13 +129,48 @@ public sealed class RsiStrategyModule : IStrategyModule
         var period = ReadInt(parameters, "rsiPeriod", 14);
         var buyLevel = ReadDouble(parameters, "buyLevel", 30);
         var sellLevel = ReadDouble(parameters, "sellLevel", 70);
-        var rsi = CalculateRsi(prepared.BaseMetrics.Rows, period);
-        var diffs = new double[prepared.Source.Count];
         var rows = new StrategyResultPoint[prepared.Source.Count];
+        var summary = CalculateSummary(prepared, period, buyLevel, sellLevel, rows, cancellationToken);
+
+        return ValueTask.FromResult(new StrategyCalculationResult(rows, summary));
+    }
+
+    public ValueTask<StrategyRunSummary> CalculateSummaryAsync(
+        IStrategyPreparedData preparedData,
+        JsonElement parameters,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var prepared = preparedData as PreparedData
+            ?? throw new InvalidOperationException("RSI was given incompatible prepared data.");
+        var validation = ValidateParameters(parameters);
+        if (!validation.IsValid)
+        {
+            throw new StrategyParameterException(validation.Errors);
+        }
+
+        var period = ReadInt(parameters, "rsiPeriod", 14);
+        var buyLevel = ReadDouble(parameters, "buyLevel", 30);
+        var sellLevel = ReadDouble(parameters, "sellLevel", 70);
+        return ValueTask.FromResult(CalculateSummary(prepared, period, buyLevel, sellLevel, null, cancellationToken));
+    }
+
+    private static StrategyRunSummary CalculateSummary(
+        PreparedData prepared,
+        int period,
+        double buyLevel,
+        double sellLevel,
+        StrategyResultPoint[]? rows,
+        CancellationToken cancellationToken)
+    {
+        var rsi = prepared.GetRsi(period);
         var position = 0d;
         var pendingExecution = string.Empty;
         var buyCount = 0;
         var sellCount = 0;
+        var accum = 0d;
+        var highWaterMark = 0d;
+        var maxDrawdown = 0d;
 
         for (var index = 0; index < prepared.Source.Count; index++)
         {
@@ -87,40 +179,40 @@ public sealed class RsiStrategyModule : IStrategyModule
             pendingExecution = string.Empty;
             if (execution == "buy") position = 1;
             if (execution == "sell") position = 0;
-            diffs[index] = position > 0 ? prepared.Source[index].Diff : 0;
+            var diff = position > 0 ? prepared.Source[index].Diff : 0;
 
-            var signal = string.Empty;
             if (index > 0 && rsi[index - 1] is double previous && rsi[index] is double current)
             {
                 if (previous > buyLevel && current <= buyLevel && position == 0)
                 {
-                    signal = "buy";
                     pendingExecution = "buy";
                     buyCount++;
                 }
                 else if (previous < sellLevel && current >= sellLevel && position > 0)
                 {
-                    signal = "sell";
                     pendingExecution = "sell";
                     sellCount++;
                 }
             }
 
-            rows[index] = new StrategyResultPoint(
-                prepared.Source[index].Timestamp,
-                diffs[index],
-                new Dictionary<string, JsonElement>());
+            if (index > 0)
+            {
+                accum = (1 + diff) * (1 + accum) - 1;
+            }
+            highWaterMark = Math.Max(highWaterMark, accum);
+            var drawdown = (1 + accum) / (1 + highWaterMark) - 1;
+            maxDrawdown = Math.Min(maxDrawdown, drawdown);
+
+            if (rows is not null)
+            {
+                rows[index] = new StrategyResultPoint(
+                    prepared.Source[index].Timestamp,
+                    diff,
+                    new Dictionary<string, JsonElement>());
+            }
         }
 
-        var metrics = BaseMetricsCalculator.Calculate(rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray());
-        return ValueTask.FromResult(new StrategyCalculationResult(
-            rows,
-            new StrategyRunSummary(
-                metrics.Summary.FinalAccum,
-                metrics.Summary.HighWaterMark,
-                metrics.Summary.MaxDrawdown,
-                buyCount,
-                sellCount)));
+        return new StrategyRunSummary(accum, highWaterMark, maxDrawdown, buyCount, sellCount);
     }
 
     private static double?[] CalculateRsi(IReadOnlyList<CalculationPoint> rows, int period)
@@ -166,5 +258,71 @@ public sealed class RsiStrategyModule : IStrategyModule
     private static double ReadDouble(JsonElement parameters, string name, double fallback) =>
         parameters.TryGetProperty(name, out var property) && property.TryGetDouble(out var value) ? value : fallback;
 
-    private sealed record PreparedData(IReadOnlyList<StrategySourcePoint> Source, CalculationSeries BaseMetrics) : IStrategyPreparedData;
+    private static void ValidateRange(
+        JsonElement searchSpace,
+        string name,
+        bool integer,
+        double minimum,
+        double maximum,
+        List<StrategyValidationError> errors)
+    {
+        if (!searchSpace.TryGetProperty(name, out var range) || range.ValueKind != JsonValueKind.Object ||
+            !range.TryGetProperty("from", out var fromProperty) || !fromProperty.TryGetDouble(out var from) ||
+            !range.TryGetProperty("to", out var toProperty) || !toProperty.TryGetDouble(out var to) ||
+            !range.TryGetProperty("step", out var stepProperty) || !stepProperty.TryGetDouble(out var step))
+        {
+            errors.Add(new(name, "A range with from, to, and step is required."));
+            return;
+        }
+
+        if (!double.IsFinite(from) || !double.IsFinite(to) || !double.IsFinite(step) ||
+            from < minimum || to > maximum || from > to || step <= 0 ||
+            (integer && (from != Math.Truncate(from) || to != Math.Truncate(to) || step != Math.Truncate(step))))
+        {
+            errors.Add(new(name, $"Range must stay between {minimum} and {maximum} with a positive step."));
+        }
+    }
+
+    private static long CountValues(JsonElement searchSpace, string name)
+    {
+        var range = searchSpace.GetProperty(name);
+        var from = range.GetProperty("from").GetDecimal();
+        var to = range.GetProperty("to").GetDecimal();
+        var step = range.GetProperty("step").GetDecimal();
+        return checked((long)decimal.Floor((to - from) / step) + 1);
+    }
+
+    private static IEnumerable<double> ExpandRange(JsonElement searchSpace, string name, bool integer)
+    {
+        var range = searchSpace.GetProperty(name);
+        var from = range.GetProperty("from").GetDecimal();
+        var to = range.GetProperty("to").GetDecimal();
+        var step = range.GetProperty("step").GetDecimal();
+        for (var value = from; value <= to; value += step)
+        {
+            yield return integer ? (double)(int)value : (double)value;
+        }
+    }
+
+    private sealed class PreparedData(
+        IReadOnlyList<StrategySourcePoint> source,
+        CalculationSeries baseMetrics) : IStrategyPreparedData
+    {
+        private int cachedRsiPeriod = -1;
+        private double?[]? cachedRsi;
+
+        public IReadOnlyList<StrategySourcePoint> Source { get; } = source;
+        public CalculationSeries BaseMetrics { get; } = baseMetrics;
+
+        public double?[] GetRsi(int period)
+        {
+            if (cachedRsiPeriod != period)
+            {
+                cachedRsi = CalculateRsi(BaseMetrics.Rows, period);
+                cachedRsiPeriod = period;
+            }
+
+            return cachedRsi!;
+        }
+    }
 }

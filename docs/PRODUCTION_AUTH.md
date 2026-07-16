@@ -23,9 +23,29 @@ unset MetaEngine__BootstrapAdmin__Email MetaEngine__BootstrapAdmin__Password
 специальный символ. Команда создает пользователя, личный workspace и membership
 с ролью `Admin` в одной транзакции. Повтор с тем же email безопасен и не меняет
 пароль. Создать другого первого владельца после bootstrap нельзя.
+При временном сбое PostgreSQL вся транзакция bootstrap безопасно повторяется;
+если первый commit уже успел завершиться, повторный вызов возвращает созданного
+владельца и его workspace.
 
 Пароль нельзя передавать аргументом командной строки, сохранять в Git, `.env`,
 shell history, `appsettings*.json` или container image.
+
+Для уже запущенного Compose-окружения вместо `dotnet run` можно использовать
+одноразовый API-контейнер после ввода значений через prompt:
+
+```bash
+read -r -p "Admin email: " ADMIN_EMAIL
+read -r -s -p "Admin password: " ADMIN_PASSWORD; echo
+docker compose run --rm --no-deps \
+  -e MetaEngine__BootstrapAdmin__Email="$ADMIN_EMAIL" \
+  -e MetaEngine__BootstrapAdmin__Password="$ADMIN_PASSWORD" \
+  api --bootstrap-admin
+unset ADMIN_EMAIL ADMIN_PASSWORD
+```
+
+Для `Production` этот запуск должен использовать тот же приватный Compose
+override с PFX-сертификатом, что и основной API; см.
+`docs/PRODUCTION_DEPLOYMENT.md`.
 
 ## Проверка входа
 

@@ -19,22 +19,32 @@ using Microsoft.AspNetCore.Http.Features;
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("MetaEngine")
     ?? throw new InvalidOperationException("Connection string 'MetaEngine' is required.");
+var migrationMode = args.Contains("--migrate", StringComparer.Ordinal);
 
 builder.Services.AddMetaEnginePersistence(connectionString);
-builder.Services.AddMetaEngineAuthentication(builder.Environment, builder.Configuration);
-builder.Services.AddSingleton<RsiStrategyModule>();
-builder.Services.AddSingleton<MddMeanReversionStrategyModule>();
-builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
-builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
-builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
-builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
-builder.Services.AddSingleton<StrategyModuleCatalog>();
-builder.Services.ConfigureHttpJsonOptions(options =>
-    options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
-builder.Services.Configure<FormOptions>(options =>
-    options.MultipartBodyLengthLimit = PortfolioImportLimits.MaxSourceBytes + 1024 * 1024);
+if (!migrationMode)
+{
+    builder.Services.AddMetaEngineAuthentication(builder.Environment, builder.Configuration);
+    builder.Services.AddSingleton<RsiStrategyModule>();
+    builder.Services.AddSingleton<MddMeanReversionStrategyModule>();
+    builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
+    builder.Services.AddSingleton<StrategyModuleCatalog>();
+    builder.Services.ConfigureHttpJsonOptions(options =>
+        options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
+    builder.Services.Configure<FormOptions>(options =>
+        options.MultipartBodyLengthLimit = PortfolioImportLimits.MaxSourceBytes + 1024 * 1024);
+}
 
 var app = builder.Build();
+
+if (migrationMode)
+{
+    await ApplyMigrationsAsync(app.Services);
+    return;
+}
 
 if (args.Contains("--bootstrap-admin", StringComparer.Ordinal))
 {
@@ -223,8 +233,19 @@ workspaces.MapPortfolioEndpoints();
 workspaces.MapPresetEndpoints();
 workspaces.MapCalculationRunEndpoints();
 workspaces.MapStrategyEndpoints();
+workspaces.MapOptimizationEndpoints();
 
 app.Run();
+
+static async Task ApplyMigrationsAsync(IServiceProvider services)
+{
+    await using var scope = services.CreateAsyncScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<MetaEngineDbContext>();
+    await dbContext.Database.MigrateAsync();
+    scope.ServiceProvider.GetRequiredService<ILoggerFactory>()
+        .CreateLogger("MetaEngine.Migrations")
+        .LogInformation("Database migrations are current.");
+}
 
 static async Task BootstrapAdminAsync(IServiceProvider services, IConfiguration configuration)
 {

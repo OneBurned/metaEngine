@@ -121,7 +121,9 @@ dev server runs on port `3000` and proxies `/api` to this API on `5080`; see
 `docs/PRODUCTION_UI.md` for the three-process local workflow.
 
 API не применяет migrations автоматически. Это отдельный управляемый шаг перед
-запуском новой версии приложения.
+запуском новой версии приложения. Root Docker Compose запускает этот шаг
+отдельным контейнером `migrations`; полный сценарий находится в
+`docs/PRODUCTION_DEPLOYMENT.md`.
 
 Публичной регистрации нет. Первый владелец создается отдельной командой
 `--bootstrap-admin`, после чего повторный запуск с другим email запрещен.
@@ -141,6 +143,10 @@ Worker проверяет composition root, загружает каталог с
 забирает один queued base или strategy calculation run. Он сохраняет summary, warnings и
 канонический `timestamp,diff` artifact. Детали API, состояний и ограничений
 описаны в `docs/CALCULATION_RUNS.md`.
+
+Root Compose может поднять несколько одинаковых Worker-контейнеров. Они делят
+одну PostgreSQL-очередь безопасно благодаря lease-claim; количество, CPU и
+память задаются через `.env`. См. `docs/PRODUCTION_DEPLOYMENT.md`.
 
 ## Проверки
 
@@ -207,7 +213,7 @@ Migrations находятся в
 - optimizer jobs;
 - OpenAPI;
 - Plotly contracts;
-- production Docker images и CD.
+- CD, TLS/reverse proxy, backups, metrics and production release runbook.
 
 CI уже находится в `.github/workflows/ci.yml`; он проверяет compose, собирает
 solution, применяет migrations к PostgreSQL 16, запускает все тесты и NuGet

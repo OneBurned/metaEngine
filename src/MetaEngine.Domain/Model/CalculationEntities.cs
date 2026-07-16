@@ -75,6 +75,10 @@ public sealed class CalculationRun
 
     public string? StrategyParametersJson { get; set; }
 
+    public Guid? OptimizationResultId { get; set; }
+
+    public OptimizationResult? OptimizationResult { get; set; }
+
     public DateTimeOffset PeriodStart { get; set; }
 
     public DateTimeOffset PeriodEnd { get; set; }
@@ -86,6 +90,14 @@ public sealed class CalculationRun
     public string EngineVersion { get; set; } = string.Empty;
 
     public JobStatus Status { get; set; } = JobStatus.Queued;
+
+    public int AttemptCount { get; set; }
+
+    public Guid? LeaseId { get; set; }
+
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
+    public DateTimeOffset? RetryNotBefore { get; set; }
 
     public int PointCount { get; set; }
 
@@ -121,6 +133,10 @@ public sealed class OptimizationJob
     public Guid WorkspaceId { get; set; }
 
     public Workspace Workspace { get; set; } = null!;
+
+    public Guid? SourceCalculationRunId { get; set; }
+
+    public CalculationRun? SourceCalculationRun { get; set; }
 
     public CalculationInputType InputType { get; set; }
 
@@ -159,6 +175,14 @@ public sealed class OptimizationJob
     public long ProcessedCandidates { get; set; }
 
     public JobStatus Status { get; set; } = JobStatus.Queued;
+
+    public int AttemptCount { get; set; }
+
+    public Guid? LeaseId { get; set; }
+
+    public DateTimeOffset? LastHeartbeatAt { get; set; }
+
+    public DateTimeOffset? RetryNotBefore { get; set; }
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 

@@ -52,6 +52,7 @@ internal sealed class SavedStrategyService(MetaEngineDbContext dbContext) : ISav
             SourcePortfolioId = run.PortfolioId,
             SourcePresetId = run.PresetId,
             ResultArtifactId = artifact.Id,
+            OptimizationResultId = run.OptimizationResultId,
             CreatedByUserId = command.UserId
         };
         dbContext.Strategies.Add(strategy);

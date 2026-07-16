@@ -18,8 +18,10 @@ queued or completed run.
 
 P5a adds **strategy calculations**. A strategy always takes one completed base
 run as an immutable input and produces a separate canonical artifact. RSI and
-MDD Mean Reversion are available; optimizer jobs and cancel/retry are later
-stages.
+MDD Mean Reversion are available. P6 adds a separate RSI optimizer job: it
+uses a completed base artifact, evaluates parameter candidates on sequential
+samples and stores only top-N metrics. Applying an optimizer row queues a normal
+strategy run. See `docs/PRODUCTION_OPTIMIZATION.md`.
 
 The run summary exposes `kind`, the original portfolio/preset source and, for a
 strategy run, `strategyType` and `strategySchemaVersion`. The production UI
@@ -40,6 +42,7 @@ The `POST` request requires the normal CSRF header.
 ```text
 POST /api/v1/workspaces/{workspaceId}/calculation-runs
 POST /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
+POST /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}
 GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/result
@@ -73,10 +76,17 @@ base or strategy run, marks it `running`, then records one of:
 - `completed`: summary, warnings and a `BaseResult` or `StrategyResult` artifact are saved;
 - `failed`: a stable error code is recorded, for example an unsupported source
   or a leveraged return below `-100%`.
+- `interrupted`: automatic retries were exhausted or the Worker lease expired
+  after the configured retry budget.
 
 Each transition is auditable through `calculation_queued`,
-`calculation_completed` or `calculation_failed` events. There is no retry or
-automatic recovery of a process that was interrupted while running in P3.
+`calculation_completed`, `calculation_failed`, retry and lease-recovery events.
+Transient PostgreSQL failures are requeued automatically with a short
+exponential delay. A user can use the retry endpoint for a `failed` or
+`interrupted` run; it starts a fresh attempt and preserves the audit trail.
+
+Queue ownership, retry budget and recovery details are described in
+`docs/QUEUE_RELIABILITY.md`.
 
 ## Stored result
 

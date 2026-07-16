@@ -9,6 +9,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { MddOptimizationPanel, type MddOptimizationParameters } from "@/features/strategies/mdd-optimization-panel"
+import { RsiOptimizationPanel } from "@/features/strategies/rsi-optimization-panel"
 import {
   getAllCalculationResult,
   getCalculationRun,
@@ -61,6 +64,7 @@ export function StrategyScreen() {
   const [strategyTypes, setStrategyTypes] = useState<string[]>([])
   const [sourceRunId, setSourceRunId] = useState("")
   const [strategyType, setStrategyType] = useState("rsi")
+  const [strategyMode, setStrategyMode] = useState<"manual" | "optimization">("manual")
   const [rsiPeriod, setRsiPeriod] = useState(14)
   const [buyLevel, setBuyLevel] = useState(30)
   const [sellLevel, setSellLevel] = useState(70)
@@ -182,6 +186,7 @@ export function StrategyScreen() {
         }))
         setTakeProfit(numberValue(parameters.takeProfit, 0.01) * 100)
       }
+      setStrategyMode("manual")
       toast.success("Параметры применены")
     } catch {
       setError("Не удалось прочитать параметры сохраненной стратегии.")
@@ -191,6 +196,29 @@ export function StrategyScreen() {
   const baseRuns = runs.filter((run) => run.kind === "base" && run.status === "completed")
   const strategyRuns = runs.filter((run) => run.kind === "strategy")
   const presentationSources = { portfolios, presets, runs }
+
+  function handleOptimizationStrategyQueued(queued: CalculationRun, parameters: { rsiPeriod: number; buyLevel: number; sellLevel: number }) {
+    setStrategyType("rsi")
+    setRsiPeriod(parameters.rsiPeriod)
+    setBuyLevel(parameters.buyLevel)
+    setSellLevel(parameters.sellLevel)
+    setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
+    setSelectedRunId(queued.id)
+    setSaveName("")
+    setStrategyMode("manual")
+    void refresh()
+  }
+
+  function handleMddOptimizationStrategyQueued(queued: CalculationRun, parameters: MddOptimizationParameters) {
+    setStrategyType("mdd_mean_reversion")
+    setLevels(parameters.levels.map((level) => ({ drawdown: Math.abs(level.drawdown) * 100, weight: level.weight * 100 })))
+    setTakeProfit(parameters.takeProfit * 100)
+    setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
+    setSelectedRunId(queued.id)
+    setSaveName("")
+    setStrategyMode("manual")
+    void refresh()
+  }
 
   return (
     <AppShell onSignOut={() => void signOut().then(() => navigate({ to: "/login" }))}>
@@ -202,15 +230,21 @@ export function StrategyScreen() {
       {!workspace ? <Alert className="mt-6 rounded-md"><AlertTitle>Нет доступного workspace</AlertTitle><AlertDescription>Для работы со стратегиями нужен доступ к workspace.</AlertDescription></Alert> : null}
       {workspace ? <>
         <Card className="mt-6 rounded-lg border-slate-200 shadow-none">
-          <CardHeader><CardTitle className="text-base">Новая стратегия</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Стратегии</CardTitle></CardHeader>
           <CardContent>
-            <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
-              <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
-              <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
-              <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
-              {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
-            </form>
-            {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
+            <Tabs value={strategyMode} onValueChange={(value) => setStrategyMode(value as "manual" | "optimization")}>
+              <TabsList aria-label="Режим работы со стратегией"><TabsTrigger value="manual">Ручной расчет</TabsTrigger><TabsTrigger value="optimization">Оптимизация</TabsTrigger></TabsList>
+              <TabsContent value="manual" className="mt-5">
+                <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
+                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
+                  <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
+                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
+                </form>
+                {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
+              </TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 
@@ -239,7 +273,7 @@ function StrategyResult({ details, title, points, saveName, onSaveName, onSave, 
   const metrics = useMemo(() => deriveMetricSeries(points), [points])
   const chartPoints = useMemo(() => downsampleForChart(metrics), [metrics])
   if (!details) return <EmptyPanel text="Выберите запуск стратегии." />
-  if (details.run.status !== "completed") return <EmptyPanel text={details.run.status === "failed" ? `Расчет завершился с ошибкой: ${details.run.errorCode ?? "unknown_error"}.` : "Стратегия выполняется. Статус обновляется автоматически."} />
+  if (details.run.status !== "completed") return <EmptyPanel text={details.run.status === "failed" || details.run.status === "interrupted" ? `Расчет не завершился: ${details.run.errorCode ?? "unknown_error"}. Повторить его можно на странице «Расчеты».` : "Стратегия выполняется. Статус обновляется автоматически."} />
   return <div className="space-y-5"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · {details.run.timeframe}</p></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto"><LineChart data={chartPoints}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="dd" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><Line yAxisId="accum" dataKey="accum" stroke="var(--color-accum)" dot={false} strokeWidth={1.75} /><Line yAxisId="dd" dataKey="drawdown" stroke="var(--color-drawdown)" dot={false} strokeWidth={1.5} /></LineChart></ChartContainer></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
 }
 
@@ -251,6 +285,6 @@ function SectionTitle({ icon, title }: { icon: React.ReactNode; title: string })
 function Metric({ label, value }: { label: string; value: string }) { return <div className="bg-white px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums">{value}</p></div> }
 function EmptyRow({ columns, text }: { columns: number; text: string }) { return <TableRow><TableCell colSpan={columns} className="py-8 text-center text-sm text-slate-500">{text}</TableCell></TableRow> }
 function EmptyPanel({ text }: { text: string }) { return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500">{text}</div> }
-function Status({ status }: { status: CalculationRun["status"] }) { const labels = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка" }; const classes = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800" }; return <Badge variant="outline" className={classes[status]}>{labels[status]}</Badge> }
+function Status({ status }: { status: CalculationRun["status"] }) { const labels = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка", interrupted: "Прервана" }; const classes = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800", interrupted: "border-orange-200 bg-orange-50 text-orange-800" }; return <Badge variant="outline" className={classes[status]}>{labels[status]}</Badge> }
 function numberValue(value: unknown, fallback: number) { return typeof value === "number" && Number.isFinite(value) ? value : fallback }
 function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }

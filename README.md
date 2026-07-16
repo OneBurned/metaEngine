@@ -32,6 +32,11 @@ docs/PRODUCTION_CI.md      GitHub Actions и integration tests с PostgreSQL
 docs/PORTFOLIO_IMPORT.md   production-импорт и API версий портфелей
 docs/PRESETS.md            production-пресеты: версии, API и расчетное ядро
 docs/CALCULATION_RUNS.md   production-очередь расчетов и Worker
+docs/QUEUE_RELIABILITY.md  lease, recovery и безопасный параллелизм Worker
+docs/PRODUCTION_DEPLOYMENT.md
+                           Docker Compose: API, migrations и Worker replicas
+docs/PRODUCTION_OPTIMIZATION.md
+                           production-оптимизация RSI и MDD, API и Worker
 docs/PRODUCTION_UI.md      production React UI: вход, импорт и расчеты
 ```
 
@@ -40,8 +45,8 @@ docs/PRODUCTION_UI.md      production React UI: вход, импорт и рас
 > Важно: браузерная local lab пока остается **файловым прототипом** на Node.js.
 > Параллельно уже создан production foundation на ASP.NET Core / C# / PostgreSQL,
 > Базовые формулы, versioned preset API, асинхронный базовый расчет через
-> Worker, production UI, ручные RSI/MDD strategy runs и экран пресетов уже
-> перенесены. В UI пока нет production-оптимизатора.
+> Worker, production UI, ручные RSI/MDD strategy runs, экран пресетов и
+> production RSI- и MDD-оптимизаторы уже перенесены.
 
 ## Что уже умеет локальная версия
 
@@ -730,10 +735,7 @@ Node.js-часть остается локальным файловым прот
 versioned presets и асинхронные базовые расчеты портфолио/пресетов через API и
 Worker. Пока нет:
 
-- production-модулей RSI/MDD Mean Reversion, их оптимизации и расчетов пресетов
-  с источниками-стратегиями;
 - управления участниками, восстановления пароля и 2FA/OIDC;
-- UI пресетов, production-стратегий и оптимизатора;
 - Plotly-compatible `data/layout/config` для production-фронтенда.
 
 ## Важные ограничения текущей версии

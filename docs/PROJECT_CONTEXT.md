@@ -46,6 +46,11 @@ docs/PRODUCTION_SCAFFOLD.md
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
+docs/QUEUE_RELIABILITY.md  Lease-based recovery, retry and parallel Worker safety
+docs/PRODUCTION_DEPLOYMENT.md
+                           Docker Compose API, migrations and Worker replicas
+docs/PRODUCTION_OPTIMIZATION.md
+                           Production RSI optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
 docs/PRODUCTION_STRATEGIES.md
                            Production RSI/MDD runs and saved strategy configs
@@ -83,8 +88,9 @@ Router and shadcn/ui. It uses a same-origin development proxy to the API so
 cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
 queue and observe base calculations, and inspect saved results with interactive
-result and comparison charts. The UI also exposes manual RSI/MDD calculations
-and strategy presets. It does not yet expose optimizer jobs or cancellation.
+result and comparison charts. The UI also exposes manual RSI/MDD calculations,
+strategy presets and production RSI optimization with progress, stop and
+result selection.
 See `docs/PRODUCTION_UI.md`.
 
 ## Production P5a: strategy runs
@@ -103,7 +109,56 @@ Saved strategy versions can now be used alongside portfolio versions in an
 immutable preset. A preset calculation combines their canonical `timestamp,diff`
 rows with the configured weights and periods. The production UI exposes a
 **Presets** page and allows a saved preset to be chosen for a base calculation.
-Optimizer jobs remain a later stage.
+
+## Production P6: strategy optimizers
+
+The platform can queue an RSI or MDD Mean Reversion optimization job from a
+completed immutable base calculation. The Worker splits that source into
+consecutive samples, prepares each strategy independently for every sample,
+streams candidates and persists only top-N aggregate metrics. The job exposes
+progress, filters and a stop request that finishes the current candidate before
+publishing accumulated results. A selected row queues a normal strategy run on
+the same base calculation; saving that run creates the usual immutable saved
+strategy with a link back to the optimization result. The **Strategies** screen
+provides separate manual and optimization tabs, including range/filter controls,
+live progress, stop, recent jobs, sortable sample metrics and a command to queue
+the chosen candidate as a standard strategy run. See
+`docs/PRODUCTION_OPTIMIZATION.md`.
+
+For RSI performance, candidates are enumerated period-first. Each sample keeps
+only the current period's prepared RSI series and reuses it for all buy/sell
+pairs; it then discards that series when the period changes. Optimizer
+evaluations use summary metrics without allocating full candidate result rows.
+
+MDD uses the same bounded result workflow. Its simple mode expands a common DD
+and weight range into the chosen number of entries while enforcing the minimum
+DD delta and nondecreasing target weights. Detailed mode provides an independent
+DD/weight range for every entry. Random search has a finite requested candidate
+count; full search remains streamed and intentionally avoids counting the whole
+space before running.
+
+## Production P8: reliable queue foundation
+
+Calculation and optimization jobs are claimed with a PostgreSQL row lock and a
+unique lease. A second Worker cannot claim the same task, and a late Worker
+cannot overwrite a result after its lease has expired. The Worker recovers
+expired leases, automatically retries transient database failures with a small
+exponential delay, and leaves an `interrupted` task after the configured retry
+budget. Failed or interrupted tasks can be retried deliberately from the UI.
+A stopping optimization is finalized as `stopped` during recovery. This makes
+several Worker processes safe to run against one database; configuring replica
+count and production capacity is the next operational stage. See
+`docs/QUEUE_RELIABILITY.md`.
+
+## Production P9: Compose Worker replicas
+
+The root Compose deployment now builds the API and Worker from the same source
+tree, runs migrations in a separate one-shot container, and starts a configurable
+number of Worker replicas. Two replicas, one CPU and two gigabytes of memory per
+Worker are the development defaults; the server environment configures the
+actual capacity. Worker logs include a container-derived worker ID. The current
+web client remains a separate deployment concern. See
+`docs/PRODUCTION_DEPLOYMENT.md`.
 
 ## 2. User communication rules
 

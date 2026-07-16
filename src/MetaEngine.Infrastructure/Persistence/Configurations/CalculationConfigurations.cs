@@ -79,6 +79,7 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
                 "(kind = 'Strategy' AND source_calculation_run_id IS NOT NULL AND strategy_type IS NOT NULL AND strategy_schema_version IS NOT NULL AND strategy_parameters_json IS NOT NULL)");
             table.HasCheckConstraint("ck_calculation_runs_period", "period_end >= period_start");
             table.HasCheckConstraint("ck_calculation_runs_counts", "point_count >= 0 AND trade_count >= 0");
+            table.HasCheckConstraint("ck_calculation_runs_attempt_count", "attempt_count >= 0");
         });
         builder.HasKey(run => run.Id);
         builder.Property(run => run.Kind).HasConversion<string>().HasMaxLength(16);
@@ -96,7 +97,10 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
         builder.Property(run => run.ErrorCode).HasMaxLength(100);
         builder.HasIndex(run => new { run.WorkspaceId, run.CreatedAt });
         builder.HasIndex(run => new { run.Status, run.CreatedAt });
+        builder.HasIndex(run => new { run.Status, run.RetryNotBefore, run.CreatedAt });
+        builder.HasIndex(run => new { run.Status, run.LastHeartbeatAt });
         builder.HasIndex(run => run.SourceCalculationRunId);
+        builder.HasIndex(run => run.OptimizationResultId);
 
         builder
             .HasOne(run => run.Workspace)
@@ -123,6 +127,12 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
             .OnDelete(DeleteBehavior.Restrict);
 
         builder
+            .HasOne(run => run.OptimizationResult)
+            .WithMany()
+            .HasForeignKey(run => run.OptimizationResultId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
             .HasOne(run => run.CreatedByUser)
             .WithMany()
             .HasForeignKey(run => run.CreatedByUserId)
@@ -146,6 +156,7 @@ internal sealed class OptimizationJobConfiguration : IEntityTypeConfiguration<Op
             table.HasCheckConstraint("ck_optimization_jobs_seed", "seed >= 0");
             table.HasCheckConstraint("ck_optimization_jobs_period", "period_end >= period_start");
             table.HasCheckConstraint("ck_optimization_jobs_progress", "processed_candidates >= 0 AND (total_candidates IS NULL OR total_candidates >= processed_candidates)");
+            table.HasCheckConstraint("ck_optimization_jobs_attempt_count", "attempt_count >= 0");
         });
         builder.HasKey(job => job.Id);
         builder.Property(job => job.InputType).HasConversion<string>().HasMaxLength(16);
@@ -158,11 +169,20 @@ internal sealed class OptimizationJobConfiguration : IEntityTypeConfiguration<Op
         builder.Property(job => job.ErrorCode).HasMaxLength(100);
         builder.HasIndex(job => new { job.WorkspaceId, job.CreatedAt });
         builder.HasIndex(job => new { job.Status, job.CreatedAt });
+        builder.HasIndex(job => new { job.Status, job.RetryNotBefore, job.CreatedAt });
+        builder.HasIndex(job => new { job.Status, job.LastHeartbeatAt });
+        builder.HasIndex(job => job.SourceCalculationRunId);
 
         builder
             .HasOne(job => job.Workspace)
             .WithMany()
             .HasForeignKey(job => job.WorkspaceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(job => job.SourceCalculationRun)
+            .WithMany()
+            .HasForeignKey(job => job.SourceCalculationRunId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder

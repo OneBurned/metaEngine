@@ -1,5 +1,8 @@
 name: metaengine
 
+x-metaengine-database-environment: &metaengine-database-environment
+  ConnectionStrings__MetaEngine: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-metaengine};Username=${POSTGRES_USER:-metaengine};Password=${POSTGRES_PASSWORD:-metaengine_dev}"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,6 +20,57 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    restart: unless-stopped
+
+  migrations:
+    build:
+      context: .
+      args:
+        PROJECT: src/MetaEngine.Api/MetaEngine.Api.csproj
+        APP_DLL: MetaEngine.Api.dll
+    command: ["--migrate"]
+    environment: *metaengine-database-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      args:
+        PROJECT: src/MetaEngine.Api/MetaEngine.Api.csproj
+        APP_DLL: MetaEngine.Api.dll
+    environment:
+      <<: *metaengine-database-environment
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: ${METAENGINE_ENVIRONMENT:-Development}
+    ports:
+      - "127.0.0.1:${API_PORT:-5080}:8080"
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      args:
+        PROJECT: src/MetaEngine.Worker/MetaEngine.Worker.csproj
+        APP_DLL: MetaEngine.Worker.dll
+    environment: *metaengine-database-environment
+    depends_on:
+      migrations:
+        condition: service_completed_successfully
+    deploy:
+      replicas: ${METAENGINE_WORKER_REPLICAS:-2}
+      resources:
+        limits:
+          cpus: "${METAENGINE_WORKER_CPU_LIMIT:-1.0}"
+          memory: "${METAENGINE_WORKER_MEMORY_LIMIT:-2G}"
+    init: true
+    stop_grace_period: 2m
     restart: unless-stopped
 
 volumes:

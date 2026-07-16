@@ -6,6 +6,7 @@ using MetaEngine.Application.Calculations;
 using MetaEngine.Domain;
 using MetaEngine.Domain.Calculations;
 using MetaEngine.Domain.Model;
+using MetaEngine.Infrastructure.Processing;
 using MetaEngine.Infrastructure.Persistence;
 using MetaEngine.Strategies.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -16,6 +17,7 @@ namespace MetaEngine.Infrastructure.Calculations;
 internal sealed class CalculationRunService(
     MetaEngineDbContext dbContext,
     ILogger<CalculationRunService> logger,
+    JobProcessingPolicy jobProcessingPolicy,
     IEnumerable<IStrategyModule> strategyModules) : ICalculationRunService, ICalculationRunProcessor
 {
     private const string EngineVersion = "base-calculation-v1";
@@ -114,6 +116,7 @@ internal sealed class CalculationRunService(
             StrategyType = module.Descriptor.StrategyType,
             StrategySchemaVersion = module.Descriptor.SchemaVersion,
             StrategyParametersJson = command.ParametersJson,
+            OptimizationResultId = command.OptimizationResultId,
             PeriodStart = sourceRun.PeriodStart,
             PeriodEnd = sourceRun.PeriodEnd,
             Timeframe = sourceRun.Timeframe,
@@ -135,6 +138,7 @@ internal sealed class CalculationRunService(
                 run.SourceCalculationRunId,
                 run.StrategyType,
                 run.StrategySchemaVersion,
+                run.OptimizationResultId,
                 run.EngineVersion
             })
         });
@@ -162,6 +166,9 @@ internal sealed class CalculationRunService(
                 run.PeriodEnd,
                 run.Timeframe,
                 run.Status,
+                run.AttemptCount,
+                run.RetryNotBefore,
+                run.LastHeartbeatAt,
                 run.PointCount,
                 run.TradeCount,
                 run.FinalAccum,
@@ -173,6 +180,45 @@ internal sealed class CalculationRunService(
                 run.CompletedAt,
                 run.CreatedByUserId))
             .ToArrayAsync(cancellationToken);
+
+    public async Task<CalculationRunSummary?> RequestRetryAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid runId,
+        CancellationToken cancellationToken)
+    {
+        var run = await dbContext.CalculationRuns.SingleOrDefaultAsync(candidate =>
+            candidate.Id == runId && candidate.WorkspaceId == workspaceId,
+            cancellationToken);
+        if (run is null)
+        {
+            return null;
+        }
+        if (run.Status is not (JobStatus.Failed or JobStatus.Interrupted))
+        {
+            throw new CalculationRunValidationException(
+                "calculation_retry_not_available", "Only failed or interrupted calculations can be retried.");
+        }
+
+        var previousErrorCode = run.ErrorCode;
+        run.Status = JobStatus.Queued;
+        run.AttemptCount = 0;
+        run.LeaseId = null;
+        run.LastHeartbeatAt = null;
+        run.RetryNotBefore = null;
+        run.StartedAt = null;
+        run.CompletedAt = null;
+        run.ErrorCode = null;
+        run.PointCount = 0;
+        run.TradeCount = 0;
+        run.FinalAccum = null;
+        run.HighWaterMark = null;
+        run.MaxDrawdown = null;
+        run.WarningsJson = "[]";
+        dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_retry_requested", new { previousErrorCode }));
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return ToSummary(run);
+    }
 
     public async Task<CalculationRunDetails?> FindAsync(
         Guid workspaceId,
@@ -236,120 +282,141 @@ internal sealed class CalculationRunService(
 
     public async Task<bool> ProcessNextAsync(CancellationToken cancellationToken)
     {
-        var runId = await ClaimNextAsync(cancellationToken);
-        if (runId is null)
+        var claim = await ClaimNextAsync(cancellationToken);
+        if (claim is null)
         {
             return false;
         }
 
         try
         {
-            var run = await LoadClaimedRunAsync(runId.Value, cancellationToken);
+            var run = await LoadClaimedRunAsync(claim.Value, cancellationToken);
             var result = await CalculateAsync(run, cancellationToken);
-            var artifact = new RunArtifact
-            {
-                CalculationRunId = run.Id,
-                Kind = run.Kind == CalculationRunKind.Base ? RunArtifactKind.BaseResult : RunArtifactKind.StrategyResult,
-                PointCount = result.Rows.Count,
-                SeriesChecksum = CalculateSeriesChecksum(result.Rows)
-            };
-            foreach (var row in result.Rows)
-            {
-                artifact.Points.Add(new RunArtifactPoint
-                {
-                    Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(row.Timestamp),
-                    Diff = row.Diff
-                });
-            }
-
-            dbContext.RunArtifacts.Add(artifact);
-            run.Status = JobStatus.Completed;
-            run.PointCount = result.Rows.Count;
-            run.TradeCount = result.TradeCount;
-            run.FinalAccum = result.Summary.FinalAccum;
-            run.HighWaterMark = result.Summary.HighWaterMark;
-            run.MaxDrawdown = result.Summary.MaxDrawdown;
-            run.WarningsJson = JsonSerializer.Serialize(result.Warnings);
-            run.ErrorCode = null;
-            run.CompletedAt = DateTimeOffset.UtcNow;
-            dbContext.AuditEvents.Add(new AuditEvent
-            {
-                WorkspaceId = run.WorkspaceId,
-                UserId = run.CreatedByUserId,
-                Action = run.Kind == CalculationRunKind.Base ? "calculation_completed" : "strategy_calculation_completed",
-                EntityType = "calculation_run",
-                EntityId = run.Id,
-                DetailsJson = JsonSerializer.Serialize(new
-                {
-                    run.PointCount,
-                    run.FinalAccum,
-                    run.HighWaterMark,
-                    run.MaxDrawdown,
-                    artifact.SeriesChecksum
-                })
-            });
-            await dbContext.SaveChangesAsync(cancellationToken);
+            await CompleteAsync(claim.Value, result, cancellationToken);
+            return true;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
             return true;
         }
         catch (CalculationValidationException exception)
         {
-            await MarkFailedAsync(runId.Value, exception.Code, cancellationToken);
+            await MarkFailedAsync(claim.Value, exception.Code, cancellationToken);
             return true;
         }
         catch (Exception exception)
         {
-            logger.LogError(exception, "Calculation run {CalculationRunId} failed unexpectedly.", runId.Value);
-            await MarkFailedAsync(runId.Value, "calculation_failed", cancellationToken);
+            logger.LogError(exception, "Calculation run {CalculationRunId} failed unexpectedly.", claim.Value.Id);
+            if (JobProcessingPolicy.IsTransientDatabaseFailure(exception))
+            {
+                await ScheduleRetryAsync(claim.Value, "transient_database_error", cancellationToken);
+            }
+            else
+            {
+                await MarkFailedAsync(claim.Value, "calculation_failed", cancellationToken);
+            }
             return true;
         }
     }
 
-    private async Task<Guid?> ClaimNextAsync(CancellationToken cancellationToken)
+    public async Task RecoverExpiredLeasesAsync(CancellationToken cancellationToken)
     {
-        var candidateId = await dbContext.CalculationRuns
-            .AsNoTracking()
-            .Where(run => run.Status == JobStatus.Queued)
-            .OrderBy(run => run.CreatedAt)
-            .Select(run => (Guid?)run.Id)
-            .FirstOrDefaultAsync(cancellationToken);
-        if (candidateId is null)
-        {
-            return null;
-        }
-
         var now = DateTimeOffset.UtcNow;
-        if (dbContext.Database.IsRelational())
+        var cutoff = now - jobProcessingPolicy.LeaseDuration;
+        if (IsPostgreSql)
         {
-            var claimed = await dbContext.CalculationRuns
-                .Where(run => run.Id == candidateId.Value && run.Status == JobStatus.Queued)
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(run => run.Status, JobStatus.Running)
-                        .SetProperty(run => run.StartedAt, now),
-                    cancellationToken);
-            return claimed == 1 ? candidateId : null;
+            await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            {
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var lockedRuns = await dbContext.CalculationRuns
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM calculation_runs
+                        WHERE status = 'Running'
+                          AND (last_heartbeat_at IS NULL OR last_heartbeat_at <= {cutoff})
+                        ORDER BY last_heartbeat_at NULLS FIRST, created_at
+                        FOR UPDATE SKIP LOCKED
+                        """)
+                    .ToArrayAsync(cancellationToken);
+                RecoverRuns(lockedRuns, now);
+                if (lockedRuns.Length > 0)
+                {
+                    await dbContext.SaveChangesAsync(cancellationToken);
+                }
+                await transaction.CommitAsync(cancellationToken);
+            });
+            return;
         }
 
-        var inMemoryRun = await dbContext.CalculationRuns
-            .SingleOrDefaultAsync(
-                run => run.Id == candidateId.Value && run.Status == JobStatus.Queued,
-                cancellationToken);
-        if (inMemoryRun is null)
+        var runs = await dbContext.CalculationRuns
+            .Where(run => run.Status == JobStatus.Running &&
+                (run.LastHeartbeatAt == null || run.LastHeartbeatAt <= cutoff))
+            .ToArrayAsync(cancellationToken);
+        RecoverRuns(runs, now);
+        if (runs.Length > 0)
         {
-            return null;
+            await dbContext.SaveChangesAsync(cancellationToken);
         }
-
-        inMemoryRun.Status = JobStatus.Running;
-        inMemoryRun.StartedAt = now;
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return candidateId;
     }
 
-    private async Task<CalculationRun> LoadClaimedRunAsync(Guid runId, CancellationToken cancellationToken)
+    private async Task<ClaimedJob?> ClaimNextAsync(CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var leaseId = Guid.CreateVersion7();
+        if (IsPostgreSql)
+        {
+            return await dbContext.Database.CreateExecutionStrategy().ExecuteAsync(async () =>
+            {
+                dbContext.ChangeTracker.Clear();
+                await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellationToken);
+                var run = await dbContext.CalculationRuns
+                    .FromSqlInterpolated($"""
+                        SELECT *
+                        FROM calculation_runs
+                        WHERE status = 'Queued'
+                          AND (retry_not_before IS NULL OR retry_not_before <= {now})
+                        ORDER BY created_at
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                        """)
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (run is null)
+                {
+                    await transaction.CommitAsync(cancellationToken);
+                    return (ClaimedJob?)null;
+                }
+
+                AssignLease(run, leaseId, now);
+                await dbContext.SaveChangesAsync(cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                dbContext.ChangeTracker.Clear();
+                return new ClaimedJob(run.Id, leaseId);
+            });
+        }
+
+        var runInMemory = await dbContext.CalculationRuns
+            .SingleOrDefaultAsync(
+                run => run.Status == JobStatus.Queued &&
+                    (run.RetryNotBefore == null || run.RetryNotBefore <= now),
+                cancellationToken);
+        if (runInMemory is null)
+        {
+            return null;
+        }
+
+        AssignLease(runInMemory, leaseId, now);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return new ClaimedJob(runInMemory.Id, leaseId);
+    }
+
+    private async Task<CalculationRun> LoadClaimedRunAsync(ClaimedJob claim, CancellationToken cancellationToken)
     {
         var run = await dbContext.CalculationRuns
             .SingleOrDefaultAsync(
-                candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
+                candidate => candidate.Id == claim.Id &&
+                    candidate.Status == JobStatus.Running &&
+                    candidate.LeaseId == claim.LeaseId,
                 cancellationToken);
         if (run is null)
         {
@@ -367,18 +434,83 @@ internal sealed class CalculationRunService(
                 .Include(candidate => candidate.Portfolio)
                 .ThenInclude(portfolio => portfolio!.Points)
                 .SingleAsync(
-                    candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
+                    candidate => candidate.Id == claim.Id &&
+                        candidate.Status == JobStatus.Running &&
+                        candidate.LeaseId == claim.LeaseId,
                     cancellationToken),
             CalculationInputType.Preset => await dbContext.CalculationRuns
                 .Include(candidate => candidate.Preset)
                 .ThenInclude(preset => preset!.Items)
                 .AsSplitQuery()
                 .SingleAsync(
-                    candidate => candidate.Id == runId && candidate.Status == JobStatus.Running,
+                    candidate => candidate.Id == claim.Id &&
+                        candidate.Status == JobStatus.Running &&
+                        candidate.LeaseId == claim.LeaseId,
                     cancellationToken),
             _ => throw new CalculationValidationException(
                 "unsupported_input_type", "Calculation input type is not supported.")
         };
+    }
+
+    private async Task CompleteAsync(
+        ClaimedJob claim,
+        CalculatedRunOutput result,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var run = await dbContext.CalculationRuns.SingleOrDefaultAsync(candidate =>
+            candidate.Id == claim.Id &&
+            candidate.Status == JobStatus.Running &&
+            candidate.LeaseId == claim.LeaseId,
+            cancellationToken);
+        if (run is null)
+        {
+            logger.LogWarning("Calculation run {CalculationRunId} lease was lost before completion.", claim.Id);
+            return;
+        }
+
+        var artifact = new RunArtifact
+        {
+            CalculationRunId = run.Id,
+            Kind = run.Kind == CalculationRunKind.Base ? RunArtifactKind.BaseResult : RunArtifactKind.StrategyResult,
+            PointCount = result.Rows.Count,
+            SeriesChecksum = CalculateSeriesChecksum(result.Rows)
+        };
+        foreach (var row in result.Rows)
+        {
+            artifact.Points.Add(new RunArtifactPoint
+            {
+                Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(row.Timestamp),
+                Diff = row.Diff
+            });
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        dbContext.RunArtifacts.Add(artifact);
+        run.Status = JobStatus.Completed;
+        run.LeaseId = null;
+        run.LastHeartbeatAt = now;
+        run.RetryNotBefore = null;
+        run.PointCount = result.Rows.Count;
+        run.TradeCount = result.TradeCount;
+        run.FinalAccum = result.Summary.FinalAccum;
+        run.HighWaterMark = result.Summary.HighWaterMark;
+        run.MaxDrawdown = result.Summary.MaxDrawdown;
+        run.WarningsJson = JsonSerializer.Serialize(result.Warnings);
+        run.ErrorCode = null;
+        run.CompletedAt = now;
+        dbContext.AuditEvents.Add(CreateAuditEvent(
+            run,
+            run.Kind == CalculationRunKind.Base ? "calculation_completed" : "strategy_calculation_completed",
+            new
+            {
+                run.PointCount,
+                run.FinalAccum,
+                run.HighWaterMark,
+                run.MaxDrawdown,
+                artifact.SeriesChecksum
+            }));
+        await dbContext.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<CalculatedRunOutput> CalculateAsync(CalculationRun run, CancellationToken cancellationToken) => run.Kind switch
@@ -611,31 +743,136 @@ internal sealed class CalculationRunService(
 
     private sealed record StrategyPresetSource(Guid Id, Guid ResultArtifactId, string Timeframe);
 
-    private async Task MarkFailedAsync(Guid runId, string errorCode, CancellationToken cancellationToken)
+    private async Task ScheduleRetryAsync(
+        ClaimedJob claim,
+        string errorCode,
+        CancellationToken cancellationToken)
     {
         dbContext.ChangeTracker.Clear();
         var run = await dbContext.CalculationRuns.SingleOrDefaultAsync(
-            candidate => candidate.Id == runId,
+            candidate => candidate.Id == claim.Id &&
+                candidate.Status == JobStatus.Running &&
+                candidate.LeaseId == claim.LeaseId,
             cancellationToken);
         if (run is null)
         {
             return;
         }
 
-        run.Status = JobStatus.Failed;
-        run.ErrorCode = errorCode;
-        run.CompletedAt = DateTimeOffset.UtcNow;
-        dbContext.AuditEvents.Add(new AuditEvent
+        var now = DateTimeOffset.UtcNow;
+        if (jobProcessingPolicy.CanRetryAutomatically(run.AttemptCount))
         {
-            WorkspaceId = run.WorkspaceId,
-            UserId = run.CreatedByUserId,
-                Action = run.Kind == CalculationRunKind.Base ? "calculation_failed" : "strategy_calculation_failed",
-            EntityType = "calculation_run",
-            EntityId = run.Id,
-            DetailsJson = JsonSerializer.Serialize(new { errorCode })
-        });
+            RequeueForRetry(run, now, errorCode);
+            dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_retry_scheduled", new
+            {
+                errorCode,
+                run.AttemptCount,
+                run.RetryNotBefore
+            }));
+        }
+        else
+        {
+            MarkInterrupted(run, now, errorCode);
+            dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_interrupted", new { errorCode, run.AttemptCount }));
+        }
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    private async Task MarkFailedAsync(
+        ClaimedJob claim,
+        string errorCode,
+        CancellationToken cancellationToken)
+    {
+        dbContext.ChangeTracker.Clear();
+        var run = await dbContext.CalculationRuns.SingleOrDefaultAsync(
+            candidate => candidate.Id == claim.Id &&
+                candidate.Status == JobStatus.Running &&
+                candidate.LeaseId == claim.LeaseId,
+            cancellationToken);
+        if (run is null)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        run.Status = JobStatus.Failed;
+        run.LeaseId = null;
+        run.LastHeartbeatAt = now;
+        run.RetryNotBefore = null;
+        run.ErrorCode = errorCode;
+        run.CompletedAt = now;
+        dbContext.AuditEvents.Add(CreateAuditEvent(
+            run,
+            run.Kind == CalculationRunKind.Base ? "calculation_failed" : "strategy_calculation_failed",
+            new { errorCode, run.AttemptCount }));
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    private void RecoverRuns(IReadOnlyList<CalculationRun> runs, DateTimeOffset now)
+    {
+        foreach (var run in runs)
+        {
+            if (jobProcessingPolicy.CanRetryAutomatically(run.AttemptCount))
+            {
+                RequeueForRetry(run, now, "worker_lease_expired");
+                dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_recovered", new
+                {
+                    run.AttemptCount,
+                    run.RetryNotBefore
+                }));
+            }
+            else
+            {
+                MarkInterrupted(run, now, "worker_lease_expired");
+                dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_interrupted", new { run.AttemptCount }));
+            }
+        }
+    }
+
+    private void RequeueForRetry(CalculationRun run, DateTimeOffset now, string errorCode)
+    {
+        run.Status = JobStatus.Queued;
+        run.LeaseId = null;
+        run.LastHeartbeatAt = now;
+        run.RetryNotBefore = jobProcessingPolicy.GetRetryNotBefore(now, run.AttemptCount);
+        run.ErrorCode = errorCode;
+        run.CompletedAt = null;
+    }
+
+    private static void MarkInterrupted(CalculationRun run, DateTimeOffset now, string errorCode)
+    {
+        run.Status = JobStatus.Interrupted;
+        run.LeaseId = null;
+        run.LastHeartbeatAt = now;
+        run.RetryNotBefore = null;
+        run.ErrorCode = errorCode;
+        run.CompletedAt = now;
+    }
+
+    private static void AssignLease(CalculationRun run, Guid leaseId, DateTimeOffset now)
+    {
+        run.Status = JobStatus.Running;
+        run.AttemptCount++;
+        run.LeaseId = leaseId;
+        run.LastHeartbeatAt = now;
+        run.RetryNotBefore = null;
+        run.ErrorCode = null;
+        run.StartedAt = now;
+        run.CompletedAt = null;
+    }
+
+    private static AuditEvent CreateAuditEvent(CalculationRun run, string action, object details) => new()
+    {
+        WorkspaceId = run.WorkspaceId,
+        UserId = run.CreatedByUserId,
+        Action = action,
+        EntityType = "calculation_run",
+        EntityId = run.Id,
+        DetailsJson = JsonSerializer.Serialize(details)
+    };
+
+    private bool IsPostgreSql =>
+        string.Equals(dbContext.Database.ProviderName, "Npgsql.EntityFrameworkCore.PostgreSQL", StringComparison.Ordinal);
 
     private async Task EnsureInputExistsAsync(
         QueueBaseCalculationCommand command,
@@ -690,6 +927,9 @@ internal sealed class CalculationRunService(
             run.PeriodEnd,
             run.Timeframe,
             run.Status,
+            run.AttemptCount,
+            run.RetryNotBefore,
+            run.LastHeartbeatAt,
             run.PointCount,
             run.TradeCount,
             run.FinalAccum,

@@ -76,6 +76,28 @@ cancelled         → TP отменен
 
 Every weight change, including TP close, is executed on the next point.
 
+## Production optimization
+
+Production MDD optimization starts from a completed base calculation and applies
+every candidate to every sequential sample. It stores only top results and
+summary metrics; candidate rows are not materialized.
+
+The simple mode accepts:
+
+- entry count;
+- minimum DD delta between entries;
+- one DD range and one target-weight range for all entries;
+- maximum target weight and TP range.
+
+Detailed mode exposes a separate DD and target-weight range for every entry.
+Both modes enforce strictly deeper DD levels, the selected minimum delta, and
+nondecreasing target weights. Equal weights are valid. The maximum total weight
+limits the deepest target weight, not the sum of level weights.
+
+Random search produces the requested candidate count from its seed. Full search
+streams valid candidates without a precomputed total; the user can stop either
+mode and keep the best accumulated results.
+
 ## Result table and CSV export columns
 
 MDD uses the common strategy table convention:
