@@ -23,6 +23,9 @@ unset MetaEngine__BootstrapAdmin__Email MetaEngine__BootstrapAdmin__Password
 специальный символ. Команда создает пользователя, личный workspace и membership
 с ролью `Admin` в одной транзакции. Повтор с тем же email безопасен и не меняет
 пароль. Создать другого первого владельца после bootstrap нельзя.
+При временном сбое PostgreSQL вся транзакция bootstrap безопасно повторяется;
+если первый commit уже успел завершиться, повторный вызов возвращает созданного
+владельца и его workspace.
 
 Пароль нельзя передавать аргументом командной строки, сохранять в Git, `.env`,
 shell history, `appsettings*.json` или container image.
