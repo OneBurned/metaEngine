@@ -15,8 +15,11 @@ public sealed class Worker(
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var nextRecoveryAt = DateTimeOffset.MinValue;
+        var workerId = $"{Environment.MachineName}:{Environment.ProcessId}";
+        using var logScope = logger.BeginScope(new Dictionary<string, object?> { ["workerId"] = workerId });
         logger.LogInformation(
-            "MetaEngine Worker started with {StrategyCount} registered strategy descriptors: {StrategyTypes}",
+            "MetaEngine Worker {WorkerId} started with {StrategyCount} registered strategy descriptors: {StrategyTypes}",
+            workerId,
             strategyCatalog.Descriptors.Count,
             string.Join(", ", strategyCatalog.Descriptors.Select(descriptor => descriptor.StrategyType)));
 
@@ -56,6 +59,6 @@ public sealed class Worker(
             }
         }
 
-        logger.LogInformation("MetaEngine Worker is stopping.");
+        logger.LogInformation("MetaEngine Worker {WorkerId} is stopping.", workerId);
     }
 }

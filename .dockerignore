@@ -1,0 +1,10 @@
+.git
+.github
+.vs
+.env
+node_modules
+artifacts
+samples
+TestResults
+**/bin
+**/obj

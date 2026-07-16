@@ -47,6 +47,8 @@ docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
 docs/QUEUE_RELIABILITY.md  Lease-based recovery, retry and parallel Worker safety
+docs/PRODUCTION_DEPLOYMENT.md
+                           Docker Compose API, migrations and Worker replicas
 docs/PRODUCTION_OPTIMIZATION.md
                            Production RSI optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
@@ -147,6 +149,16 @@ A stopping optimization is finalized as `stopped` during recovery. This makes
 several Worker processes safe to run against one database; configuring replica
 count and production capacity is the next operational stage. See
 `docs/QUEUE_RELIABILITY.md`.
+
+## Production P9: Compose Worker replicas
+
+The root Compose deployment now builds the API and Worker from the same source
+tree, runs migrations in a separate one-shot container, and starts a configurable
+number of Worker replicas. Two replicas, one CPU and two gigabytes of memory per
+Worker are the development defaults; the server environment configures the
+actual capacity. Worker logs include a container-derived worker ID. The current
+web client remains a separate deployment concern. See
+`docs/PRODUCTION_DEPLOYMENT.md`.
 
 ## 2. User communication rules
 

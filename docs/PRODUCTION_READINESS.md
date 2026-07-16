@@ -46,7 +46,8 @@ Production foundation уже позволяет авторизованному �
 P3/P4 now cover the public calculation workflow, artifact storage and the first
 production UI. P5 adds manual strategy calculations; P6 adds RSI and MDD
 optimizer workflows. P8 adds lease-based recovery and retry controls; Worker
-replica deployment and capacity settings remain the next operational stage.
+replica deployment and capacity settings are now available through the Compose
+foundation. TLS, backups, monitoring and release operations remain later work.
 
 ### Реализовано в P5a/P5b
 
@@ -508,7 +509,8 @@ golden fixtures.
 | P6. Optimizer | Потоковый перебор, кэш семплов, top-N и resource quotas |
 | P7. Staging | Миграция данных, load/security/restore tests и приемка |
 | P8. Queue reliability | Database lease, retry, recovery and manual restart |
-| P9. Production | Worker replicas, backup, monitoring, runbook, release и rollback check |
+| P9. Deployment foundation | Docker images, controlled migrations and Worker replicas |
+| P10. Production | Backup, monitoring, runbook, release и rollback check |
 
 Текущий прогресс:
 
@@ -532,6 +534,8 @@ golden fixtures.
   временных ошибок, recovery просроченных Worker-задач, статус `interrupted` и
   ручной повтор расчётов и оптимизаций; несколько Worker-процессов могут
   безопасно читать одну очередь;
+- P9: добавлены Compose-образы API/Worker, отдельный migration container,
+  две Worker-replica по умолчанию, resource limits и worker ID в JSON-логах;
 - управление участниками, password recovery/2FA, остальные API workflows,
   очередь, пресеты и production-формулы стратегий еще не реализованы.
 

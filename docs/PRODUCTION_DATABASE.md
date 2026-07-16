@@ -148,8 +148,6 @@ dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure
 
 ## Следующие шаги
 
-- добавить API workflows стратегий и optimizer jobs с workspace-проверкой;
 - добавить управление участниками, восстановление пароля, 2FA/OIDC и rate limiting;
-- добавить cancel/retry и restart recovery для calculation/optimizer jobs;
 - расширять real-PostgreSQL integration tests вместе с новыми API workflows;
 - определить retention и backup/restore policy.

@@ -34,6 +34,8 @@
      статусы и сохраненные артефакты.
    - `docs/QUEUE_RELIABILITY.md` — lease, recovery, retry и безопасный
      параллельный запуск Worker.
+   - `docs/PRODUCTION_DEPLOYMENT.md` — Docker Compose, migrations и Worker
+     replicas для deployment-окружения.
    - `docs/PRODUCTION_OPTIMIZATION.md` — production RSI-оптимизация, API и Worker.
    - `docs/PRODUCTION_UI.md` — React-клиент production workflow и его запуск.
    - `docs/PRODUCTION_STRATEGIES.md` — production RSI/MDD runs и сохраненные

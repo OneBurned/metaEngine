@@ -33,6 +33,8 @@ docs/PORTFOLIO_IMPORT.md   production-импорт и API версий порт�
 docs/PRESETS.md            production-пресеты: версии, API и расчетное ядро
 docs/CALCULATION_RUNS.md   production-очередь расчетов и Worker
 docs/QUEUE_RELIABILITY.md  lease, recovery и безопасный параллелизм Worker
+docs/PRODUCTION_DEPLOYMENT.md
+                           Docker Compose: API, migrations и Worker replicas
 docs/PRODUCTION_OPTIMIZATION.md
                            production-оптимизация RSI и MDD, API и Worker
 docs/PRODUCTION_UI.md      production React UI: вход, импорт и расчеты
