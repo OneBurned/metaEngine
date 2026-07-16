@@ -167,6 +167,7 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
         Assert.NotNull(strategyRun);
         Assert.Equal(CalculationRunKind.Strategy, strategyRun.Kind);
         Assert.Equal(baseRun.Run.Id, strategyRun.SourceCalculationRunId);
+        Assert.Equal("rsi", strategyRun.StrategyType);
         await ProcessOneAsync();
 
         var result = await client.GetFromJsonAsync<CalculationResultPage>(

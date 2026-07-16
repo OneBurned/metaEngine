@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell"
+import { calculationDisplayName } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -12,13 +13,17 @@ import {
   getAllCalculationResult,
   getCalculationRun,
   listCalculationRuns,
+  listPortfolios,
+  listPresets,
   listSavedStrategies,
   listStrategyTypes,
   queueStrategyCalculation,
   saveStrategy,
   type CalculationRun,
   type CalculationRunDetails,
+  type Portfolio,
   type PortfolioPoint,
+  type Preset,
   type SavedStrategy,
 } from "@/lib/api"
 import { deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent } from "@/lib/metrics"
@@ -50,6 +55,8 @@ export function StrategyScreen() {
   const { workspace, signOut } = useSession()
   const navigate = useNavigate({ from: "/strategies" })
   const [runs, setRuns] = useState<CalculationRun[]>([])
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([])
+  const [presets, setPresets] = useState<Preset[]>([])
   const [savedStrategies, setSavedStrategies] = useState<SavedStrategy[]>([])
   const [strategyTypes, setStrategyTypes] = useState<string[]>([])
   const [sourceRunId, setSourceRunId] = useState("")
@@ -73,12 +80,16 @@ export function StrategyScreen() {
       return
     }
     try {
-      const [allRuns, saved, availableTypes] = await Promise.all([
+      const [allRuns, nextPortfolios, nextPresets, saved, availableTypes] = await Promise.all([
         listCalculationRuns(workspace.id),
+        listPortfolios(workspace.id),
+        listPresets(workspace.id),
         listSavedStrategies(workspace.id),
         listStrategyTypes(),
       ])
       setRuns(allRuns)
+      setPortfolios(nextPortfolios)
+      setPresets(nextPresets)
       setSavedStrategies(saved)
       setStrategyTypes(availableTypes.map((item) => item.strategyType))
       const baseRuns = allRuns.filter((run) => run.kind === "base" && run.status === "completed")
@@ -179,6 +190,7 @@ export function StrategyScreen() {
 
   const baseRuns = runs.filter((run) => run.kind === "base" && run.status === "completed")
   const strategyRuns = runs.filter((run) => run.kind === "strategy")
+  const presentationSources = { portfolios, presets, runs }
 
   return (
     <AppShell onSignOut={() => void signOut().then(() => navigate({ to: "/login" }))}>
@@ -193,7 +205,7 @@ export function StrategyScreen() {
           <CardHeader><CardTitle className="text-base">Новая стратегия</CardTitle></CardHeader>
           <CardContent>
             <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
-              <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{formatDateTime(run.createdAt)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
+              <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
               <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
               <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
               {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
@@ -202,8 +214,8 @@ export function StrategyScreen() {
           </CardContent>
         </Card>
 
-        <section className="mt-7"><SectionTitle icon={<Play className="size-4" />} title="Запуски стратегий" /><StrategyRunTable runs={strategyRuns} selectedId={selectedRunId} onSelect={setSelectedRunId} /></section>
-        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult details={selectedRun} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
+        <section className="mt-7"><SectionTitle icon={<Play className="size-4" />} title="Запуски стратегий" /><StrategyRunTable runs={strategyRuns} selectedId={selectedRunId} onSelect={setSelectedRunId} presentationSources={presentationSources} /></section>
+        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult details={selectedRun} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
         <section className="mt-7"><SectionTitle icon={<Save className="size-4" />} title="Сохраненные стратегии" /><SavedStrategyTable items={savedStrategies} onApply={applySaved} /></section>
       </> : null}
     </AppShell>
@@ -219,16 +231,16 @@ function MddFields({ levels, takeProfit, onLevels, onTakeProfit }: { levels: Mdd
   return <div className="md:col-span-3"><div className="mb-2 flex items-center justify-between"><Label>Уровни входа MDD</Label><Button type="button" variant="outline" size="sm" onClick={() => onLevels([...levels, { drawdown: (levels.at(-1)?.drawdown ?? 0) + 5, weight: levels.at(-1)?.weight ?? 0 }])}><Plus />Уровень</Button></div><div className="grid gap-3 md:grid-cols-3">{levels.map((level, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-md border border-slate-200 p-3"><NumberField label={`DD ${index + 1}, %`} value={level.drawdown} onChange={(value) => update(index, "drawdown", value)} min={0.01} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить уровень"><Trash2 /></Button></div>)}</div><div className="mt-3 max-w-xs"><NumberField label="Выход TP, %" value={takeProfit} onChange={onTakeProfit} min={0} /></div></div>
 }
 
-function StrategyRunTable({ runs, selectedId, onSelect }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void }) {
-  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Тип</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Доходность</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell>{run.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
+function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
+  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Доходность</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{formatDateTime(run.createdAt)}</div></TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
 }
 
-function StrategyResult({ details, points, saveName, onSaveName, onSave, canWrite }: { details: CalculationRunDetails | null; points: PortfolioPoint[]; saveName: string; onSaveName: (value: string) => void; onSave: () => void; canWrite: boolean }) {
+function StrategyResult({ details, title, points, saveName, onSaveName, onSave, canWrite }: { details: CalculationRunDetails | null; title: string | null; points: PortfolioPoint[]; saveName: string; onSaveName: (value: string) => void; onSave: () => void; canWrite: boolean }) {
   const metrics = useMemo(() => deriveMetricSeries(points), [points])
   const chartPoints = useMemo(() => downsampleForChart(metrics), [metrics])
   if (!details) return <EmptyPanel text="Выберите запуск стратегии." />
   if (details.run.status !== "completed") return <EmptyPanel text={details.run.status === "failed" ? `Расчет завершился с ошибкой: ${details.run.errorCode ?? "unknown_error"}.` : "Стратегия выполняется. Статус обновляется автоматически."} />
-  return <div className="space-y-5"><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto"><LineChart data={chartPoints}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="dd" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><Line yAxisId="accum" dataKey="accum" stroke="var(--color-accum)" dot={false} strokeWidth={1.75} /><Line yAxisId="dd" dataKey="drawdown" stroke="var(--color-drawdown)" dot={false} strokeWidth={1.5} /></LineChart></ChartContainer></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
+  return <div className="space-y-5"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · {details.run.timeframe}</p></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto"><LineChart data={chartPoints}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="dd" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><Line yAxisId="accum" dataKey="accum" stroke="var(--color-accum)" dot={false} strokeWidth={1.75} /><Line yAxisId="dd" dataKey="drawdown" stroke="var(--color-drawdown)" dot={false} strokeWidth={1.5} /></LineChart></ChartContainer></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
 }
 
 function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }

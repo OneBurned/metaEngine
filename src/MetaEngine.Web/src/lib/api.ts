@@ -258,6 +258,24 @@ export async function getPortfolioBounds(workspaceId: string, portfolioId: strin
   }
 }
 
+export async function getAllPortfolioPoints(workspaceId: string, portfolioId: string) {
+  const items: PortfolioPoint[] = []
+  let offset = 0
+  const limit = 5_000
+  let total = 0
+
+  do {
+    const page = await request<CalculationResultPage>(
+      `/api/v1/workspaces/${workspaceId}/portfolios/${portfolioId}/points?offset=${offset}&limit=${limit}`,
+    )
+    total = page.total
+    items.push(...page.items)
+    offset += page.items.length
+  } while (offset < total)
+
+  return items
+}
+
 export async function listPresets(workspaceId: string) {
   const response = await request<{ items: Preset[] }>(`/api/v1/workspaces/${workspaceId}/presets`)
   return response.items
@@ -305,6 +323,9 @@ export async function getPresetBounds(workspaceId: string, presetId: string) {
     .map((item) => item.endsAt ?? item.sourcePeriodEnd)
     .sort()
     .at(-1)
+  if (!endsAt) {
+    throw new ApiError("The preset has no valid end time.", "preset_empty", 400)
+  }
   const sourceTimeframe = details.items
     .map((item) => item.sourceTimeframe)
     .sort((left, right) => timeframeOptions.indexOf(left) - timeframeOptions.indexOf(right))[0]

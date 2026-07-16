@@ -21,6 +21,11 @@ run as an immutable input and produces a separate canonical artifact. RSI and
 MDD Mean Reversion are available; optimizer jobs and cancel/retry are later
 stages.
 
+The run summary exposes `kind`, the original portfolio/preset source and, for a
+strategy run, `strategyType` and `strategySchemaVersion`. The production UI
+uses these immutable values to show a readable source/type name such as
+`Core allocation · v2 · RSI`; it does not store a mutable nickname on a run.
+
 For a strategy run, the Worker reads only the completed base artifact in a
 separate series query. It does not join the base artifact points to the
 portfolio or preset points, so a long source series remains practical to

@@ -30,6 +30,8 @@ public sealed record CalculationRunSummary(
     Guid? PortfolioId,
     Guid? PresetId,
     Guid? SourceCalculationRunId,
+    string? StrategyType,
+    int? StrategySchemaVersion,
     DateTimeOffset PeriodStart,
     DateTimeOffset PeriodEnd,
     string Timeframe,

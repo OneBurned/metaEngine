@@ -81,9 +81,11 @@ See `docs/CALCULATION_RUNS.md` for endpoints and operational behavior.
 `src/MetaEngine.Web` is a separate React/TypeScript client built with TanStack
 Router and shadcn/ui. It uses a same-origin development proxy to the API so
 cookie/CSRF protections remain unchanged. The user can sign in, import a
-portfolio, queue and observe a base calculation, and inspect saved results with
-an interactive equity/drawdown chart. It does not yet expose presets,
-strategies, optimizer jobs or cancellation. See `docs/PRODUCTION_UI.md`.
+portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
+queue and observe base calculations, and inspect saved results with interactive
+result and comparison charts. The UI also exposes manual RSI/MDD calculations
+and strategy presets. It does not yet expose optimizer jobs or cancellation.
+See `docs/PRODUCTION_UI.md`.
 
 ## Production P5a: strategy runs
 

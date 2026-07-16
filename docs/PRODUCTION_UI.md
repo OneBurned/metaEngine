@@ -10,17 +10,22 @@ user interface for the ASP.NET Core / PostgreSQL production workflow.
 After signing in, the user can:
 
 1. select an accessible workspace;
-2. import canonical `timestamp,diff` portfolio CSV;
-3. select an imported immutable portfolio version;
+2. use **Data** to import canonical `timestamp,diff` portfolio CSV and inspect
+   all saved portfolio, strategy and preset versions;
+3. choose a portfolio or preset directly in **Calculations**;
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;
-6. follow `queued`, `running`, `completed` or `failed` status;
-7. open a completed result, inspect summary metrics and rows, and explore the
-   equity/drawdown chart with the mouse range brush.
-8. select a completed base run, calculate RSI or MDD Mean Reversion, and save
+6. follow `queued`, `running`, `completed` or `failed` status in the five most
+   recent runs, and open the full history when needed;
+7. open a completed result under its source/type title, inspect summary metrics
+   and explore the equity/drawdown chart with the mouse range brush;
+8. open the point table only when needed and continue loading rows in batches;
+9. select a completed base run, calculate RSI or MDD Mean Reversion, and save
    the resulting strategy configuration.
-9. create a preset from portfolio and saved-strategy sources, then select that
+10. create a preset from portfolio and saved-strategy sources, then select that
    preset as the source for a base calculation.
+11. compare up to five portfolio, saved-strategy or completed-run series in one
+   chart; each series starts at 0% on its own first point.
 
 The first accessible workspace is selected automatically. The production API
 uses `workspaces[].id` and `workspaces[].name`; all portfolio and calculation
@@ -39,9 +44,11 @@ and domain contracts.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only
-the rendered chart to at most 3,000 points so a long series remains responsive;
-the summary always comes from the saved calculation run. The chart has
-independent drawdown and accumulated-return axes, both displayed as percentages.
+the rendered chart so a long series remains responsive; the summary always
+comes from the saved calculation run. The current-result chart has independent
+drawdown and accumulated-return axes. The comparison chart can overlay up to
+five series and optionally their drawdowns; all axes are displayed as
+percentages.
 
 ## Authentication and local development
 

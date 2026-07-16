@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
-import { BarChart3, Database, Layers3, LogOut, Workflow } from "lucide-react"
+import { BarChart3, Database, FolderInput, Layers3, LogOut, Workflow } from "lucide-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 import type { PropsWithChildren } from "react"
 
@@ -38,6 +38,10 @@ export function AppShell({ children, onSignOut }: PropsWithChildren<{ onSignOut:
           <Separator className="my-6" />
 
           <nav className="space-y-1" aria-label="Разделы приложения">
+            <Link to="/data" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/data" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
+              <FolderInput className="size-4" aria-hidden="true" />
+              Данные
+            </Link>
             <Link to="/" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <BarChart3 className="size-4" aria-hidden="true" />
               Расчеты
