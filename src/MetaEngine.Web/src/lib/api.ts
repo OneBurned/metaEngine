@@ -97,6 +97,76 @@ export type StrategyType = {
   displayName: string
   schemaVersion: number
   isProductionCalculationAvailable: boolean
+  isProductionOptimizationAvailable: boolean
+}
+
+export type OptimizationJobStatus = "queued" | "running" | "stopping" | "stopped" | "completed" | "failed"
+
+export type OptimizationJob = {
+  id: string
+  sourceCalculationRunId: string | null
+  inputType: "portfolio" | "preset"
+  portfolioId: string | null
+  presetId: string | null
+  strategyType: string
+  strategySchemaVersion: number
+  periodStart: string
+  periodEnd: string
+  timeframe: Timeframe
+  sampleCount: number
+  seed: number
+  topCount: number
+  totalCandidates: number | null
+  processedCandidates: number
+  status: OptimizationJobStatus
+  stopRequestedAt: string | null
+  errorCode: string | null
+  createdAt: string
+  startedAt: string | null
+  completedAt: string | null
+}
+
+export type OptimizationFilters = {
+  maximumDrawdownMagnitude: number | null
+  minimumTradeCount: number | null
+  minimumProfitableSampleCount: number | null
+}
+
+export type OptimizationSampleMetric = {
+  sample: number
+  periodStart: string
+  periodEnd: string
+  finalAccum: number
+  maxDrawdown: number
+  tradeCount: number
+  score: number
+}
+
+export type OptimizationResult = {
+  id: string
+  rank: number
+  parametersJson: string
+  score: number
+  compoundedAccum: number
+  averageAccum: number
+  worstAccum: number
+  worstMaxDrawdown: number
+  tradeCount: number
+  profitableSampleCount: number
+  samples: OptimizationSampleMetric[]
+  createdAt: string
+}
+
+export type OptimizationJobDetails = {
+  job: OptimizationJob
+  filters: OptimizationFilters
+  results: OptimizationResult[]
+}
+
+export type RsiOptimizationSearchSpace = {
+  rsiPeriod: { from: number; to: number; step: number }
+  buyLevel: { from: number; to: number; step: number }
+  sellLevel: { from: number; to: number; step: number }
 }
 
 export type SavedStrategy = {
@@ -371,6 +441,64 @@ export async function queueStrategyCalculation(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ strategyType, parameters }),
     },
+    true,
+  )
+}
+
+export async function queueOptimization(
+  workspaceId: string,
+  sourceRunId: string,
+  input: {
+    strategyType: "rsi"
+    searchSpace: RsiOptimizationSearchSpace
+    sampleCount: number
+    seed: number
+    topCount: number
+    maximumDrawdownMagnitude?: number | null
+    minimumTradeCount?: number | null
+    minimumProfitableSampleCount?: number | null
+  },
+) {
+  return request<OptimizationJob>(
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${sourceRunId}/optimizations`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    },
+    true,
+  )
+}
+
+export async function listOptimizationJobs(workspaceId: string) {
+  const response = await request<{ items: OptimizationJob[] }>(
+    `/api/v1/workspaces/${workspaceId}/optimization-jobs`,
+  )
+  return response.items
+}
+
+export async function getOptimizationJob(workspaceId: string, jobId: string) {
+  return request<OptimizationJobDetails>(
+    `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}`,
+  )
+}
+
+export async function stopOptimizationJob(workspaceId: string, jobId: string) {
+  return request<OptimizationJob>(
+    `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}/stop`,
+    { method: "POST" },
+    true,
+  )
+}
+
+export async function queueStrategyFromOptimization(
+  workspaceId: string,
+  jobId: string,
+  resultId: string,
+) {
+  return request<CalculationRun>(
+    `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}/results/${resultId}/strategy-runs`,
+    { method: "POST" },
     true,
   )
 }

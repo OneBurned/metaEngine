@@ -114,6 +114,7 @@ internal sealed class CalculationRunService(
             StrategyType = module.Descriptor.StrategyType,
             StrategySchemaVersion = module.Descriptor.SchemaVersion,
             StrategyParametersJson = command.ParametersJson,
+            OptimizationResultId = command.OptimizationResultId,
             PeriodStart = sourceRun.PeriodStart,
             PeriodEnd = sourceRun.PeriodEnd,
             Timeframe = sourceRun.Timeframe,
@@ -135,6 +136,7 @@ internal sealed class CalculationRunService(
                 run.SourceCalculationRunId,
                 run.StrategyType,
                 run.StrategySchemaVersion,
+                run.OptimizationResultId,
                 run.EngineVersion
             })
         });

@@ -2,8 +2,10 @@ using MetaEngine.Application.Security;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Presets;
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Optimizations;
 using MetaEngine.Application.Strategies;
 using MetaEngine.Infrastructure.Calculations;
+using MetaEngine.Infrastructure.Optimizations;
 using MetaEngine.Infrastructure.Portfolios;
 using MetaEngine.Infrastructure.Presets;
 using MetaEngine.Infrastructure.Strategies;
@@ -35,6 +37,11 @@ public static class MetaEnginePersistenceExtensions
             serviceProvider.GetRequiredService<CalculationRunService>());
         services.AddScoped<ICalculationRunProcessor>(serviceProvider =>
             serviceProvider.GetRequiredService<CalculationRunService>());
+        services.AddScoped<OptimizationJobService>();
+        services.AddScoped<IOptimizationJobService>(serviceProvider =>
+            serviceProvider.GetRequiredService<OptimizationJobService>());
+        services.AddScoped<IOptimizationJobProcessor>(serviceProvider =>
+            serviceProvider.GetRequiredService<OptimizationJobService>());
 
         return services;
     }

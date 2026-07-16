@@ -29,6 +29,34 @@ public sealed class StrategyModuleTests
     }
 
     [Fact]
+    public async Task Rsi_generates_each_candidate_lazily_from_its_search_space()
+    {
+        var module = new RsiStrategyModule();
+        using var searchSpace = JsonDocument.Parse("""
+            {
+              "rsiPeriod": { "from": 5, "to": 6, "step": 1 },
+              "buyLevel": { "from": 20, "to": 30, "step": 10 },
+              "sellLevel": { "from": 70, "to": 70, "step": 1 }
+            }
+            """);
+
+        Assert.True(module.ValidateSearchSpace(searchSpace.RootElement).IsValid);
+        Assert.Equal(4, module.EstimateCandidateCount(searchSpace.RootElement));
+
+        var candidates = new List<JsonElement>();
+        await foreach (var candidate in module.GenerateCandidatesAsync(searchSpace.RootElement, 42, CancellationToken.None))
+        {
+            candidates.Add(candidate);
+        }
+
+        Assert.Equal(4, candidates.Count);
+        Assert.Equal(5, candidates[0].GetProperty("rsiPeriod").GetInt32());
+        Assert.Equal(20, candidates[0].GetProperty("buyLevel").GetDouble());
+        Assert.Equal(6, candidates[^1].GetProperty("rsiPeriod").GetInt32());
+        Assert.Equal(30, candidates[^1].GetProperty("buyLevel").GetDouble());
+    }
+
+    [Fact]
     public async Task Mdd_executes_the_target_weight_on_the_point_after_the_level()
     {
         var module = new MddMeanReversionStrategyModule();

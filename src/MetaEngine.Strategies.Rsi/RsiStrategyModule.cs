@@ -45,14 +45,71 @@ public sealed class RsiStrategyModule : IStrategyModule
         return ValueTask.FromResult<IStrategyPreparedData>(new PreparedData(source, metrics));
     }
 
+    public StrategyValidationResult ValidateSearchSpace(JsonElement searchSpace)
+    {
+        var errors = new List<StrategyValidationError>();
+        if (searchSpace.ValueKind != JsonValueKind.Object)
+        {
+            return new StrategyValidationResult([new("searchSpace", "Search space must be an object.")]);
+        }
+
+        ValidateRange(searchSpace, "rsiPeriod", integer: true, minimum: 1, maximum: 1000, errors);
+        ValidateRange(searchSpace, "buyLevel", integer: false, minimum: 0, maximum: 100, errors);
+        ValidateRange(searchSpace, "sellLevel", integer: false, minimum: 0, maximum: 100, errors);
+        return errors.Count == 0 ? StrategyValidationResult.Valid : new StrategyValidationResult(errors);
+    }
+
+    public long? EstimateCandidateCount(JsonElement searchSpace)
+    {
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
+        {
+            return null;
+        }
+
+        try
+        {
+            checked
+            {
+                return CountValues(searchSpace, "rsiPeriod") *
+                    CountValues(searchSpace, "buyLevel") *
+                    CountValues(searchSpace, "sellLevel");
+            }
+        }
+        catch (OverflowException)
+        {
+            return null;
+        }
+    }
+
     public async IAsyncEnumerable<JsonElement> GenerateCandidatesAsync(
         JsonElement searchSpace,
         int seed,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken)
     {
         await Task.CompletedTask;
-        cancellationToken.ThrowIfCancellationRequested();
-        yield break;
+        var validation = ValidateSearchSpace(searchSpace);
+        if (!validation.IsValid)
+        {
+            throw new StrategyParameterException(validation.Errors);
+        }
+
+        foreach (var rsiPeriod in ExpandRange(searchSpace, "rsiPeriod", integer: true))
+        {
+            foreach (var buyLevel in ExpandRange(searchSpace, "buyLevel", integer: false))
+            {
+                foreach (var sellLevel in ExpandRange(searchSpace, "sellLevel", integer: false))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    yield return JsonSerializer.SerializeToElement(new
+                    {
+                        rsiPeriod = (int)rsiPeriod,
+                        buyLevel,
+                        sellLevel
+                    });
+                }
+            }
+        }
     }
 
     public ValueTask<StrategyCalculationResult> CalculateAsync(
@@ -165,6 +222,52 @@ public sealed class RsiStrategyModule : IStrategyModule
 
     private static double ReadDouble(JsonElement parameters, string name, double fallback) =>
         parameters.TryGetProperty(name, out var property) && property.TryGetDouble(out var value) ? value : fallback;
+
+    private static void ValidateRange(
+        JsonElement searchSpace,
+        string name,
+        bool integer,
+        double minimum,
+        double maximum,
+        List<StrategyValidationError> errors)
+    {
+        if (!searchSpace.TryGetProperty(name, out var range) || range.ValueKind != JsonValueKind.Object ||
+            !range.TryGetProperty("from", out var fromProperty) || !fromProperty.TryGetDouble(out var from) ||
+            !range.TryGetProperty("to", out var toProperty) || !toProperty.TryGetDouble(out var to) ||
+            !range.TryGetProperty("step", out var stepProperty) || !stepProperty.TryGetDouble(out var step))
+        {
+            errors.Add(new(name, "A range with from, to, and step is required."));
+            return;
+        }
+
+        if (!double.IsFinite(from) || !double.IsFinite(to) || !double.IsFinite(step) ||
+            from < minimum || to > maximum || from > to || step <= 0 ||
+            (integer && (from != Math.Truncate(from) || to != Math.Truncate(to) || step != Math.Truncate(step))))
+        {
+            errors.Add(new(name, $"Range must stay between {minimum} and {maximum} with a positive step."));
+        }
+    }
+
+    private static long CountValues(JsonElement searchSpace, string name)
+    {
+        var range = searchSpace.GetProperty(name);
+        var from = range.GetProperty("from").GetDecimal();
+        var to = range.GetProperty("to").GetDecimal();
+        var step = range.GetProperty("step").GetDecimal();
+        return checked((long)decimal.Floor((to - from) / step) + 1);
+    }
+
+    private static IEnumerable<double> ExpandRange(JsonElement searchSpace, string name, bool integer)
+    {
+        var range = searchSpace.GetProperty(name);
+        var from = range.GetProperty("from").GetDecimal();
+        var to = range.GetProperty("to").GetDecimal();
+        var step = range.GetProperty("step").GetDecimal();
+        for (var value = from; value <= to; value += step)
+        {
+            yield return integer ? (double)(int)value : (double)value;
+        }
+    }
 
     private sealed record PreparedData(IReadOnlyList<StrategySourcePoint> Source, CalculationSeries BaseMetrics) : IStrategyPreparedData;
 }

@@ -32,5 +32,6 @@ public sealed class RsiStrategyModuleDescriptor : IStrategyModuleDescriptorProvi
             new("signal", "Сигнал", StrategyOutputKind.Signal),
             new("execution", "Исполнение", StrategyOutputKind.Signal),
             new("position", "Вес", StrategyOutputKind.Position, "decimal")
-        ]);
+        ],
+        IsProductionOptimizationAvailable: true);
 }

@@ -1,4 +1,5 @@
 using MetaEngine.Application.Calculations;
+using MetaEngine.Application.Optimizations;
 using MetaEngine.Strategies.Abstractions;
 
 namespace MetaEngine.Worker;
@@ -22,8 +23,14 @@ public sealed class Worker(
             try
             {
                 await using var scope = serviceScopeFactory.CreateAsyncScope();
-                var processor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
-                if (await processor.ProcessNextAsync(stoppingToken))
+                var calculationProcessor = scope.ServiceProvider.GetRequiredService<ICalculationRunProcessor>();
+                if (await calculationProcessor.ProcessNextAsync(stoppingToken))
+                {
+                    continue;
+                }
+
+                var optimizationProcessor = scope.ServiceProvider.GetRequiredService<IOptimizationJobProcessor>();
+                if (await optimizationProcessor.ProcessNextAsync(stoppingToken))
                 {
                     continue;
                 }
@@ -36,7 +43,7 @@ public sealed class Worker(
             }
             catch (Exception exception)
             {
-                logger.LogError(exception, "Calculation worker loop failed; retrying after delay.");
+                logger.LogError(exception, "Worker loop failed; retrying after delay.");
                 await Task.Delay(IdleDelay, stoppingToken);
             }
         }

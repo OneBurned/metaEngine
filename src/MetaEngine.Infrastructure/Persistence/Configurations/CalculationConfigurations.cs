@@ -97,6 +97,7 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
         builder.HasIndex(run => new { run.WorkspaceId, run.CreatedAt });
         builder.HasIndex(run => new { run.Status, run.CreatedAt });
         builder.HasIndex(run => run.SourceCalculationRunId);
+        builder.HasIndex(run => run.OptimizationResultId);
 
         builder
             .HasOne(run => run.Workspace)
@@ -120,6 +121,12 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
             .HasOne(run => run.SourceCalculationRun)
             .WithMany()
             .HasForeignKey(run => run.SourceCalculationRunId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(run => run.OptimizationResult)
+            .WithMany()
+            .HasForeignKey(run => run.OptimizationResultId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder
@@ -158,11 +165,18 @@ internal sealed class OptimizationJobConfiguration : IEntityTypeConfiguration<Op
         builder.Property(job => job.ErrorCode).HasMaxLength(100);
         builder.HasIndex(job => new { job.WorkspaceId, job.CreatedAt });
         builder.HasIndex(job => new { job.Status, job.CreatedAt });
+        builder.HasIndex(job => job.SourceCalculationRunId);
 
         builder
             .HasOne(job => job.Workspace)
             .WithMany()
             .HasForeignKey(job => job.WorkspaceId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        builder
+            .HasOne(job => job.SourceCalculationRun)
+            .WithMany()
+            .HasForeignKey(job => job.SourceCalculationRunId)
             .OnDelete(DeleteBehavior.Restrict);
 
         builder

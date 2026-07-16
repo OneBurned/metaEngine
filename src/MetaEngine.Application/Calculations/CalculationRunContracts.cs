@@ -21,7 +21,8 @@ public sealed record QueueStrategyCalculationCommand(
     Guid UserId,
     Guid SourceCalculationRunId,
     string StrategyType,
-    string ParametersJson);
+    string ParametersJson,
+    Guid? OptimizationResultId = null);
 
 public sealed record CalculationRunSummary(
     Guid Id,

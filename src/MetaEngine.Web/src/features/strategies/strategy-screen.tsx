@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { RsiOptimizationPanel } from "@/features/strategies/rsi-optimization-panel"
 import {
   getAllCalculationResult,
   getCalculationRun,
@@ -61,6 +63,7 @@ export function StrategyScreen() {
   const [strategyTypes, setStrategyTypes] = useState<string[]>([])
   const [sourceRunId, setSourceRunId] = useState("")
   const [strategyType, setStrategyType] = useState("rsi")
+  const [strategyMode, setStrategyMode] = useState<"manual" | "optimization">("manual")
   const [rsiPeriod, setRsiPeriod] = useState(14)
   const [buyLevel, setBuyLevel] = useState(30)
   const [sellLevel, setSellLevel] = useState(70)
@@ -182,6 +185,7 @@ export function StrategyScreen() {
         }))
         setTakeProfit(numberValue(parameters.takeProfit, 0.01) * 100)
       }
+      setStrategyMode("manual")
       toast.success("Параметры применены")
     } catch {
       setError("Не удалось прочитать параметры сохраненной стратегии.")
@@ -191,6 +195,18 @@ export function StrategyScreen() {
   const baseRuns = runs.filter((run) => run.kind === "base" && run.status === "completed")
   const strategyRuns = runs.filter((run) => run.kind === "strategy")
   const presentationSources = { portfolios, presets, runs }
+
+  function handleOptimizationStrategyQueued(queued: CalculationRun, parameters: { rsiPeriod: number; buyLevel: number; sellLevel: number }) {
+    setStrategyType("rsi")
+    setRsiPeriod(parameters.rsiPeriod)
+    setBuyLevel(parameters.buyLevel)
+    setSellLevel(parameters.sellLevel)
+    setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
+    setSelectedRunId(queued.id)
+    setSaveName("")
+    setStrategyMode("manual")
+    void refresh()
+  }
 
   return (
     <AppShell onSignOut={() => void signOut().then(() => navigate({ to: "/login" }))}>
@@ -202,15 +218,21 @@ export function StrategyScreen() {
       {!workspace ? <Alert className="mt-6 rounded-md"><AlertTitle>Нет доступного workspace</AlertTitle><AlertDescription>Для работы со стратегиями нужен доступ к workspace.</AlertDescription></Alert> : null}
       {workspace ? <>
         <Card className="mt-6 rounded-lg border-slate-200 shadow-none">
-          <CardHeader><CardTitle className="text-base">Новая стратегия</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="text-base">Стратегии</CardTitle></CardHeader>
           <CardContent>
-            <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
-              <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
-              <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
-              <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
-              {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
-            </form>
-            {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
+            <Tabs value={strategyMode} onValueChange={(value) => setStrategyMode(value as "manual" | "optimization")}>
+              <TabsList aria-label="Режим работы со стратегией"><TabsTrigger value="manual">Ручной расчет</TabsTrigger><TabsTrigger value="optimization">Оптимизация</TabsTrigger></TabsList>
+              <TabsContent value="manual" className="mt-5">
+                <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
+                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
+                  <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
+                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
+                </form>
+                {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
+              </TabsContent>
+              <TabsContent value="optimization" className="mt-5"><RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} /></TabsContent>
+            </Tabs>
           </CardContent>
         </Card>
 

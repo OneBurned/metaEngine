@@ -223,6 +223,7 @@ workspaces.MapPortfolioEndpoints();
 workspaces.MapPresetEndpoints();
 workspaces.MapCalculationRunEndpoints();
 workspaces.MapStrategyEndpoints();
+workspaces.MapOptimizationEndpoints();
 
 app.Run();
 

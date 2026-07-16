@@ -75,6 +75,10 @@ public sealed class CalculationRun
 
     public string? StrategyParametersJson { get; set; }
 
+    public Guid? OptimizationResultId { get; set; }
+
+    public OptimizationResult? OptimizationResult { get; set; }
+
     public DateTimeOffset PeriodStart { get; set; }
 
     public DateTimeOffset PeriodEnd { get; set; }
@@ -121,6 +125,10 @@ public sealed class OptimizationJob
     public Guid WorkspaceId { get; set; }
 
     public Workspace Workspace { get; set; } = null!;
+
+    public Guid? SourceCalculationRunId { get; set; }
+
+    public CalculationRun? SourceCalculationRun { get; set; }
 
     public CalculationInputType InputType { get; set; }
 

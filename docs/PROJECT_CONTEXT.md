@@ -46,6 +46,8 @@ docs/PRODUCTION_SCAFFOLD.md
 docs/PORTFOLIO_IMPORT.md   Production portfolio CSV import and version API
 docs/PRESETS.md            Production presets, versions, API and calculation core
 docs/CALCULATION_RUNS.md   Production base calculation queue, worker and artifacts
+docs/PRODUCTION_OPTIMIZATION.md
+                           Production RSI optimization jobs, API and Worker
 docs/PRODUCTION_UI.md      Production React UI and local run workflow
 docs/PRODUCTION_STRATEGIES.md
                            Production RSI/MDD runs and saved strategy configs
@@ -83,8 +85,9 @@ Router and shadcn/ui. It uses a same-origin development proxy to the API so
 cookie/CSRF protections remain unchanged. The user can sign in, import a
 portfolio in the **Data** section, inspect saved portfolios/strategies/presets,
 queue and observe base calculations, and inspect saved results with interactive
-result and comparison charts. The UI also exposes manual RSI/MDD calculations
-and strategy presets. It does not yet expose optimizer jobs or cancellation.
+result and comparison charts. The UI also exposes manual RSI/MDD calculations,
+strategy presets and production RSI optimization with progress, stop and
+result selection.
 See `docs/PRODUCTION_UI.md`.
 
 ## Production P5a: strategy runs
@@ -103,7 +106,21 @@ Saved strategy versions can now be used alongside portfolio versions in an
 immutable preset. A preset calculation combines their canonical `timestamp,diff`
 rows with the configured weights and periods. The production UI exposes a
 **Presets** page and allows a saved preset to be chosen for a base calculation.
-Optimizer jobs remain a later stage.
+
+## Production P6: RSI optimizer
+
+The platform can queue an RSI optimization job from a completed immutable base
+calculation. The Worker splits that source into consecutive samples, prepares
+RSI independently for each sample, streams candidates and persists only top-N
+aggregate metrics. The job exposes progress, filters and a stop request that
+finishes the current candidate before publishing accumulated results. A selected
+row queues a normal RSI run on the same base calculation; saving that run creates
+the usual immutable saved strategy with a link back to the optimization result.
+The **Strategies** screen provides separate manual and optimization tabs,
+including range/filter controls, live progress, stop, recent jobs, sortable
+sample metrics and a command to queue the chosen candidate as a standard
+strategy run. Production MDD optimization remains a later stage. See
+`docs/PRODUCTION_OPTIMIZATION.md`.
 
 ## 2. User communication rules
 
