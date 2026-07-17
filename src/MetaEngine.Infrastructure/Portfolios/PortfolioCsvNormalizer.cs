@@ -134,11 +134,11 @@ internal sealed class PortfolioCsvNormalizer
                 }
 
                 var row = csv.Parser.Row;
+                EnsureTwoColumns(csv.Parser.Count, row);
                 var first = csv.GetField(0);
                 var second = csv.GetField(1);
-                if (isFirstRow && IsHeaderCandidate(first))
+                if (isFirstRow && IsHeaderRow(first))
                 {
-                    ValidateHeaders(first, second);
                     isFirstRow = false;
                     continue;
                 }
@@ -173,20 +173,50 @@ internal sealed class PortfolioCsvNormalizer
         }
     }
 
-    private static bool IsHeaderCandidate(string? first) =>
-        string.Equals(first?.Trim(), "timestamp", StringComparison.OrdinalIgnoreCase);
-
-    private static void ValidateHeaders(string? first, string? second)
+    private static void EnsureTwoColumns(int columnCount, int row)
     {
-        if (!string.Equals(first?.Trim(), "timestamp", StringComparison.OrdinalIgnoreCase) ||
-            !(string.Equals(second?.Trim(), "diff", StringComparison.OrdinalIgnoreCase) ||
-              string.Equals(second?.Trim(), "accum", StringComparison.OrdinalIgnoreCase) ||
-              string.Equals(second?.Trim(), "value", StringComparison.OrdinalIgnoreCase)))
+        if (columnCount != 2)
         {
-            throw new PortfolioImportValidationException(
-                "invalid_headers",
-                "CSV header must be timestamp,diff, timestamp,accum, or timestamp,value. Header can also be omitted.");
+            throw InvalidRow(row, $"expected exactly 2 columns, but found {columnCount}");
         }
+    }
+
+    private static bool IsHeaderRow(string? first) =>
+        !CanParseTimestamp(first);
+
+    private static bool CanParseTimestamp(string? value)
+    {
+        var raw = value?.Trim();
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return false;
+        }
+
+        if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var unixMilliseconds))
+        {
+            try
+            {
+                _ = DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds);
+                return true;
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return false;
+            }
+        }
+
+        string[] exactFormats = ["yyyy-MM-dd HH:mm", "yyyy-MM-dd'T'HH:mm"];
+        return DateTimeOffset.TryParseExact(
+                   raw,
+                   exactFormats,
+                   CultureInfo.InvariantCulture,
+                   DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                   out _) ||
+               DateTimeOffset.TryParse(
+                   raw,
+                   CultureInfo.InvariantCulture,
+                   DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal,
+                   out _);
     }
 
     private static DateTimeOffset ParseTimestamp(string? value, int row)

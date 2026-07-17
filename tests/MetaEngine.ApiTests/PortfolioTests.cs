@@ -112,6 +112,34 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
 
 
     [Fact]
+    public async Task Admin_can_import_accum_portfolio_with_custom_headers()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        const string accumCsv =
+            "Timestamp,Unrealized_profits\n" +
+            "1704499200000,0.01\n" +
+            "1704502800000,0.03\n" +
+            "1704506400000,0.00\n";
+
+        var response = await ImportAsync(client, owner.WorkspaceId, accumCsv, "Custom header accum", valueType: "accum");
+        var result = await response.Content.ReadFromJsonAsync<PortfolioImportResult>(JsonOptions);
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.NotNull(result);
+        Assert.Equal(PortfolioValueType.Accum, result.Portfolio.ValueType);
+
+        var page = await client.GetFromJsonAsync<PortfolioPointPage>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/portfolios/{result.Portfolio.Id}/points?offset=0&limit=3");
+
+        Assert.NotNull(page);
+        Assert.Equal(0.01, page.Items[0].Diff, 10);
+        Assert.Equal((1.03 / 1.01) - 1, page.Items[1].Diff, 10);
+        Assert.Equal((1.00 / 1.03) - 1, page.Items[2].Diff, 10);
+    }
+
+    [Fact]
     public async Task Admin_can_import_headerless_accum_portfolio()
     {
         var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
