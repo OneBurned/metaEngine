@@ -82,6 +82,38 @@ Backend API работает отдельно:
 параллельным продуктом; он сохраняется как лаборатория и страховка на время
 переноса поведения в production-платформу.
 
+
+### Как проверять PR с основным production UI
+
+Для PR, который меняет вход, workspace, данные, расчеты, стратегии, оптимизации,
+пресеты, API или Worker, проверка идет в двух терминалах.
+
+**Терминал 1** получает PR-ветку, запускает тесты и backend/API/Worker/PostgreSQL:
+
+```bash
+cd /workspaces/metaEngine
+git fetch
+gh pr checkout <номер_PR>
+git status
+git log --oneline --decorate -5
+dotnet test MetaEngine.slnx
+npm test
+docker compose up -d --build
+curl -s http://localhost:5080/health/ready
+```
+
+**Терминал 2** запускает frontend:
+
+```bash
+cd /workspaces/metaEngine/src/MetaEngine.Web
+npm install
+VITE_API_TARGET=http://localhost:5080 npm run dev
+```
+
+После этого в Codespaces открывай `Ports → 3000 → Open in Browser`.
+Порт `5080` не открывают как сайт; его проверяют `curl`. Порт `5173` нужен
+только для старого local lab/reference.
+
 ## Что уже умеет локальная версия
 
 - Запуск локальной страницы в браузере.

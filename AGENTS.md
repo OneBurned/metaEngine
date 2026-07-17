@@ -119,11 +119,48 @@
 ## Проверка открытого PR в Codespaces
 
 Пользователь проверяет изменения до merge в `main` через реальную ветку GitHub
-PR. Если PR открыт и не смержен, команды для пользователя должны быть такими:
+PR. Агент должен явно писать, нужны ли один или два терминала. Для основного
+production UI/API/Worker workflow обычно нужны **два терминала**:
+
+- **Терминал 1** — получить PR-ветку, запустить проверки и поднять backend/API/Worker/PostgreSQL;
+- **Терминал 2** — запустить frontend на порту `3000`;
+- браузером пользователь открывает только `3000`; порт `5080` проверяется через `curl`,
+  а `5173` используется только для старого local lab, если агент отдельно объяснил зачем.
+
+Команды для production PR должны быть такими:
 
 ```bash
+# Терминал 1: PR-ветка, тесты, backend/API/Worker/PostgreSQL
 cd /workspaces/metaEngine
-# если приложение уже запущено — остановить через Ctrl+C
+# если backend/API/Worker уже запущены в этом терминале — остановить через Ctrl+C
+git fetch
+gh pr checkout <номер_PR>
+git status
+git log --oneline --decorate -5
+dotnet test MetaEngine.slnx
+npm test
+docker compose up -d --build
+curl -s http://localhost:5080/health/ready
+```
+
+```bash
+# Терминал 2: frontend production UI
+cd /workspaces/metaEngine/src/MetaEngine.Web
+# если frontend уже запущен в этом терминале — остановить через Ctrl+C
+npm install
+VITE_API_TARGET=http://localhost:5080 npm run dev
+```
+
+После запуска frontend нужно открыть порт `3000` в Codespaces и сделать жесткое
+обновление страницы: `Ctrl + Shift + R` или `Cmd + Shift + R` на Mac.
+
+Если PR меняет только документацию, старый local lab или reference-формулы, агент
+может дать более короткий однотерминальный сценарий и должен явно объяснить,
+почему в этой задаче не нужен production UI на `3000`. Для local lab сценарий:
+
+```bash
+# Один терминал: только старый local lab/reference
+cd /workspaces/metaEngine
 git fetch
 gh pr checkout <номер_PR>
 git status
@@ -132,26 +169,41 @@ npm test
 npm start
 ```
 
-После запуска нужно открыть порт `5173` в Codespaces и сделать жесткое
-обновление страницы: `Ctrl + Shift + R` или `Cmd + Shift + R` на Mac.
+После такого local-lab запуска открывается порт `5173`, но это не основной путь
+проверки production-фич.
 
 Если `gh` недоступен, агент должен попросить только номер PR или реальное имя
 ветки PR из GitHub и дать команды для этой PR-ветки. Нельзя придумывать
 локальные sandbox-ветки для пользователя.
 
 Команды для `main` давать только после того, как пользователь сказал, что PR
-смёржен или задачу пора зацементировать:
+смёржен или задачу пора зацементировать. Для production-проверки после merge
+также использовать два терминала:
 
 ```bash
+# Терминал 1: main, тесты, backend/API/Worker/PostgreSQL
 cd /workspaces/metaEngine
-# если приложение уже запущено — остановить через Ctrl+C
+# если backend/API/Worker уже запущены в этом терминале — остановить через Ctrl+C
 git switch main
 git pull --ff-only
 git status
 git log --oneline --decorate -5
+dotnet test MetaEngine.slnx
 npm test
-npm start
+docker compose up -d --build
+curl -s http://localhost:5080/health/ready
 ```
+
+```bash
+# Терминал 2: frontend production UI
+cd /workspaces/metaEngine/src/MetaEngine.Web
+# если frontend уже запущен в этом терминале — остановить через Ctrl+C
+npm install
+VITE_API_TARGET=http://localhost:5080 npm run dev
+```
+
+После этого открыть порт `3000`. Команды `npm start` и порт `5173` для main
+давать только при проверке старого local lab/reference.
 
 Агент не должен говорить пользователю «проверь», пока изменения не видны в
 GitHub PR или в `git log` пользователя.
