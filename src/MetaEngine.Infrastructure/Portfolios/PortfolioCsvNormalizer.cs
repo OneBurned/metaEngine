@@ -4,6 +4,7 @@ using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 using MetaEngine.Application.Portfolios;
+using MetaEngine.Domain.Model;
 
 namespace MetaEngine.Infrastructure.Portfolios;
 
@@ -32,13 +33,14 @@ internal sealed class PortfolioCsvNormalizer
 
     public async Task<NormalizedPortfolioSeries> NormalizeAsync(
         Stream source,
+        PortfolioValueType sourceValueType,
         CancellationToken cancellationToken)
     {
         await using var buffer = await ReadSourceAsync(source, cancellationToken);
         var sourceChecksum = ComputeHash(buffer);
         buffer.Position = 0;
 
-        var points = await ParseAsync(buffer, cancellationToken);
+        var points = await ParseAsync(buffer, sourceValueType, cancellationToken);
         points.Sort((left, right) => left.Timestamp.CompareTo(right.Timestamp));
         EnsureUniqueTimestamps(points);
 
@@ -98,6 +100,7 @@ internal sealed class PortfolioCsvNormalizer
 
     private static async Task<List<NormalizedPortfolioPoint>> ParseAsync(
         Stream source,
+        PortfolioValueType sourceValueType,
         CancellationToken cancellationToken)
     {
         try
@@ -110,7 +113,7 @@ internal sealed class PortfolioCsvNormalizer
             using var csv = new CsvReader(reader, new CsvConfiguration(CultureInfo.InvariantCulture)
             {
                 Delimiter = ",",
-                HasHeaderRecord = true,
+                HasHeaderRecord = false,
                 IgnoreBlankLines = true,
                 TrimOptions = TrimOptions.Trim,
                 DetectDelimiter = false,
@@ -118,19 +121,12 @@ internal sealed class PortfolioCsvNormalizer
                 MissingFieldFound = null
             });
 
-            if (!await csv.ReadAsync())
-            {
-                throw new PortfolioImportValidationException("empty_file", "CSV file is empty.");
-            }
-
-            csv.ReadHeader();
-            ValidateHeaders(csv.HeaderRecord);
-
-            var points = new List<NormalizedPortfolioPoint>();
+            var rawRows = new List<(DateTimeOffset Timestamp, double Value, int Row)>();
+            var isFirstRow = true;
             while (await csv.ReadAsync())
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (points.Count >= PortfolioImportLimits.MaxPoints)
+                if (rawRows.Count >= PortfolioImportLimits.MaxPoints)
                 {
                     throw new PortfolioImportValidationException(
                         "too_many_points",
@@ -138,19 +134,32 @@ internal sealed class PortfolioCsvNormalizer
                 }
 
                 var row = csv.Parser.Row;
-                var timestamp = ParseTimestamp(csv.GetField(0), row);
-                var diff = ParseDiff(csv.GetField(1), row);
-                points.Add(new NormalizedPortfolioPoint(timestamp, diff));
+                var first = csv.GetField(0);
+                var second = csv.GetField(1);
+                if (isFirstRow && IsHeaderCandidate(first))
+                {
+                    ValidateHeaders(first, second);
+                    isFirstRow = false;
+                    continue;
+                }
+
+                isFirstRow = false;
+                var timestamp = ParseTimestamp(first, row);
+                var value = ParseReturnValue(second, row, sourceValueType);
+                rawRows.Add((timestamp, value, row));
             }
 
-            if (points.Count == 0)
+            if (rawRows.Count == 0)
             {
                 throw new PortfolioImportValidationException(
                     "empty_series",
                     "CSV file does not contain portfolio points.");
             }
 
-            return points;
+            rawRows.Sort((left, right) => left.Timestamp.CompareTo(right.Timestamp));
+            return sourceValueType == PortfolioValueType.Accum
+                ? ConvertAccumToDiff(rawRows)
+                : rawRows.Select(row => new NormalizedPortfolioPoint(row.Timestamp, row.Value)).ToList();
         }
         catch (PortfolioImportValidationException)
         {
@@ -164,15 +173,19 @@ internal sealed class PortfolioCsvNormalizer
         }
     }
 
-    private static void ValidateHeaders(string[]? headers)
+    private static bool IsHeaderCandidate(string? first) =>
+        string.Equals(first?.Trim(), "timestamp", StringComparison.OrdinalIgnoreCase);
+
+    private static void ValidateHeaders(string? first, string? second)
     {
-        if (headers is null || headers.Length != 2 ||
-            !string.Equals(headers[0].Trim(), "timestamp", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(headers[1].Trim(), "diff", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(first?.Trim(), "timestamp", StringComparison.OrdinalIgnoreCase) ||
+            !(string.Equals(second?.Trim(), "diff", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(second?.Trim(), "accum", StringComparison.OrdinalIgnoreCase) ||
+              string.Equals(second?.Trim(), "value", StringComparison.OrdinalIgnoreCase)))
         {
             throw new PortfolioImportValidationException(
                 "invalid_headers",
-                "CSV header must contain exactly: timestamp,diff.");
+                "CSV header must be timestamp,diff, timestamp,accum, or timestamp,value. Header can also be omitted.");
         }
     }
 
@@ -219,23 +232,67 @@ internal sealed class PortfolioCsvNormalizer
         throw InvalidRow(row, $"timestamp cannot be parsed: {raw}");
     }
 
-    private static double ParseDiff(string? value, int row)
+    private static double ParseReturnValue(string? value, int row, PortfolioValueType sourceValueType)
     {
         var raw = value?.Trim();
         if (string.IsNullOrWhiteSpace(raw) ||
-            !double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var diff) ||
-            !double.IsFinite(diff))
+            !double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed) ||
+            !double.IsFinite(parsed))
         {
-            throw InvalidRow(row, $"diff must be a finite decimal number: {raw}");
+            var label = sourceValueType == PortfolioValueType.Accum ? "accum" : "diff";
+            throw InvalidRow(row, $"{label} must be a finite decimal number: {raw}");
         }
 
-        if (diff < -1)
+        if (parsed < -1)
         {
+            var label = sourceValueType == PortfolioValueType.Accum ? "accum" : "diff";
             throw new PortfolioImportValidationException(
                 "return_below_minus_one",
-                $"Row {row}: diff cannot be less than -100%.");
+                $"Row {row}: {label} cannot be less than -100%.");
         }
 
+        return parsed;
+    }
+
+    private static List<NormalizedPortfolioPoint> ConvertAccumToDiff(
+        IReadOnlyList<(DateTimeOffset Timestamp, double Value, int Row)> rows)
+    {
+        var points = new List<NormalizedPortfolioPoint>(rows.Count);
+        double? previousAccum = null;
+        foreach (var row in rows)
+        {
+            var diff = previousAccum is null
+                ? row.Value
+                : AccumToDiff(previousAccum.Value, row.Value, row.Row);
+            points.Add(new NormalizedPortfolioPoint(row.Timestamp, diff));
+            previousAccum = row.Value;
+        }
+        return points;
+    }
+
+    private static double AccumToDiff(double previousAccum, double currentAccum, int row)
+    {
+        var previousEquity = 1 + previousAccum;
+        var currentEquity = 1 + currentAccum;
+        if (previousEquity == 0)
+        {
+            if (currentEquity == 0)
+            {
+                return 0;
+            }
+
+            throw new PortfolioImportValidationException(
+                "invalid_accum_sequence",
+                $"Row {row}: accum cannot recover after reaching -100%.");
+        }
+
+        var diff = currentEquity / previousEquity - 1;
+        if (!double.IsFinite(diff) || diff < -1)
+        {
+            throw new PortfolioImportValidationException(
+                "invalid_accum_sequence",
+                $"Row {row}: accum sequence produces an invalid diff.");
+        }
         return diff;
     }
 

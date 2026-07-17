@@ -117,10 +117,10 @@ VITE_API_TARGET=http://localhost:5080 npm run dev
 ## Что уже умеет локальная версия
 
 - Запуск локальной страницы в браузере.
-- Загрузка CSV-стратегий без заголовков в формате `timestamp,value`.
+- Загрузка CSV без заголовков в формате `timestamp,value`.
 - Выбор типа значения при загрузке:
-  - `diff` — доходность за шаг;
-  - `accum` — накопленная доходность.
+  - `accum` — накопленная доходность, выбран по умолчанию;
+  - `diff` — доходность за шаг.
 - Нормализация загруженной стратегии в формат `timestamp,diff`.
 - Пересчет `accum → diff`:
   - первая точка получает `diff = 0`;
@@ -298,7 +298,7 @@ GitHub Actions запускает build, migrations, .NET/Node.js tests и secur
 на каждый push и pull request. Полный состав проверок и локальный запуск
 PostgreSQL integration test описаны в `docs/PRODUCTION_CI.md`.
 
-Production API уже принимает canonical portfolio CSV `timestamp,diff`, хранит
+Production API принимает portfolio CSV с header `timestamp,diff`, `timestamp,accum` или `timestamp,value`, а также файлы без header; хранит
 неизменяемые версии и отдает metadata/points только внутри workspace. Новый
 React UI разделяет импорт и библиотеку данных от запусков расчета, поддерживает
 создание пресета из портфелей и сохраненных стратегий, запуск и просмотр

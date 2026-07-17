@@ -45,9 +45,11 @@ flowchart LR
 
 ## Данные и неизменяемость
 
-Production принимает canonical CSV `timestamp,diff`. Импорт создает
-неизменяемую `PortfolioVersion` с checksum. Результаты всех расчетов также
-хранят только канонический ряд `timestamp,diff`; `accum`, HWM, DD и MDD всегда
+Production принимает двухколоночный portfolio CSV с header или без него: вторая
+колонка выбирается как `accum` или `diff`, при этом импорт всегда сохраняет
+канонический ряд `timestamp,diff`. Импорт создает неизменяемую
+`PortfolioVersion` с checksum. Результаты всех расчетов также хранят только
+канонический ряд `timestamp,diff`; `accum`, HWM, DD и MDD всегда
 восстанавливаются из него.
 
 ```mermaid

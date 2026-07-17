@@ -10,7 +10,7 @@ internal sealed class PortfolioService(
     MetaEngineDbContext dbContext,
     PortfolioCsvNormalizer normalizer) : IPortfolioService
 {
-    private const string NormalizationVersion = "portfolio-diff-v1";
+    private const string NormalizationVersion = "portfolio-diff-v2";
 
     public async Task<PortfolioImportResult> ImportAsync(
         ImportPortfolioCommand command,
@@ -25,7 +25,7 @@ internal sealed class PortfolioService(
                 "Source file name cannot exceed 512 characters.");
         }
 
-        var normalized = await normalizer.NormalizeAsync(command.Content, cancellationToken);
+        var normalized = await normalizer.NormalizeAsync(command.Content, command.SourceValueType, cancellationToken);
         var duplicate = await FindDuplicateAsync(
             command.WorkspaceId,
             normalized.SourceChecksum,
@@ -47,7 +47,7 @@ internal sealed class PortfolioService(
             Version = version,
             Name = name,
             SourceFileName = sourceFileName,
-            ValueType = PortfolioValueType.Diff,
+            ValueType = command.SourceValueType,
             ValueScale = PortfolioValueScale.Decimal,
             Timeframe = normalized.Timeframe,
             NormalizationVersion = NormalizationVersion,

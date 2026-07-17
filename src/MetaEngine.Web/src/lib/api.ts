@@ -322,9 +322,12 @@ export async function listPortfolios(workspaceId: string) {
   return response.items
 }
 
-export async function importPortfolio(workspaceId: string, file: File, name: string) {
+export type PortfolioImportValueType = "accum" | "diff"
+
+export async function importPortfolio(workspaceId: string, file: File, name: string, valueType: PortfolioImportValueType = "accum") {
   const form = new FormData()
   form.set("name", name)
+  form.set("valueType", valueType)
   form.set("file", file)
   return request<{ portfolio: Portfolio }>(
     `/api/v1/workspaces/${workspaceId}/portfolios/import`,

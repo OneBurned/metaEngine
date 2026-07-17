@@ -361,13 +361,13 @@ PostgreSQL bootstrap/login/workspace integration test. The integration test is
 conditionally skipped on developer machines without a dedicated test database,
 but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
 
-The production importer accepts only canonical UTF-8 `timestamp,diff` CSV,
-normalizes UTC
-ordering, rejects duplicate timestamps, reports gaps, and stores immutable
-versions with raw and normalized-series SHA-256 checksums. Re-importing the same
-file or semantic series returns the existing version. This intentionally does
-not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
-upload. See `docs/PORTFOLIO_IMPORT.md`.
+The production importer accepts two-column UTF-8 portfolio CSV with or without
+a header. The second column can be `accum` or `diff`: the production UI defaults
+to `accum`, the API accepts multipart `valueType=accum|diff`, and stored points
+remain canonical `timestamp,diff`. Import normalizes UTC ordering, rejects
+duplicate timestamps, reports gaps, and stores immutable versions with raw and
+normalized-series SHA-256 checksums. Re-importing the same file or semantic
+series returns the existing version. See `docs/PORTFOLIO_IMPORT.md`.
 
 The pure C# base calculation core builds the selected source grid, applies
 `missing diff = 0`, calculates

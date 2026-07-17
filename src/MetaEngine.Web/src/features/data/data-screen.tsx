@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
-import { importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type Preset, type SavedStrategy } from "@/lib/api"
+import { importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
 import { formatDateTime } from "@/lib/metrics"
 import { useNavigate } from "@tanstack/react-router"
 import { AlertCircle, Database, LoaderCircle, RefreshCw, Upload } from "lucide-react"
@@ -59,12 +60,12 @@ export function DataScreen() {
     await navigate({ to: "/login" })
   }
 
-  async function handleImport(file: File, name: string) {
+  async function handleImport(file: File, name: string, valueType: PortfolioImportValueType) {
     if (!workspace) {
       return
     }
 
-    const result = await importPortfolio(workspace.id, file, name)
+    const result = await importPortfolio(workspace.id, file, name, valueType)
     toast.success("Портфолио импортировано", { description: result.portfolio.name })
     await refresh()
   }
@@ -108,9 +109,10 @@ export function DataScreen() {
   )
 }
 
-function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file: File, name: string) => Promise<void> }) {
+function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file: File, name: string, valueType: PortfolioImportValueType) => Promise<void> }) {
   const [file, setFile] = useState<File | null>(null)
   const [name, setName] = useState("")
+  const [valueType, setValueType] = useState<PortfolioImportValueType>("accum")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -132,7 +134,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
     setIsSubmitting(true)
     setError(null)
     try {
-      await onImport(file, name.trim())
+      await onImport(file, name.trim(), valueType)
       setFile(null)
       setName("")
       event.currentTarget.reset()
@@ -143,11 +145,13 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
     }
   }
 
-  return <form className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={handleSubmit}>
+  return <form className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_220px_auto]" onSubmit={handleSubmit}>
     <Field label="Название" htmlFor="portfolio-name"><Input id="portfolio-name" value={name} onChange={(event) => setName(event.target.value)} placeholder="Например, Core allocation" disabled={disabled || isSubmitting} /></Field>
-    <Field label="CSV, timestamp,diff" htmlFor="portfolio-file"><Input id="portfolio-file" type="file" accept=".csv,text/csv" onChange={handleFileChange} disabled={disabled || isSubmitting} /></Field>
+    <Field label="CSV, 2 колонки" htmlFor="portfolio-file"><Input id="portfolio-file" type="file" accept=".csv,text/csv" onChange={handleFileChange} disabled={disabled || isSubmitting} /></Field>
+    <Field label="Вторая колонка" htmlFor="portfolio-value-type"><Select value={valueType} onValueChange={(nextValue) => setValueType(nextValue as PortfolioImportValueType)} disabled={disabled || isSubmitting}><SelectTrigger id="portfolio-value-type"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="accum">Accum</SelectItem><SelectItem value="diff">Diff</SelectItem></SelectContent></Select></Field>
     <div className="flex items-end"><Button type="submit" disabled={disabled || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Upload />}Импортировать</Button></div>
-    {error ? <p className="sm:col-span-3 text-sm text-rose-700">{error}</p> : null}
+    <p className="text-xs text-slate-500 lg:col-span-4">CSV может быть без заголовка или с заголовком <code>timestamp,accum</code>/<code>timestamp,diff</code>. По умолчанию вторая колонка считается Accum и будет сохранена как canonical diff.</p>
+    {error ? <p className="lg:col-span-4 text-sm text-rose-700">{error}</p> : null}
   </form>
 }
 

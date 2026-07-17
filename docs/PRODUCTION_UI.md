@@ -10,8 +10,7 @@ user interface for the ASP.NET Core / PostgreSQL production workflow.
 After signing in, the user can:
 
 1. select an accessible workspace;
-2. use **Data** to import canonical `timestamp,diff` portfolio CSV and inspect
-   all saved portfolio, strategy and preset versions;
+2. use **Data** to import two-column portfolio CSV with or without header, choose whether the second column is `Accum` or `Diff`, and inspect all saved portfolio, strategy and preset versions;
 3. choose a portfolio or preset directly in **Calculations**;
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;

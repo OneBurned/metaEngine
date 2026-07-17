@@ -16,7 +16,8 @@ public sealed record ImportPortfolioCommand(
     string Name,
     string SourceFileName,
     Guid? PortfolioKey,
-    Stream Content);
+    Stream Content,
+    PortfolioValueType SourceValueType = PortfolioValueType.Diff);
 
 public sealed record PortfolioSummary(
     Guid Id,
