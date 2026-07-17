@@ -1049,4 +1049,4 @@ base_result_timestamp_accum.csv
 strategy_result_timestamp_diff_accum_mdd.csv
 ```
 
-- P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching plus line/histogram chart modes for Accum/HWM/DD/MDD on one shared percent scale.
+- P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching through `1M/1Y` plus line/histogram chart modes. Line mode shows Accum/HWM/DD/MDD on one shared percent scale; histogram mode switches to Diff bars by default, matching the old local lab behavior.

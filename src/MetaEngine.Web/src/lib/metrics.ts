@@ -9,7 +9,9 @@ export type MetricPoint = PortfolioPoint & {
   maxDrawdown: number
 }
 
-const timeframeMilliseconds: Record<Timeframe, number> = {
+const timeframeOrder: Timeframe[] = ["1m", "5m", "15m", "1h", "1d", "1M", "1Y"]
+
+const fixedTimeframeMilliseconds: Partial<Record<Timeframe, number>> = {
   "1m": 60_000,
   "5m": 5 * 60_000,
   "15m": 15 * 60_000,
@@ -44,9 +46,7 @@ export function aggregatePortfolioPoints(points: PortfolioPoint[], sourceTimefra
     return points
   }
 
-  const sourceStep = timeframeMilliseconds[sourceTimeframe]
-  const displayStep = timeframeMilliseconds[displayTimeframe]
-  if (displayStep < sourceStep) {
+  if (timeframeOrder.indexOf(displayTimeframe) < timeframeOrder.indexOf(sourceTimeframe)) {
     return points
   }
 
@@ -54,7 +54,7 @@ export function aggregatePortfolioPoints(points: PortfolioPoint[], sourceTimefra
   const checkpoints = sourceMetrics.filter((point, index) =>
     index === 0 ||
     index === sourceMetrics.length - 1 ||
-    isFixedBoundary(point.timestamp, displayStep),
+    isBoundary(point.timestamp, displayTimeframe),
   )
 
   let previousEquity = 1
@@ -67,7 +67,8 @@ export function aggregatePortfolioPoints(points: PortfolioPoint[], sourceTimefra
 }
 
 export function allowedDisplayTimeframes(sourceTimeframe: Timeframe, options: Timeframe[]) {
-  return options.slice(options.indexOf(sourceTimeframe))
+  const sourceIndex = timeframeOrder.indexOf(sourceTimeframe)
+  return options.filter((option) => timeframeOrder.indexOf(option) >= sourceIndex)
 }
 
 export function downsampleForChart<T>(items: T[], maximum = 3_000) {
@@ -115,8 +116,31 @@ export function toIsoDateTime(value: string) {
   return new Date(value).toISOString()
 }
 
-function isFixedBoundary(value: string, stepMilliseconds: number) {
-  return new Date(value).getTime() % stepMilliseconds === 0
+function isBoundary(value: string, timeframe: Timeframe) {
+  const fixedStep = fixedTimeframeMilliseconds[timeframe]
+  const date = new Date(value)
+  if (fixedStep) {
+    return date.getTime() % fixedStep === 0
+  }
+
+  if (timeframe === "1M") {
+    return date.getUTCDate() === 1 &&
+      date.getUTCHours() === 0 &&
+      date.getUTCMinutes() === 0 &&
+      date.getUTCSeconds() === 0 &&
+      date.getUTCMilliseconds() === 0
+  }
+
+  if (timeframe === "1Y") {
+    return date.getUTCMonth() === 0 &&
+      date.getUTCDate() === 1 &&
+      date.getUTCHours() === 0 &&
+      date.getUTCMinutes() === 0 &&
+      date.getUTCSeconds() === 0 &&
+      date.getUTCMilliseconds() === 0
+  }
+
+  return false
 }
 
 function formatChartTimestamp(value: string) {

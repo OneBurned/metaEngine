@@ -31,7 +31,7 @@ export type Portfolio = {
   createdByUserId: string | null
 }
 
-export type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d"
+export type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d" | "1M" | "1Y"
 
 export type PortfolioPoint = {
   timestamp: string
@@ -592,4 +592,4 @@ export async function saveStrategy(workspaceId: string, name: string, strategyRu
   )
 }
 
-export const timeframeOptions: Timeframe[] = ["1m", "5m", "15m", "1h", "1d"]
+export const timeframeOptions: Timeframe[] = ["1m", "5m", "15m", "1h", "1d", "1M", "1Y"]
