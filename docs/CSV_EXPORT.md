@@ -91,7 +91,7 @@ timestamp,rsi,signal,execution,weight,in_diff,in_accum,out_diff,out_accum,out_hw
 For MDD Mean Reversion, the export columns are:
 
 ```text
-timestamp,in_diff,in_accum,in_dd,local_mdd,local_accum,tp_status,signal,execution,weight,out_diff,out_accum,out_hwm,out_dd,out_mdd
+timestamp,in_diff,in_accum,in_dd,local_mdd,signal,execution,active_deals,weight,out_diff,out_accum,out_hwm,out_dd,out_mdd,max_config_weight,max_realized_weight
 ```
 
 Saved strategy configs are not CSV result series. To export strategy rows, first calculate the strategy and then choose **Текущий результат стратегии** in the CSV export popup.

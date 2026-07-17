@@ -43,9 +43,12 @@ Queue body example:
 }
 ```
 
-MDD parameters use decimal values: `drawdown: -0.1` is -10%, `weight: 0.1`
-is 10%, and `takeProfit: 0.01` is 1%. Target weights must be nondecreasing;
-equal weights are allowed.
+MDD parameters use decimal values: `entryDrawdown: -0.1` is -10%, `weight: 0.1`
+is 10%, and `exitValue: 0` means the configured exit threshold. MDD configs now
+store independent `deals`; each deal has entry by Local DD исходника, additive
+opening weight, `exitType` (`source_dd`, `strategy_dd`, `source_hwm`,
+`strategy_hwm`) and `exitValue`. Weights do not have to be nondecreasing and the
+sum of open deal weights is not capped.
 
 Save body example:
 

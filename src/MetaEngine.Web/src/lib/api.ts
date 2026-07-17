@@ -183,11 +183,10 @@ export type MddOptimizationSearchSpace = {
   parameterMode: "simple" | "detailed"
   levelCount: number
   minEntryDelta: number
-  maxTotalWeight: number
   drawdown?: OptimizationNumericRange
   weight?: OptimizationNumericRange
   levels?: Array<{ drawdown: OptimizationNumericRange; weight: OptimizationNumericRange }>
-  takeProfit: OptimizationNumericRange
+  exitValue: OptimizationNumericRange
   searchMode: "random" | "full"
   maxCandidates: number
 }

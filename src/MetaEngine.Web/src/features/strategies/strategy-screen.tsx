@@ -37,14 +37,14 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
-type MddLevel = { drawdown: number; weight: number }
+type MddDeal = { entryDrawdown: number; weight: number; exitType: "source_dd" | "strategy_dd" | "source_hwm" | "strategy_hwm"; exitValue: number }
 
-const defaultLevels: MddLevel[] = [
-  { drawdown: 10, weight: 10 },
-  { drawdown: 20, weight: 20 },
-  { drawdown: 30, weight: 30 },
-  { drawdown: 40, weight: 40 },
-  { drawdown: 50, weight: 50 },
+const defaultDeals: MddDeal[] = [
+  { entryDrawdown: 10, weight: 10, exitType: "source_dd", exitValue: 0 },
+  { entryDrawdown: 20, weight: 20, exitType: "source_dd", exitValue: 0 },
+  { entryDrawdown: 30, weight: 30, exitType: "source_dd", exitValue: 0 },
+  { entryDrawdown: 40, weight: 40, exitType: "source_dd", exitValue: 0 },
+  { entryDrawdown: 50, weight: 50, exitType: "source_dd", exitValue: 0 },
 ]
 
 const chartConfig = {
@@ -68,8 +68,7 @@ export function StrategyScreen() {
   const [rsiPeriod, setRsiPeriod] = useState(14)
   const [buyLevel, setBuyLevel] = useState(30)
   const [sellLevel, setSellLevel] = useState(70)
-  const [takeProfit, setTakeProfit] = useState(1)
-  const [levels, setLevels] = useState<MddLevel[]>(defaultLevels)
+  const [deals, setDeals] = useState<MddDeal[]>(defaultDeals)
   const [selectedRunId, setSelectedRunId] = useState("")
   const [selectedRun, setSelectedRun] = useState<CalculationRunDetails | null>(null)
   const [points, setPoints] = useState<PortfolioPoint[]>([])
@@ -142,7 +141,7 @@ export function StrategyScreen() {
     try {
       const parameters = strategyType === "rsi"
         ? { rsiPeriod, buyLevel, sellLevel }
-        : { levels: levels.map((level) => ({ drawdown: -Math.abs(level.drawdown) / 100, weight: level.weight / 100 })), takeProfit: takeProfit / 100 }
+        : { deals: deals.map((deal) => ({ entryDrawdown: -Math.abs(deal.entryDrawdown) / 100, weight: deal.weight / 100, exitType: deal.exitType, exitValue: deal.exitValue / 100 })) }
       const queued = await queueStrategyCalculation(workspace.id, sourceRunId, strategyType, parameters)
       setSelectedRunId(queued.id)
       setSaveName("")
@@ -179,12 +178,17 @@ export function StrategyScreen() {
         setRsiPeriod(numberValue(parameters.rsiPeriod, 14))
         setBuyLevel(numberValue(parameters.buyLevel, 30))
         setSellLevel(numberValue(parameters.sellLevel, 70))
-      } else if (Array.isArray(parameters.levels)) {
-        setLevels(parameters.levels.map((level) => {
-          const item = level as Record<string, unknown>
-          return { drawdown: Math.abs(numberValue(item.drawdown, -0.1) * 100), weight: numberValue(item.weight, 0.1) * 100 }
+      } else if (Array.isArray(parameters.deals) || Array.isArray(parameters.levels)) {
+        const rawDeals = (Array.isArray(parameters.deals) ? parameters.deals : parameters.levels) as unknown[]
+        setDeals(rawDeals.map((deal: unknown) => {
+          const item = deal as Record<string, unknown>
+          return {
+            entryDrawdown: Math.abs(numberValue(item.entryDrawdown ?? item.drawdown, -0.1) * 100),
+            weight: numberValue(item.weight, 0.1) * 100,
+            exitType: typeof item.exitType === "string" && ["source_dd", "strategy_dd", "source_hwm", "strategy_hwm"].includes(item.exitType) ? item.exitType as MddDeal["exitType"] : "source_dd",
+            exitValue: numberValue(item.exitValue, 0) * 100,
+          }
         }))
-        setTakeProfit(numberValue(parameters.takeProfit, 0.01) * 100)
       }
       setStrategyMode("manual")
       toast.success("Параметры применены")
@@ -211,8 +215,7 @@ export function StrategyScreen() {
 
   function handleMddOptimizationStrategyQueued(queued: CalculationRun, parameters: MddOptimizationParameters) {
     setStrategyType("mdd_mean_reversion")
-    setLevels(parameters.levels.map((level) => ({ drawdown: Math.abs(level.drawdown) * 100, weight: level.weight * 100 })))
-    setTakeProfit(parameters.takeProfit * 100)
+    setDeals(parameters.deals.map((deal) => ({ entryDrawdown: Math.abs(deal.entryDrawdown) * 100, weight: deal.weight * 100, exitType: deal.exitType, exitValue: deal.exitValue * 100 })))
     setSourceRunId(queued.sourceCalculationRunId ?? sourceRunId)
     setSelectedRunId(queued.id)
     setSaveName("")
@@ -239,7 +242,7 @@ export function StrategyScreen() {
                   <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
                   <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
                   <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
-                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields levels={levels} takeProfit={takeProfit} onLevels={setLevels} onTakeProfit={setTakeProfit} />}
+                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields deals={deals} onDeals={setDeals} />}
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
@@ -260,9 +263,11 @@ function RsiFields({ period, buy, sell, onPeriod, onBuy, onSell }: { period: num
   return <><NumberField label="RSI период" value={period} onChange={onPeriod} min={1} /><NumberField label="Купить на" value={buy} onChange={onBuy} min={0} max={100} /><NumberField label="Продать на" value={sell} onChange={onSell} min={0} max={100} /></>
 }
 
-function MddFields({ levels, takeProfit, onLevels, onTakeProfit }: { levels: MddLevel[]; takeProfit: number; onLevels: (items: MddLevel[]) => void; onTakeProfit: (value: number) => void }) {
-  function update(index: number, key: keyof MddLevel, value: number) { onLevels(levels.map((level, itemIndex) => itemIndex === index ? { ...level, [key]: value } : level)) }
-  return <div className="md:col-span-3"><div className="mb-2 flex items-center justify-between"><Label>Уровни входа MDD</Label><Button type="button" variant="outline" size="sm" onClick={() => onLevels([...levels, { drawdown: (levels.at(-1)?.drawdown ?? 0) + 5, weight: levels.at(-1)?.weight ?? 0 }])}><Plus />Уровень</Button></div><div className="grid gap-3 md:grid-cols-3">{levels.map((level, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-2 rounded-md border border-slate-200 p-3"><NumberField label={`DD ${index + 1}, %`} value={level.drawdown} onChange={(value) => update(index, "drawdown", value)} min={0.01} /><NumberField label={`Вес ${index + 1}, %`} value={level.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Button type="button" variant="ghost" size="icon" disabled={levels.length === 1} onClick={() => onLevels(levels.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить уровень"><Trash2 /></Button></div>)}</div><div className="mt-3 max-w-xs"><NumberField label="Выход TP, %" value={takeProfit} onChange={onTakeProfit} min={0} /></div></div>
+function MddFields({ deals, onDeals }: { deals: MddDeal[]; onDeals: (items: MddDeal[]) => void }) {
+  const sortedDeals = [...deals].sort((left, right) => left.entryDrawdown - right.entryDrawdown)
+  const maxConfigWeight = deals.reduce((sum, deal) => sum + deal.weight, 0)
+  function update(index: number, key: keyof MddDeal, value: number | MddDeal["exitType"]) { onDeals(deals.map((deal, itemIndex) => itemIndex === index ? { ...deal, [key]: value } : deal)) }
+  return <div className="md:col-span-3"><div className="mb-2 flex items-center justify-between"><div><Label>Сделки MDD Mean Reversion</Label><p className="mt-1 text-xs text-slate-500">Каждая строка — независимая сделка. Общий вес равен сумме открытых сделок.</p></div><Button type="button" variant="outline" size="sm" onClick={() => onDeals([...deals, { entryDrawdown: (deals.at(-1)?.entryDrawdown ?? 0) + 10, weight: 10, exitType: "source_dd", exitValue: 0 }])}><Plus />Сделка</Button></div><div className="grid gap-3 md:grid-cols-2">{deals.map((deal, index) => <div key={index} className="grid gap-3 rounded-md border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-sm font-medium text-slate-900">Сделка {index + 1}</p><Button type="button" variant="ghost" size="icon" disabled={deals.length === 1} onClick={() => onDeals(deals.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить сделку"><Trash2 /></Button></div><div className="grid gap-2 sm:grid-cols-2"><NumberField label="Вход при Local DD исходника, %" value={deal.entryDrawdown} onChange={(value) => update(index, "entryDrawdown", value)} min={0.01} /><NumberField label="Вес открытия, %" value={deal.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Field label="Выход по"><Select value={deal.exitType} onValueChange={(value) => update(index, "exitType", value as MddDeal["exitType"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="source_dd">DD исходника</SelectItem><SelectItem value="strategy_dd">DD стратегии</SelectItem><SelectItem value="source_hwm">HWM исходника</SelectItem><SelectItem value="strategy_hwm">HWM стратегии</SelectItem></SelectContent></Select></Field><NumberField label="Значение выхода, %" value={deal.exitValue} onChange={(value) => update(index, "exitValue", value)} /></div></div>)}</div><p className="mt-3 text-sm text-slate-600">Максимально возможный вес конфигурации: {formatPercent(maxConfigWeight / 100)}. Порядок расчета: {sortedDeals.map((deal) => `${deal.entryDrawdown}%`).join(" → ")}.</p></div>
 }
 
 function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {

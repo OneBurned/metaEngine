@@ -20,16 +20,10 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
         }
 
         var errors = new List<StrategyValidationError>();
-        var takeProfit = ReadDouble(parameters, "takeProfit", 0.01);
-        if (!double.IsFinite(takeProfit) || takeProfit < 0)
+        var deals = ReadDeals(parameters, errors);
+        if (deals.Count == 0)
         {
-            errors.Add(new("takeProfit", "Take profit must be a non-negative number."));
-        }
-
-        var levels = ReadLevels(parameters, errors);
-        if (levels.Count == 0)
-        {
-            errors.Add(new("levels", "At least one drawdown level is required."));
+            errors.Add(new("deals", "At least one MDD deal is required."));
         }
         return errors.Count == 0 ? StrategyValidationResult.Valid : new StrategyValidationResult(errors);
     }
@@ -69,13 +63,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
             errors.Add(new("minEntryDelta", "Minimum entry delta must be non-negative."));
         }
 
-        var maxTotalWeight = ReadDouble(searchSpace, "maxTotalWeight", double.NaN);
-        if (!double.IsFinite(maxTotalWeight) || maxTotalWeight <= 0)
-        {
-            errors.Add(new("maxTotalWeight", "Maximum total weight must be positive."));
-        }
-
-        ValidateRange(searchSpace, "takeProfit", 0, null, errors);
+        ValidateRange(searchSpace, searchSpace.TryGetProperty("exitValue", out _) ? "exitValue" : "takeProfit", 0, null, errors);
 
         var searchMode = ReadString(searchSpace, "searchMode", string.Empty);
         if (searchMode is not ("random" or "full"))
@@ -109,9 +97,9 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
         {
             errors.Add(new("drawdown", "The selected drawdown ranges cannot satisfy the level count and minimum entry delta."));
         }
-        if (!HasFeasibleSequence(config.Levels.Select(level => level.Weights).ToArray(), 0))
+        if (config.Levels.Any(level => level.Weights.Length == 0))
         {
-            errors.Add(new("weight", "The selected weight ranges cannot produce nondecreasing target weights within the maximum total weight."));
+            errors.Add(new("weight", "The selected weight ranges must contain at least one weight."));
         }
 
         return errors.Count == 0 ? StrategyValidationResult.Valid : new StrategyValidationResult(errors);
@@ -148,27 +136,27 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
             for (var index = 0; index < config.MaxCandidates; index++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                if (!TryBuildRandomSequence(config.Levels.Select(level => level.Drawdowns).ToArray(), config.MinEntryDelta, requireStrictIncrease: true, random, out var drawdowns) ||
-                    !TryBuildRandomSequence(config.Levels.Select(level => level.Weights).ToArray(), 0, requireStrictIncrease: false, random, out var weights))
+                if (!TryBuildRandomSequence(config.Levels.Select(level => level.Drawdowns).ToArray(), config.MinEntryDelta, requireStrictIncrease: true, random, out var drawdowns))
                 {
                     throw new StrategyParameterException([new("searchSpace", "The selected MDD ranges cannot produce a valid candidate.")]);
                 }
+                var weights = config.Levels.Select(level => level.Weights[random.Next(level.Weights.Length)]).ToArray();
 
                 var levels = drawdowns
                     .Select((drawdown, levelIndex) => new CandidateLevel(drawdown, weights[levelIndex]))
                     .ToArray();
-                var takeProfit = config.TakeProfits[random.Next(config.TakeProfits.Length)];
-                yield return ToParameters(levels, takeProfit);
+                var exitValue = config.ExitValues[random.Next(config.ExitValues.Length)];
+                yield return ToParameters(levels, exitValue);
             }
             yield break;
         }
 
         foreach (var levels in GenerateFullLevelSets(config, cancellationToken))
         {
-            foreach (var takeProfit in config.TakeProfits)
+            foreach (var exitValue in config.ExitValues)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                yield return ToParameters(levels, takeProfit);
+                yield return ToParameters(levels, exitValue);
             }
         }
     }
@@ -180,9 +168,9 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
     {
         cancellationToken.ThrowIfCancellationRequested();
         var prepared = GetPrepared(preparedData);
-        var (levels, takeProfit) = ReadValidatedParameters(parameters);
+        var deals = ReadValidatedParameters(parameters);
         var rows = new StrategyResultPoint[prepared.Source.Count];
-        var summary = CalculateSummary(prepared, levels, takeProfit, rows, cancellationToken);
+        var summary = CalculateSummary(prepared, deals, rows, cancellationToken);
         return ValueTask.FromResult(new StrategyCalculationResult(rows, summary));
     }
 
@@ -193,15 +181,15 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
     {
         cancellationToken.ThrowIfCancellationRequested();
         var prepared = GetPrepared(preparedData);
-        var (levels, takeProfit) = ReadValidatedParameters(parameters);
-        return ValueTask.FromResult(CalculateSummary(prepared, levels, takeProfit, null, cancellationToken));
+        var deals = ReadValidatedParameters(parameters);
+        return ValueTask.FromResult(CalculateSummary(prepared, deals, null, cancellationToken));
     }
 
     private static PreparedData GetPrepared(IStrategyPreparedData preparedData) =>
         preparedData as PreparedData
         ?? throw new InvalidOperationException("MDD Mean Reversion was given incompatible prepared data.");
 
-    private static (Level[] Levels, double TakeProfit) ReadValidatedParameters(JsonElement parameters)
+    private static Deal[] ReadValidatedParameters(JsonElement parameters)
     {
         var validation = ValidateParametersCore(parameters);
         if (!validation.IsValid)
@@ -209,22 +197,21 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
             throw new StrategyParameterException(validation.Errors);
         }
 
-        return (ReadLevels(parameters, []).OrderByDescending(level => level.Drawdown).ToArray(), ReadDouble(parameters, "takeProfit", 0.01));
+        return ReadDeals(parameters, []).OrderByDescending(deal => deal.EntryDrawdown).ToArray();
     }
 
     private static StrategyRunSummary CalculateSummary(
         PreparedData prepared,
-        IReadOnlyList<Level> levels,
-        double takeProfit,
+        IReadOnlyList<Deal> deals,
         StrategyResultPoint[]? rows,
         CancellationToken cancellationToken)
     {
-        var position = 0d;
-        double? pendingPosition = null;
-        var waitingTakeProfit = false;
-        double? takeProfitStartEquity = null;
+        var states = deals.Select(deal => new DealState(deal)).ToArray();
+        var pendingEvents = new List<PendingEvent>();
         var buyCount = 0;
         var sellCount = 0;
+        var maxRealizedWeight = 0d;
+        var maxConfigWeight = deals.Sum(deal => deal.Weight);
         var localMinEquity = prepared.BaseMetrics.Rows.Count > 0 ? 1 + prepared.BaseMetrics.Rows[0].Accum : 1;
         var accum = 0d;
         var highWaterMark = 0d;
@@ -233,60 +220,32 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
         for (var index = 0; index < prepared.Source.Count; index++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (pendingPosition is double nextPosition)
+            var executions = new List<string>();
+            foreach (var pending in pendingEvents)
             {
-                position = nextPosition;
-                pendingPosition = null;
-            }
-
-            var diff = prepared.Source[index].Diff * position;
-            var baseRow = prepared.BaseMetrics.Rows[index];
-            var equity = 1 + baseRow.Accum;
-            var hwmEquity = 1 + baseRow.HighWaterMark;
-            var dd = hwmEquity == 0 ? 0 : (equity / hwmEquity) - 1;
-            if (dd >= 0) localMinEquity = equity;
-            else localMinEquity = Math.Min(localMinEquity, equity);
-            var localMdd = dd >= 0 ? 0 : (localMinEquity / hwmEquity) - 1;
-
-            if (waitingTakeProfit && dd < 0)
-            {
-                waitingTakeProfit = false;
-                takeProfitStartEquity = null;
-            }
-
-            if (waitingTakeProfit && takeProfitStartEquity is double startEquity)
-            {
-                if (equity >= startEquity * (1 + takeProfit) && position > 0)
+                var state = states[pending.DealIndex];
+                if (pending.Kind == PendingEventKind.Open && !state.IsActive)
                 {
-                    pendingPosition = 0;
-                    waitingTakeProfit = false;
-                    takeProfitStartEquity = null;
-                    sellCount++;
-                }
-            }
-            else if (dd >= 0 && position > 0)
-            {
-                if (takeProfit == 0)
-                {
-                    pendingPosition = 0;
-                    sellCount++;
-                }
-                else
-                {
-                    waitingTakeProfit = true;
-                    takeProfitStartEquity = equity;
-                }
-            }
-            else if (dd < 0)
-            {
-                var target = levels.LastOrDefault(level => localMdd <= level.Drawdown);
-                if (target is not null && target.Weight > position)
-                {
-                    pendingPosition = target.Weight;
+                    state.IsActive = true;
+                    state.SourceHwmStartEquity = null;
+                    state.StrategyHwmStartEquity = null;
                     buyCount++;
+                    executions.Add($"Открыта сделка {pending.DealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                }
+                else if (pending.Kind == PendingEventKind.Close && state.IsActive)
+                {
+                    state.IsActive = false;
+                    state.SourceHwmStartEquity = null;
+                    state.StrategyHwmStartEquity = null;
+                    sellCount++;
+                    executions.Add($"Закрыта сделка {pending.DealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
                 }
             }
+            pendingEvents.Clear();
 
+            var activeWeight = states.Where(state => state.IsActive).Sum(state => state.Deal.Weight);
+            maxRealizedWeight = Math.Max(maxRealizedWeight, activeWeight);
+            var diff = prepared.Source[index].Diff * activeWeight;
             if (index > 0)
             {
                 accum = (1 + diff) * (1 + accum) - 1;
@@ -295,16 +254,105 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
             var strategyDrawdown = (1 + accum) / (1 + highWaterMark) - 1;
             maxDrawdown = Math.Min(maxDrawdown, strategyDrawdown);
 
+            var baseRow = prepared.BaseMetrics.Rows[index];
+            var equity = 1 + baseRow.Accum;
+            var hwmEquity = 1 + baseRow.HighWaterMark;
+            var dd = hwmEquity == 0 ? 0 : (equity / hwmEquity) - 1;
+            if (dd >= 0)
+            {
+                localMinEquity = equity;
+                foreach (var state in states)
+                {
+                    state.OpenedInCycle = false;
+                }
+            }
+            else
+            {
+                localMinEquity = Math.Min(localMinEquity, equity);
+            }
+            var localMdd = dd >= 0 ? 0 : (localMinEquity / hwmEquity) - 1;
+
+            var signals = new List<string>();
+            for (var dealIndex = 0; dealIndex < states.Length; dealIndex++)
+            {
+                var state = states[dealIndex];
+                if (!state.IsActive && !state.OpenedInCycle && localMdd <= state.Deal.EntryDrawdown)
+                {
+                    state.OpenedInCycle = true;
+                    pendingEvents.Add(new(PendingEventKind.Open, dealIndex));
+                    signals.Add($"Вход: сделка {dealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                }
+            }
+
+            for (var dealIndex = 0; dealIndex < states.Length; dealIndex++)
+            {
+                var state = states[dealIndex];
+                if (!state.IsActive || pendingEvents.Any(item => item.Kind == PendingEventKind.Close && item.DealIndex == dealIndex))
+                {
+                    continue;
+                }
+
+                if (ShouldClose(state, dd, equity, strategyDrawdown, 1 + accum))
+                {
+                    pendingEvents.Add(new(PendingEventKind.Close, dealIndex));
+                    signals.Add($"Выход: сделка {dealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
+                }
+            }
+
             if (rows is not null)
             {
                 rows[index] = new StrategyResultPoint(
                     prepared.Source[index].Timestamp,
                     diff,
-                    new Dictionary<string, JsonElement>());
+                    new Dictionary<string, JsonElement>
+                    {
+                        ["base_dd"] = JsonSerializer.SerializeToElement(dd),
+                        ["local_mdd"] = JsonSerializer.SerializeToElement(localMdd),
+                        ["signal"] = JsonSerializer.SerializeToElement(string.Join("; ", signals)),
+                        ["execution"] = JsonSerializer.SerializeToElement(string.Join("; ", executions)),
+                        ["position"] = JsonSerializer.SerializeToElement(activeWeight),
+                        ["active_deals"] = JsonSerializer.SerializeToElement(string.Join(", ", states.Select((state, stateIndex) => state.IsActive ? (stateIndex + 1).ToString() : string.Empty).Where(value => value.Length > 0))),
+                        ["max_config_weight"] = JsonSerializer.SerializeToElement(maxConfigWeight),
+                        ["max_realized_weight"] = JsonSerializer.SerializeToElement(maxRealizedWeight),
+                        ["strategy_accum"] = JsonSerializer.SerializeToElement(accum),
+                        ["strategy_hwm"] = JsonSerializer.SerializeToElement(highWaterMark),
+                        ["strategy_dd"] = JsonSerializer.SerializeToElement(strategyDrawdown),
+                        ["strategy_mdd"] = JsonSerializer.SerializeToElement(maxDrawdown)
+                    });
             }
         }
 
         return new StrategyRunSummary(accum, highWaterMark, maxDrawdown, buyCount, sellCount);
+    }
+
+    private static bool ShouldClose(DealState state, double sourceDd, double sourceEquity, double strategyDd, double strategyEquity)
+    {
+        return state.Deal.ExitType switch
+        {
+            ExitType.SourceDrawdown => sourceDd >= state.Deal.ExitValue,
+            ExitType.StrategyDrawdown => strategyDd >= state.Deal.ExitValue,
+            ExitType.SourceHighWaterMark => HasReachedHwmExit(state, true, sourceDd, sourceEquity),
+            ExitType.StrategyHighWaterMark => HasReachedHwmExit(state, false, strategyDd, strategyEquity),
+            _ => false
+        };
+    }
+
+    private static bool HasReachedHwmExit(DealState state, bool source, double drawdown, double equity)
+    {
+        var startEquity = source ? state.SourceHwmStartEquity : state.StrategyHwmStartEquity;
+        if (drawdown < 0)
+        {
+            if (source) state.SourceHwmStartEquity = null;
+            else state.StrategyHwmStartEquity = null;
+            return false;
+        }
+        if (startEquity is null)
+        {
+            startEquity = equity;
+            if (source) state.SourceHwmStartEquity = startEquity;
+            else state.StrategyHwmStartEquity = startEquity;
+        }
+        return equity >= startEquity.Value * (1 + state.Deal.ExitValue);
     }
 
     private static void ValidateDetailedLevels(
@@ -373,7 +421,6 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
     {
         var parameterMode = ReadString(searchSpace, "parameterMode", "simple");
         var levelCount = ReadInt(searchSpace, "levelCount", 1);
-        var maxTotalWeight = ReadDouble(searchSpace, "maxTotalWeight", 100);
         SearchLevelSpace[] levels;
         if (parameterMode == "detailed")
         {
@@ -381,13 +428,13 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                 .EnumerateArray()
                 .Select(level => new SearchLevelSpace(
                     ReadRangeValues(level, "drawdown"),
-                    ReadRangeValues(level, "weight").Where(weight => weight <= maxTotalWeight).ToArray()))
+                    ReadRangeValues(level, "weight").ToArray()))
                 .ToArray();
         }
         else
         {
             var drawdowns = ReadRangeValues(searchSpace, "drawdown");
-            var weights = ReadRangeValues(searchSpace, "weight").Where(weight => weight <= maxTotalWeight).ToArray();
+            var weights = ReadRangeValues(searchSpace, "weight").ToArray();
             levels = Enumerable.Range(0, levelCount)
                 .Select(_ => new SearchLevelSpace(drawdowns, weights))
                 .ToArray();
@@ -395,7 +442,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
 
         return new SearchConfig(
             levels,
-            ReadRangeValues(searchSpace, "takeProfit"),
+            ReadRangeValues(searchSpace, searchSpace.TryGetProperty("exitValue", out _) ? "exitValue" : "takeProfit"),
             ReadDouble(searchSpace, "minEntryDelta", 0),
             ReadString(searchSpace, "searchMode", "random"),
             ReadInt(searchSpace, "maxCandidates", 1));
@@ -492,12 +539,11 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
     {
         var drawdowns = new double[config.Levels.Count];
         var weights = new double[config.Levels.Count];
-        return Traverse(0, 0, 0, false);
+        return Traverse(0, 0, false);
 
         IEnumerable<CandidateLevel[]> Traverse(
             int levelIndex,
             double previousDrawdown,
-            double previousWeight,
             bool hasPrevious)
         {
             if (levelIndex == config.Levels.Count)
@@ -518,14 +564,9 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                 foreach (var weight in config.Levels[levelIndex].Weights)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (hasPrevious && weight < previousWeight)
-                    {
-                        continue;
-                    }
-
                     drawdowns[levelIndex] = drawdown;
                     weights[levelIndex] = weight;
-                    foreach (var result in Traverse(levelIndex + 1, drawdown, weight, true))
+                    foreach (var result in Traverse(levelIndex + 1, drawdown, true))
                     {
                         yield return result;
                     }
@@ -534,57 +575,124 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
         }
     }
 
-    private static JsonElement ToParameters(IReadOnlyList<CandidateLevel> levels, double takeProfit) =>
+    private static JsonElement ToParameters(IReadOnlyList<CandidateLevel> levels, double exitValue) =>
         JsonSerializer.SerializeToElement(new
         {
-            levels = levels.Select(level => new
-            {
-                drawdown = -level.DrawdownPercent / 100d,
-                weight = level.WeightPercent / 100d
-            }).ToArray(),
-            takeProfit = takeProfit / 100d
+            deals = levels
+                .OrderBy(level => level.DrawdownPercent)
+                .Select(level => new
+                {
+                    entryDrawdown = -level.DrawdownPercent / 100d,
+                    weight = level.WeightPercent / 100d,
+                    exitType = "source_dd",
+                    exitValue = exitValue / 100d
+                }).ToArray()
         });
 
-    private static List<Level> ReadLevels(JsonElement parameters, List<StrategyValidationError> errors)
+    private static List<Deal> ReadDeals(JsonElement parameters, List<StrategyValidationError> errors)
     {
-        var levels = new List<Level>();
-        if (!parameters.TryGetProperty("levels", out var rawLevels) || rawLevels.ValueKind != JsonValueKind.Array)
+        if (parameters.TryGetProperty("deals", out var rawDeals) && rawDeals.ValueKind == JsonValueKind.Array)
         {
-            errors.Add(new("levels", "Levels must be an array."));
-            return levels;
+            return ReadDealArray(rawDeals, errors);
         }
 
-        var previousWeight = double.NegativeInfinity;
-        var drawdowns = new HashSet<double>();
-        foreach (var rawLevel in rawLevels.EnumerateArray())
+        if (parameters.TryGetProperty("levels", out var rawLevels) && rawLevels.ValueKind == JsonValueKind.Array)
         {
-            var drawdown = ReadDouble(rawLevel, "drawdown", double.NaN);
-            var weight = ReadDouble(rawLevel, "weight", double.NaN);
-            if (!double.IsFinite(drawdown) || drawdown >= 0)
+            var legacy = new List<Deal>();
+            var seenLegacyDrawdowns = new HashSet<double>();
+            foreach (var rawLevel in rawLevels.EnumerateArray())
             {
-                errors.Add(new("levels.drawdown", "Drawdown level must be negative."));
+                var drawdown = ReadDouble(rawLevel, "drawdown", double.NaN);
+                var weight = ReadDouble(rawLevel, "weight", double.NaN);
+                if (!double.IsFinite(drawdown) || drawdown >= 0)
+                {
+                    errors.Add(new("levels.drawdown", "Drawdown level must be negative."));
+                    continue;
+                }
+                if (!double.IsFinite(weight) || weight < 0)
+                {
+                    errors.Add(new("levels.weight", "Weight must be non-negative."));
+                    continue;
+                }
+                if (!seenLegacyDrawdowns.Add(drawdown))
+                {
+                    errors.Add(new("levels.drawdown", "Drawdown levels must be unique."));
+                    continue;
+                }
+                legacy.Add(new(drawdown, weight, ExitType.SourceDrawdown, 0));
+            }
+            return legacy;
+        }
+
+        errors.Add(new("deals", "Deals must be an array."));
+        return [];
+    }
+
+    private static List<Deal> ReadDealArray(JsonElement rawDeals, List<StrategyValidationError> errors)
+    {
+        var deals = new List<Deal>();
+        var seenDrawdowns = new HashSet<double>();
+        foreach (var rawDeal in rawDeals.EnumerateArray())
+        {
+            if (rawDeal.ValueKind != JsonValueKind.Object)
+            {
+                errors.Add(new("deals", "Each deal must be an object."));
+                continue;
+            }
+
+            var entryDrawdown = ReadDouble(rawDeal, "entryDrawdown", double.NaN);
+            var weight = ReadDouble(rawDeal, "weight", double.NaN);
+            var exitTypeValue = ReadString(rawDeal, "exitType", "source_dd");
+            var exitValue = ReadDouble(rawDeal, "exitValue", 0);
+            if (!double.IsFinite(entryDrawdown) || entryDrawdown >= 0)
+            {
+                errors.Add(new("deals.entryDrawdown", "Entry drawdown must be negative."));
                 continue;
             }
             if (!double.IsFinite(weight) || weight < 0)
             {
-                errors.Add(new("levels.weight", "Target weight must be non-negative."));
+                errors.Add(new("deals.weight", "Deal weight must be non-negative."));
                 continue;
             }
-            if (!drawdowns.Add(drawdown))
+            if (!double.IsFinite(exitValue))
             {
-                errors.Add(new("levels.drawdown", "Drawdown levels must be unique."));
+                errors.Add(new("deals.exitValue", "Exit value must be a finite number."));
                 continue;
             }
-            if (weight < previousWeight)
+            if (!TryReadExitType(exitTypeValue, out var exitType))
             {
-                errors.Add(new("levels.weight", "Target weights must be nondecreasing."));
+                errors.Add(new("deals.exitType", "Exit type must be source_dd, strategy_dd, source_hwm, or strategy_hwm."));
                 continue;
             }
-            previousWeight = weight;
-            levels.Add(new Level(drawdown, weight));
+            if ((exitType is ExitType.SourceHighWaterMark or ExitType.StrategyHighWaterMark) && exitValue < 0)
+            {
+                errors.Add(new("deals.exitValue", "HWM exit value must be non-negative."));
+                continue;
+            }
+            if (!seenDrawdowns.Add(entryDrawdown))
+            {
+                errors.Add(new("deals.entryDrawdown", "Entry drawdown levels must be unique."));
+                continue;
+            }
+            deals.Add(new(entryDrawdown, weight, exitType, exitValue));
         }
-        return levels;
+        return deals;
     }
+
+    private static bool TryReadExitType(string value, out ExitType exitType)
+    {
+        exitType = value switch
+        {
+            "source_dd" => ExitType.SourceDrawdown,
+            "strategy_dd" => ExitType.StrategyDrawdown,
+            "source_hwm" => ExitType.SourceHighWaterMark,
+            "strategy_hwm" => ExitType.StrategyHighWaterMark,
+            _ => default
+        };
+        return value is "source_dd" or "strategy_dd" or "source_hwm" or "strategy_hwm";
+    }
+
+    private static string FormatPercent(double value) => $"{value:P0}";
 
     private static int ReadInt(JsonElement parameters, string name, int fallback) =>
         parameters.TryGetProperty(name, out var property) && property.TryGetInt32(out var value) ? value : fallback;
@@ -597,7 +705,22 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
             ? property.GetString() ?? fallback
             : fallback;
 
-    private sealed record Level(double Drawdown, double Weight);
+    private enum ExitType { SourceDrawdown, StrategyDrawdown, SourceHighWaterMark, StrategyHighWaterMark }
+
+    private enum PendingEventKind { Open, Close }
+
+    private sealed record Deal(double EntryDrawdown, double Weight, ExitType ExitType, double ExitValue);
+
+    private sealed record PendingEvent(PendingEventKind Kind, int DealIndex);
+
+    private sealed class DealState(Deal deal)
+    {
+        public Deal Deal { get; } = deal;
+        public bool IsActive { get; set; }
+        public bool OpenedInCycle { get; set; }
+        public double? SourceHwmStartEquity { get; set; }
+        public double? StrategyHwmStartEquity { get; set; }
+    }
 
     private sealed record CandidateLevel(double DrawdownPercent, double WeightPercent);
 
@@ -605,7 +728,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
 
     private sealed record SearchConfig(
         IReadOnlyList<SearchLevelSpace> Levels,
-        double[] TakeProfits,
+        double[] ExitValues,
         double MinEntryDelta,
         string SearchMode,
         int MaxCandidates);
