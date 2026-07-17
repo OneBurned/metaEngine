@@ -14,6 +14,8 @@ const portfolio = {
   sourceChecksum: "source",
   seriesChecksum: "series",
   pointCount: 3,
+  startsAt: "2024-01-01T00:00:00Z",
+  endsAt: "2024-01-02T00:00:00Z",
   createdAt: "2026-01-01T00:00:00Z",
   createdByUserId: null,
 }

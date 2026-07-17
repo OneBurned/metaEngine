@@ -100,3 +100,8 @@ The root Node reference suite and the .NET solution remain separate checks:
 npm test
 dotnet test MetaEngine.slnx
 ```
+
+
+## Portfolio library and result chart parity
+
+The production data library shows each imported portfolio with its source period (`startsAt` → `endsAt`) alongside the detected timeframe, so users can distinguish files without opening the raw CSV. The main calculation result chart keeps the local-lab analysis controls: display timeframe can be switched for an already completed run, the chart can switch between line and histogram modes, and the same percent scale is used for Accum/HWM/DD/MDD so drawdown and return lines are visually comparable.

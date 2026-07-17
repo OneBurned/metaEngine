@@ -1048,3 +1048,5 @@ portfolio_timestamp_mdd.csv
 base_result_timestamp_accum.csv
 strategy_result_timestamp_diff_accum_mdd.csv
 ```
+
+- P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching plus line/histogram chart modes for Accum/HWM/DD/MDD on one shared percent scale.

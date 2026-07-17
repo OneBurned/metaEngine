@@ -31,6 +31,8 @@ public sealed record PortfolioSummary(
     string SourceChecksum,
     string SeriesChecksum,
     int PointCount,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
     DateTimeOffset CreatedAt,
     Guid? CreatedByUserId);
 

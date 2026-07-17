@@ -25,6 +25,8 @@ export type Portfolio = {
   sourceChecksum: string
   seriesChecksum: string
   pointCount: number
+  startsAt: string
+  endsAt: string
   createdAt: string
   createdByUserId: string | null
 }
