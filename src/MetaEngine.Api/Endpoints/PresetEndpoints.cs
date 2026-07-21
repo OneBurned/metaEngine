@@ -11,6 +11,8 @@ public static class PresetEndpoints
     {
         workspaces.MapPost("/{workspaceId:guid}/presets", CreateAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/presets/{presetId:guid}/delete", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapDelete("/{workspaceId:guid}/presets/{presetId:guid}", DeleteAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/presets", ListAsync);

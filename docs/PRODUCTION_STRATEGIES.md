@@ -26,9 +26,12 @@ All endpoints are workspace-scoped. `Admin` and `Researcher` can create data;
 
 ```text
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/delete?kind=strategy
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/delete-many?kind=strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}?kind=strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs?kind=strategy
 POST   /api/v1/workspaces/{workspaceId}/strategies
+POST   /api/v1/workspaces/{workspaceId}/strategies/{strategyId}/delete
 DELETE /api/v1/workspaces/{workspaceId}/strategies/{strategyId}
 GET    /api/v1/workspaces/{workspaceId}/strategies
 ```
@@ -95,7 +98,7 @@ Inactive strategy runs can be deleted from the run list after confirmation, and
 the list also has **Удалить все** for inactive unsaved runs; queued/running runs
 and runs already saved as versioned strategies are protected. Saved strategies
 can also be deleted after confirmation when no preset references them.
-A current-result CSV export shortcut downloads the visible strategy result
+For older strategy artifacts, the UI derives missing Local DD and Weight from the source/result series where possible, so active trading rows do not show empty weight columns only because old per-point fields were missing. A current-result CSV export shortcut downloads the visible strategy result
 columns, while the dedicated
 **Экспорт** tab can export strategy results alongside portfolio versions and
 base calculations with any selected column set and a preview table. Its

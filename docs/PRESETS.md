@@ -36,6 +36,7 @@ the existing CSRF request header.
 
 ```text
 POST   /api/v1/workspaces/{workspaceId}/presets
+POST   /api/v1/workspaces/{workspaceId}/presets/{presetId}/delete
 DELETE /api/v1/workspaces/{workspaceId}/presets/{presetId}
 GET    /api/v1/workspaces/{workspaceId}/presets
 GET    /api/v1/workspaces/{workspaceId}/presets/{presetId}
@@ -110,4 +111,4 @@ npm test
 dotnet test tests/MetaEngine.DomainTests/MetaEngine.DomainTests.csproj
 ```
 
-Preset versions can be deleted from the production UI after confirmation when they are not referenced by calculation runs, optimization jobs or saved strategies.
+The production UI uses the POST cleanup action. Preset versions can be deleted from the production UI after confirmation when they are not referenced by calculation runs, optimization jobs or saved strategies.

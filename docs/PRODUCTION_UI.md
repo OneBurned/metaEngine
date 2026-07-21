@@ -58,7 +58,7 @@ comes from the saved calculation run. The current-result chart uses one shared
 percent scale for Diff/Accum/HWM/DD/MDD. The **Calculations** page intentionally
 lists only completed or queued base calculations, while strategy runs are
 managed on the **Strategies** page. Both run tables support deleting inactive
-unused rows and bulk cleanup that skips protected rows.
+unused rows and bulk cleanup that skips protected rows; the UI sends cleanup through POST action endpoints to avoid DELETE method limitations in development/proxy environments.
 
 ## Authentication and local development
 

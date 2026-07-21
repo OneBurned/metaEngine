@@ -406,18 +406,38 @@ function SavedStrategyTable({ items, onApply, onDelete, canWrite }: { items: Sav
 
 function StrategyResultTable({ strategyType, metrics, sourceMetrics, isVisible, visibleRows, onToggle, onShowMore }: { strategyType: string | null; metrics: ReturnType<typeof deriveMetricSeries>; sourceMetrics: ReturnType<typeof deriveMetricSeries>; isVisible: boolean; visibleRows: number; onToggle: () => void; onShowMore: () => void }) {
   const rows = metrics.slice(0, visibleRows)
-  const sourceByTimestamp = new Map(sourceMetrics.map((point) => [point.timestamp, point]))
+  const sourceFallbackByTimestamp = buildSourceFallbackByTimestamp(sourceMetrics)
   const isMdd = strategyType === "mdd_mean_reversion"
   const remainingRows = Math.max(metrics.length - rows.length, 0)
-  return <div className="space-y-3"><div className="flex justify-start"><Button type="button" variant="outline" onClick={onToggle}>{isVisible ? <ChevronUp /> : <TableProperties />}{isVisible ? "Скрыть данные" : `Показать данные (${metrics.length.toLocaleString("ru-RU")})`}</Button></div>{isVisible ? <><div className="px-4 py-3 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</div><div className="overflow-x-auto"><Table className="min-w-[1180px]"><TableHeader><TableRow><TableHead>Время</TableHead>{isMdd ? <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">DD исходника</TableHead><TableHead className="text-right">Local DD</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Active deals</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead><TableHead className="text-right">Max config weight</TableHead><TableHead className="text-right">Max realized weight</TableHead></> : <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">RSI</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} sourcePoint={sourceByTimestamp.get(point.timestamp)} isMdd={isMdd} />)}</TableBody></Table></div>{remainingRows > 0 ? <div className="border-t border-slate-200 px-4 py-3"><Button type="button" variant="outline" onClick={onShowMore}>Показать ещё {Math.min(500, remainingRows).toLocaleString("ru-RU")}</Button></div> : null}</> : null}</div>
+  return <div className="space-y-3"><div className="flex justify-start"><Button type="button" variant="outline" onClick={onToggle}>{isVisible ? <ChevronUp /> : <TableProperties />}{isVisible ? "Скрыть данные" : `Показать данные (${metrics.length.toLocaleString("ru-RU")})`}</Button></div>{isVisible ? <><div className="px-4 py-3 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</div><div className="overflow-x-auto rounded-lg border border-slate-200"><Table className="min-w-[1320px] text-xs"><TableHeader><TableRow><TableHead className="whitespace-nowrap">Время</TableHead>{isMdd ? <><TableHead className="whitespace-nowrap text-right">IN Diff</TableHead><TableHead className="whitespace-nowrap text-right">IN Accum</TableHead><TableHead className="whitespace-nowrap text-right">DD исходника</TableHead><TableHead className="whitespace-nowrap text-right">Local DD</TableHead><TableHead className="whitespace-nowrap">Сигнал</TableHead><TableHead className="whitespace-nowrap">Исполнение</TableHead><TableHead className="whitespace-nowrap text-right">Active deals</TableHead><TableHead className="whitespace-nowrap text-right">Weight</TableHead><TableHead className="whitespace-nowrap text-right">OUT Diff</TableHead><TableHead className="whitespace-nowrap text-right">OUT Accum</TableHead><TableHead className="whitespace-nowrap text-right">OUT HWM</TableHead><TableHead className="whitespace-nowrap text-right">OUT DD</TableHead><TableHead className="whitespace-nowrap text-right">OUT MDD</TableHead><TableHead className="whitespace-nowrap text-right">Max config weight</TableHead><TableHead className="whitespace-nowrap text-right">Max realized weight</TableHead></> : <><TableHead className="whitespace-nowrap text-right">IN Diff</TableHead><TableHead className="whitespace-nowrap text-right">IN Accum</TableHead><TableHead className="whitespace-nowrap text-right">RSI</TableHead><TableHead className="whitespace-nowrap">Сигнал</TableHead><TableHead className="whitespace-nowrap">Исполнение</TableHead><TableHead className="whitespace-nowrap text-right">Weight</TableHead><TableHead className="whitespace-nowrap text-right">OUT Diff</TableHead><TableHead className="whitespace-nowrap text-right">OUT Accum</TableHead><TableHead className="whitespace-nowrap text-right">OUT HWM</TableHead><TableHead className="whitespace-nowrap text-right">OUT DD</TableHead><TableHead className="whitespace-nowrap text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} sourceFallback={sourceFallbackByTimestamp.get(point.timestamp)} isMdd={isMdd} />)}</TableBody></Table></div>{remainingRows > 0 ? <div className="border-t border-slate-200 px-4 py-3"><Button type="button" variant="outline" onClick={onShowMore}>Показать ещё {Math.min(500, remainingRows).toLocaleString("ru-RU")}</Button></div> : null}</> : null}</div>
 }
 
-function StrategyResultRow({ point, sourcePoint, isMdd }: { point: ReturnType<typeof deriveMetricSeries>[number]; sourcePoint?: ReturnType<typeof deriveMetricSeries>[number]; isMdd: boolean }) {
+function StrategyResultRow({ point, sourceFallback, isMdd }: { point: ReturnType<typeof deriveMetricSeries>[number]; sourceFallback?: SourceFallbackPoint; isMdd: boolean }) {
   const fields = normalizeStrategyFields(point.fields)
-  if (fields.source_diff === undefined && sourcePoint) fields.source_diff = sourcePoint.diff
-  if (fields.source_accum === undefined && sourcePoint) fields.source_accum = sourcePoint.accum
-  if (fields.source_dd === undefined && sourcePoint) fields.source_dd = sourcePoint.drawdown
-  return <TableRow><TableCell>{point.label}</TableCell>{isMdd ? <><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd ?? fields.base_dd))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.local_mdd))}</TableCell><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{textField(fields.active_deals)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_config_weight))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_realized_weight))}</TableCell></> : <><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="text-right tabular-nums">{formatNumber(numberField(fields.rsi))}</TableCell><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell></>}</TableRow>
+  if (fields.source_diff === undefined && sourceFallback) fields.source_diff = sourceFallback.diff
+  if (fields.source_accum === undefined && sourceFallback) fields.source_accum = sourceFallback.accum
+  if (fields.source_dd === undefined && sourceFallback) fields.source_dd = sourceFallback.drawdown
+  if (fields.local_mdd === undefined && sourceFallback) fields.local_mdd = sourceFallback.localDrawdown
+  if (fields.weight === undefined && fields.position === undefined) fields.weight = inferWeight(point.diff, numberField(fields.source_diff))
+  const weight = numberField(fields.weight ?? fields.position)
+  if (isMdd && fields.max_realized_weight === undefined && weight !== null) fields.max_realized_weight = weight
+  return <TableRow><TableCell className="whitespace-nowrap py-2">{point.label}</TableCell>{isMdd ? <><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.source_dd ?? fields.base_dd))}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.local_mdd))}</TableCell><TableCell className="max-w-48 py-2">{textField(fields.signal)}</TableCell><TableCell className="max-w-48 py-2">{textField(fields.execution)}</TableCell><TableCell className="py-2 text-right tabular-nums">{textField(fields.active_deals)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(weight)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.max_config_weight))}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.max_realized_weight))}</TableCell></> : <><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatNumber(numberField(fields.rsi))}</TableCell><TableCell className="max-w-48 py-2">{textField(fields.signal)}</TableCell><TableCell className="max-w-48 py-2">{textField(fields.execution)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(weight)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="py-2 text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell></>}</TableRow>
+}
+
+type SourceFallbackPoint = { diff: number; accum: number; drawdown: number; localDrawdown: number }
+
+function buildSourceFallbackByTimestamp(sourceMetrics: ReturnType<typeof deriveMetricSeries>) {
+  let localDrawdown = 0
+  return new Map(sourceMetrics.map((point) => {
+    localDrawdown = point.drawdown >= 0 ? 0 : Math.min(localDrawdown, point.drawdown)
+    return [point.timestamp, { diff: point.diff, accum: point.accum, drawdown: point.drawdown, localDrawdown } satisfies SourceFallbackPoint]
+  }))
+}
+
+function inferWeight(outDiff: number, sourceDiff: number | null) {
+  if (sourceDiff === null || Math.abs(sourceDiff) < 1e-12) return Math.abs(outDiff) < 1e-12 ? 0 : null
+  const weight = outDiff / sourceDiff
+  return Number.isFinite(weight) ? weight : null
 }
 
 function StrategyIndicatorChart({ strategyType, points, parameters }: { strategyType: string | null; points: StrategyIndicatorPoint[]; parameters: StrategyParameters | null }) {
@@ -528,26 +548,76 @@ function toRsi(averageGain: number, averageLoss: number) {
 
 function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indicators: StrategyIndicatorPoint[], sourceMetrics: ReturnType<typeof deriveMetricSeries>, strategyType: string | null) {
   const indicatorByTimestamp = new Map(indicators.map((point) => [point.timestamp, point]))
-  const sourceByTimestamp = new Map(sourceMetrics.map((point) => [point.timestamp, point]))
-  const indicatorColumns = strategyType === "rsi"
-    ? ["source_diff", "source_accum", "rsi", "signal", "execution", "position", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
-    : ["source_diff", "source_accum", "source_dd", "local_mdd", "signal", "execution", "active_deals", "weight", "max_config_weight", "max_realized_weight", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
-  const header = ["timestamp", "diff", "accum", "hwm", "dd", "mdd", ...indicatorColumns]
+  const sourceByTimestamp = buildSourceFallbackByTimestamp(sourceMetrics)
+  const isRsi = strategyType === "rsi"
+  const columns = isRsi
+    ? [
+      { id: "time", label: "Время" },
+      { id: "source_diff", label: "IN Diff" },
+      { id: "source_accum", label: "IN Accum" },
+      { id: "rsi", label: "RSI" },
+      { id: "signal", label: "Сигнал" },
+      { id: "execution", label: "Исполнение" },
+      { id: "weight", label: "Weight" },
+      { id: "out_diff", label: "OUT Diff" },
+      { id: "out_accum", label: "OUT Accum" },
+      { id: "out_hwm", label: "OUT HWM" },
+      { id: "out_dd", label: "OUT DD" },
+      { id: "out_mdd", label: "OUT MDD" },
+    ]
+    : [
+      { id: "time", label: "Время" },
+      { id: "source_diff", label: "IN Diff" },
+      { id: "source_accum", label: "IN Accum" },
+      { id: "source_dd", label: "DD исходника" },
+      { id: "local_mdd", label: "Local DD" },
+      { id: "signal", label: "Сигнал" },
+      { id: "execution", label: "Исполнение" },
+      { id: "active_deals", label: "Active deals" },
+      { id: "weight", label: "Weight" },
+      { id: "out_diff", label: "OUT Diff" },
+      { id: "out_accum", label: "OUT Accum" },
+      { id: "out_hwm", label: "OUT HWM" },
+      { id: "out_dd", label: "OUT DD" },
+      { id: "out_mdd", label: "OUT MDD" },
+      { id: "max_config_weight", label: "Max config weight" },
+      { id: "max_realized_weight", label: "Max realized weight" },
+    ]
   const lines = metrics.map((point) => {
     const indicator = indicatorByTimestamp.get(point.timestamp)
     const sourcePoint = sourceByTimestamp.get(point.timestamp)
     const fields = normalizeStrategyFields(point.fields)
     if (fields.source_diff === undefined) fields.source_diff = sourcePoint?.diff ?? null
     if (fields.source_accum === undefined) fields.source_accum = sourcePoint?.accum ?? null
-    if (strategyType === "rsi" && fields.rsi === undefined) fields.rsi = indicator?.rsi ?? null
-    if (strategyType !== "rsi") {
+    if (isRsi && fields.rsi === undefined) fields.rsi = indicator?.rsi ?? null
+    if (!isRsi) {
       if (fields.source_dd === undefined) fields.source_dd = sourcePoint?.drawdown ?? indicator?.sourceDrawdown ?? null
-      if (fields.local_mdd === undefined) fields.local_mdd = indicator?.localDrawdown ?? null
+      if (fields.local_mdd === undefined) fields.local_mdd = sourcePoint?.localDrawdown ?? indicator?.localDrawdown ?? null
     }
-    const values: Record<string, string | number | boolean | null | undefined> = { timestamp: point.timestamp, diff: point.diff, accum: point.accum, hwm: point.highWaterMark, dd: point.drawdown, mdd: point.maxDrawdown, ...fields }
-    return header.map((column) => formatCsvValue(values[column])).join(",")
+    if (fields.weight === undefined && fields.position === undefined) fields.weight = inferWeight(point.diff, numberField(fields.source_diff))
+    if (fields.position !== undefined && fields.weight === undefined) fields.weight = fields.position
+    const values: Record<string, string | number | boolean | null | undefined> = {
+      time: point.label,
+      source_diff: fields.source_diff,
+      source_accum: fields.source_accum,
+      source_dd: fields.source_dd,
+      local_mdd: fields.local_mdd,
+      rsi: fields.rsi,
+      signal: fields.signal,
+      execution: fields.execution,
+      active_deals: fields.active_deals,
+      weight: fields.weight,
+      out_diff: point.diff,
+      out_accum: point.accum,
+      out_hwm: point.highWaterMark,
+      out_dd: point.drawdown,
+      out_mdd: point.maxDrawdown,
+      max_config_weight: fields.max_config_weight,
+      max_realized_weight: fields.max_realized_weight,
+    }
+    return columns.map((column) => formatCsvValue(values[column.id])).join(",")
   })
-  return [header.join(","), ...lines].join("\n")
+  return [columns.map((column) => formatCsvValue(column.label)).join(","), ...lines].join("\n")
 }
 
 function normalizeStrategyFields(fields: Record<string, unknown> | undefined) { const values = Object.fromEntries(Object.entries(fields ?? {}).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)) as Record<string, string | number | boolean | null>; if (values.base_dd !== undefined && values.source_dd === undefined) values.source_dd = values.base_dd; if (values.position !== undefined && values.weight === undefined) values.weight = values.position; return values }

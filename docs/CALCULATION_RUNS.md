@@ -44,6 +44,8 @@ The `POST` request requires the normal CSRF header.
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/delete?kind=base|strategy
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/delete-many?kind=base|strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}?kind=base|strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs?kind=base|strategy
 GET    /api/v1/workspaces/{workspaceId}/calculation-runs
@@ -106,4 +108,4 @@ The Worker must be running for a queued API run to progress beyond `queued`.
 Tests call the same processor directly, including the real PostgreSQL
 integration scenario.
 
-Inactive calculation runs can be deleted individually or in bulk. Bulk deletion skips queued/running runs and runs referenced by strategy runs, optimization jobs or saved strategy versions.
+The production UI uses POST cleanup actions for reliable same-origin form-style requests; DELETE aliases remain available for direct API clients. Inactive calculation runs can be deleted individually or in bulk. Bulk deletion skips queued/running runs and runs referenced by strategy runs, optimization jobs or saved strategy versions.

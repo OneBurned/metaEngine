@@ -1075,4 +1075,4 @@ main user workflow. **Последние запуски** in Calculations and **
 strategy versions; **Сохранённые пресеты** can delete unused preset versions.
 Strategy result tables use the same visible pattern as calculation result
 tables, and old RSI/MDD runs without stored source fields fall back to the
-source base result by timestamp for `IN Diff`, `IN Accum` and MDD `DD исходника`.
+source base result by timestamp for `IN Diff`, `IN Accum`, MDD `DD исходника`, Local DD and inferable Weight. The UI uses POST cleanup action endpoints while keeping DELETE aliases, preventing proxy/browser environments from turning deletion clicks into 405 responses. Dedicated CSV export keeps selected columns in UI order, places download above preview, exports `timestamp` as Unix milliseconds and writes labels matching the visible tables.

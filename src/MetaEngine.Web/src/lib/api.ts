@@ -386,8 +386,8 @@ export async function getPreset(workspaceId: string, presetId: string) {
 
 export async function deletePreset(workspaceId: string, presetId: string) {
   return request<void>(
-    `/api/v1/workspaces/${workspaceId}/presets/${presetId}`,
-    { method: "DELETE" },
+    `/api/v1/workspaces/${workspaceId}/presets/${presetId}/delete`,
+    { method: "POST" },
     true,
   )
 }
@@ -570,8 +570,8 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
 export async function deleteCalculationRun(workspaceId: string, runId: string, kind?: "base" | "strategy") {
   const suffix = kind ? `?kind=${kind}` : ""
   return request<void>(
-    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}${suffix}`,
-    { method: "DELETE" },
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/delete${suffix}`,
+    { method: "POST" },
     true,
   )
 }
@@ -579,8 +579,8 @@ export async function deleteCalculationRun(workspaceId: string, runId: string, k
 export async function deleteCalculationRuns(workspaceId: string, kind?: "base" | "strategy") {
   const suffix = kind ? `?kind=${kind}` : ""
   return request<{ deleted: number; skipped: number }>(
-    `/api/v1/workspaces/${workspaceId}/calculation-runs${suffix}`,
-    { method: "DELETE" },
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/delete-many${suffix}`,
+    { method: "POST" },
     true,
   )
 }
@@ -626,8 +626,8 @@ export async function saveStrategy(workspaceId: string, name: string, strategyRu
 
 export async function deleteSavedStrategy(workspaceId: string, strategyId: string) {
   return request<void>(
-    `/api/v1/workspaces/${workspaceId}/strategies/${strategyId}`,
-    { method: "DELETE" },
+    `/api/v1/workspaces/${workspaceId}/strategies/${strategyId}/delete`,
+    { method: "POST" },
     true,
   )
 }

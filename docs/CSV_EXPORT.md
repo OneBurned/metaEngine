@@ -15,7 +15,7 @@ If the selected group has no completed source yet, the module shows an empty sta
 
 ## Columns
 
-The `timestamp` and `date` columns are normal selectable columns in production export. They can be used alone with one metric or together with all available columns.
+The `timestamp` and `date` columns are normal selectable columns in production export. `timestamp` is exported as Unix time in milliseconds, for example `1722474000000`; `date` is the readable UTC string, for example `2024-08-01 00:00:00 UTC`. They can be used alone with one metric or together with all available columns. Unchecking and checking a column keeps the original UI/export order instead of appending it to the end.
 
 The user can independently toggle:
 
@@ -54,7 +54,7 @@ GET /api/portfolios/portfolio_a.csv/export?columns=timestamp,mdd
 
 ## Current result export
 
-For portfolio versions, completed base calculation results, completed strategy results, and saved strategy results, the production UI downloads canonical `timestamp,diff` points from the API, derives `accum`, `hwm`, `dd`, and `mdd`, then assembles CSV in the browser from the selected columns.
+For portfolio versions, completed base calculation results, completed strategy results, and saved strategy results, the production UI downloads canonical `timestamp,diff` points from the API, derives `accum`, `hwm`, `dd`, and `mdd`, then assembles CSV in the browser from the selected columns. The downloaded header uses the same visible labels as the preview/table for strategy columns, and numeric cells are written as numbers without leading apostrophes so Excel opens them as numbers.
 
 ## File names
 
@@ -76,7 +76,8 @@ Export tests should verify:
 - timestamp/date can be enabled or disabled like any other column;
 - the client builds selected columns;
 - source groups are split into portfolio, base calculation, strategy result and saved strategy;
-- the preview table renders the selected columns before download;
+- the download action is above the preview table so users do not need to scroll through preview rows;
+- the preview table renders the selected columns;
 - the export flow avoids fixed `format` / `exportFormat` presets.
 
 
