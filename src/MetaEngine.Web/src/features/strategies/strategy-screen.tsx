@@ -14,6 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MddOptimizationPanel, type MddOptimizationParameters } from "@/features/strategies/mdd-optimization-panel"
 import { RsiOptimizationPanel } from "@/features/strategies/rsi-optimization-panel"
 import {
+  displayApiError,
   deleteCalculationRuns,
   deleteSavedStrategy,
   deleteStrategyRun,
@@ -675,5 +676,5 @@ function numberValue(value: unknown, fallback: number) { return typeof value ===
 function numberField(value: unknown) { return typeof value === "number" && Number.isFinite(value) ? value : null }
 function textField(value: unknown) { return value === null || value === undefined || value === "" ? "-" : String(value) }
 function formatNumber(value: number | null) { return value === null ? "-" : new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value) }
-function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function toDisplayMessage(error: unknown) { return displayApiError(error) }
 function ChartToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) { return <label className="flex items-center gap-2"><Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />{label}</label> }

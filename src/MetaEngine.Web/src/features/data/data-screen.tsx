@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
-import { deletePortfolio, importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
+import { displayApiError, deletePortfolio, importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
 import { formatDateTime } from "@/lib/metrics"
 import { useNavigate } from "@tanstack/react-router"
 import { AlertCircle, Database, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react"
@@ -187,4 +187,4 @@ function LibraryMetric({ label, value }: { label: string; value: number }) { ret
 function Field({ label, htmlFor, children }: { label: string; htmlFor: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label htmlFor={htmlFor}>{label}</Label>{children}</div> }
 function LoadingRow({ columns }: { columns: number }) { return <TableRow><TableCell colSpan={columns} className="py-8 text-center text-sm text-slate-500">Загрузка...</TableCell></TableRow> }
 function EmptyRow({ columns, text }: { columns: number; text: string }) { return <TableRow><TableCell colSpan={columns} className="py-8 text-center text-sm text-slate-500">{text}</TableCell></TableRow> }
-function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function toDisplayMessage(error: unknown) { return displayApiError(error) }

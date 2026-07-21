@@ -11,6 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
 import {
+  displayApiError,
   createPreset,
   deletePreset,
   getPortfolioBounds,
@@ -297,5 +298,5 @@ function EmptyRow({ columns, text }: { columns: number; text: string }) {
 }
 
 function toDisplayMessage(error: unknown) {
-  return error instanceof Error ? error.message : "Не удалось выполнить запрос."
+  return displayApiError(error)
 }

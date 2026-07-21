@@ -15,7 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ComparisonPanel } from "@/features/calculations/comparison-panel"
 import { calculationDisplayName, calculationKindLabel } from "@/features/calculations/run-presentation"
 import { useSession } from "@/features/session/session-context"
-import { deleteCalculationRun, deleteCalculationRuns, getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, retryCalculationRun, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
+import { displayApiError, deleteCalculationRun, deleteCalculationRuns, getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, retryCalculationRun, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
 import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent, toDateTimeLocal, toIsoDateTime } from "@/lib/metrics"
 import { Link, useNavigate } from "@tanstack/react-router"
 import { AlertCircle, BarChart3, CalendarClock, ChevronDown, ChevronUp, Layers3, LoaderCircle, Play, RefreshCw, RotateCcw, TableProperties, Trash2 } from "lucide-react"
@@ -297,7 +297,7 @@ function ResultPanel({ details, isLoading, points, title, canRetry, onRetry }: {
 
   if (isLoading) return <div className="grid min-h-56 place-items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" /> Загрузка результата</div>
   if (!details) return <EmptyResult text="Выберите запуск расчёта." />
-  if (details.run.status !== "completed") return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500"><div className="grid justify-items-center gap-3">{isRetryable(details.run) ? <p>Расчёт не завершился: {details.run.errorCode ?? "unknown_error"}. Попыток: {details.run.attemptCount}.</p> : <p>Расчёт выполняется. Статус обновляется автоматически.</p>}{canRetry && isRetryable(details.run) ? <Button variant="outline" onClick={() => onRetry(details.run.id)}><RotateCcw />Повторить расчёт</Button> : null}</div></div>
+  if (details.run.status !== "completed") return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500"><div className="grid max-w-xl justify-items-center gap-3">{isRetryable(details.run) ? <><p>Расчёт не завершился: {calculationErrorMessage(details.run.errorCode)}. Попыток: {details.run.attemptCount}.</p><p className="text-xs text-slate-500">Если причина непонятна, откройте логи Worker: <code>docker compose logs --tail=200 worker</code>.</p></> : <p>Расчёт выполняется. Статус обновляется автоматически.</p>}{canRetry && isRetryable(details.run) ? <Button variant="outline" onClick={() => onRetry(details.run.id)}><RotateCcw />Повторить расчёт</Button> : null}</div></div>
 
   const displayedSummary = summarizeMetrics(metrics)
   function handleChartModeChange(value: "line" | "histogram") {
@@ -319,11 +319,28 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
 function Metric({ label, value }: { label: string; value: string }) { return <div className="bg-white px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums">{value}</p></div> }
 function StatusBadge({ status }: { status: CalculationRun["status"] }) { const styles: Record<CalculationRun["status"], string> = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800", interrupted: "border-orange-200 bg-orange-50 text-orange-800" }; const labels: Record<CalculationRun["status"], string> = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка", interrupted: "Прервана" }; return <Badge variant="outline" className={styles[status]}>{labels[status]}</Badge> }
 function isRetryable(run: CalculationRun) { return run.status === "failed" || run.status === "interrupted" }
-function queueStatusNote(run: CalculationRun) { if (run.status === "queued" && run.retryNotBefore) return `Автоповтор после ${formatDateTime(run.retryNotBefore)}`; if (run.status === "running" && run.attemptCount > 1) return `Попытка ${run.attemptCount}`; if (isRetryable(run)) return `Попыток: ${run.attemptCount}`; return null }
+function queueStatusNote(run: CalculationRun) { if (run.status === "queued" && run.retryNotBefore) return `Автоповтор после ${formatDateTime(run.retryNotBefore)}`; if (run.status === "running" && run.attemptCount > 1) return `Попытка ${run.attemptCount}`; if (isRetryable(run)) return `${calculationErrorMessage(run.errorCode)} · попыток: ${run.attemptCount}`; return null }
+function calculationErrorMessage(code: string | null) {
+  const messages: Record<string, string> = {
+    calculation_failed: "внутренняя ошибка расчёта",
+    transient_database_error: "временная ошибка базы данных",
+    worker_lease_expired: "Worker потерял задачу и не успел завершить расчёт",
+    portfolio_not_found: "портфолио не найдено",
+    preset_not_found: "пресет не найден",
+    source_run_not_found: "исходный базовый расчёт не найден",
+    strategy_source_not_completed: "исходный базовый расчёт стратегии не завершён",
+    strategy_type_not_found: "тип стратегии не зарегистрирован",
+    invalid_strategy_parameters: "параметры стратегии невалидны",
+    unsupported_input_type: "тип источника не поддерживается",
+    unknown_timeframe: "таймфрейм не поддерживается",
+    invalid_period: "период расчёта невалиден",
+  }
+  return code ? `${messages[code] ?? code} (${code})` : "unknown_error"
+}
 function LoadingRows({ columns }: { columns: number }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">Загрузка...</TableCell></TableRow> }
 function EmptyRow({ columns, text }: { columns: number; text: string }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">{text}</TableCell></TableRow> }
 function EmptyResult({ text }: { text: string }) { return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500">{text}</div> }
-function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function toDisplayMessage(error: unknown) { return displayApiError(error) }
 
 function ChartToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) { return <label className="flex items-center gap-2"><Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />{label}</label> }
 function summarizeMetrics(metrics: ReturnType<typeof deriveMetricSeries>) { const last = metrics.at(-1); return { finalAccum: last?.accum ?? null, highWaterMark: last?.highWaterMark ?? null, maxDrawdown: last?.maxDrawdown ?? null } }

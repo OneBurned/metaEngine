@@ -15,8 +15,8 @@ After signing in, the user can:
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;
 6. follow `queued`, `running`, `completed`, `failed` or `interrupted` status in
-   the five most recent runs, retry a failed/interrupted run when appropriate,
-   and open the full history when needed;
+   the five most recent runs, see the stored error code for failed/interrupted runs,
+   retry a failed/interrupted run when appropriate, and open the full history when needed;
 7. open a completed result under its source/type title, inspect summary metrics
    and explore the equity/drawdown chart with the mouse range brush;
 8. open the point table only when needed and continue loading rows in batches;

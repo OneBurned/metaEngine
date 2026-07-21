@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  displayApiError,
   getOptimizationJob,
   listOptimizationJobs,
   queueOptimization,
@@ -251,4 +252,4 @@ function optionalNumber(value: string) { if (!value.trim()) return null; const n
 function optionalPercent(value: string) { const numeric = optionalNumber(value); return numeric === null ? null : numeric / 100 }
 function parseRsiParameters(parametersJson: string): RsiParameters | null { try { const value = JSON.parse(parametersJson) as Record<string, unknown>; return typeof value.rsiPeriod === "number" && typeof value.buyLevel === "number" && typeof value.sellLevel === "number" ? { rsiPeriod: value.rsiPeriod, buyLevel: value.buyLevel, sellLevel: value.sellLevel } : null } catch { return null } }
 function formatScore(value: number) { return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 4 }).format(value) }
-function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function toDisplayMessage(error: unknown) { return displayApiError(error) }

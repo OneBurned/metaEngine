@@ -247,6 +247,24 @@ export class ApiError extends Error {
   }
 }
 
+
+export function displayApiError(error: unknown, fallback = "Не удалось выполнить запрос.") {
+  if (error instanceof ApiError) {
+    const messages: Record<string, string> = {
+      invalid_csrf_token: "Сессия устарела. Обновите страницу и повторите действие.",
+      portfolio_in_use: "Портфолио уже используется расчетом, пресетом, оптимизацией или сохраненной стратегией. Сначала удалите связанные объекты.",
+      preset_in_use: "Пресет уже используется расчетом, оптимизацией или сохраненной стратегией. Сначала удалите связанные объекты.",
+      strategy_in_use: "Сохраненная стратегия используется в пресете. Сначала удалите или измените этот пресет.",
+      calculation_run_in_use: "Запуск используется другим расчетом, оптимизацией или сохраненной стратегией. Сначала удалите связанные объекты.",
+      calculation_run_active: "Запуск еще выполняется или стоит в очереди, поэтому его нельзя удалить.",
+      calculation_kind_mismatch: "Выбранный запуск относится к другому разделу и не может быть удален здесь.",
+    }
+    return messages[error.code] ?? error.message
+  }
+
+  return error instanceof Error ? error.message : fallback
+}
+
 async function getCsrfToken() {
   const response = await fetch("/api/v1/auth/csrf", { credentials: "same-origin" })
   if (!response.ok) {

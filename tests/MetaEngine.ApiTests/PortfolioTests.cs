@@ -166,6 +166,52 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
         Assert.Equal((1.00 / 1.03) - 1, page.Items[2].Diff, 10);
     }
 
+
+    [Fact]
+    public async Task Admin_can_delete_unused_portfolio_version()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var importResponse = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Delete unused");
+        var imported = await importResponse.Content.ReadFromJsonAsync<PortfolioImportResult>(JsonOptions);
+        Assert.NotNull(imported);
+
+        var deleteResponse = await DeleteAsync(client, owner.WorkspaceId, imported.Portfolio.Id);
+        var deleted = await client.GetAsync($"/api/v1/workspaces/{owner.WorkspaceId}/portfolios/{imported.Portfolio.Id}");
+        var list = await client.GetFromJsonAsync<JsonElement>(
+            $"/api/v1/workspaces/{owner.WorkspaceId}/portfolios");
+
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, deleted.StatusCode);
+        Assert.Equal(0, list.GetProperty("items").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Delete_portfolio_blocks_used_calculation_source()
+    {
+        var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
+        using var client = factory.CreateClient();
+        await LoginAsync(client, owner);
+        var importResponse = await ImportAsync(client, owner.WorkspaceId, PortfolioCsv, "Used source");
+        var imported = await importResponse.Content.ReadFromJsonAsync<PortfolioImportResult>(JsonOptions);
+        Assert.NotNull(imported);
+
+        var queueResponse = await QueueAsync(
+            client,
+            owner.WorkspaceId,
+            imported.Portfolio.Id,
+            imported.Portfolio.StartsAt,
+            imported.Portfolio.EndsAt,
+            imported.Portfolio.Timeframe);
+        var deleteResponse = await DeleteAsync(client, owner.WorkspaceId, imported.Portfolio.Id);
+        var body = await deleteResponse.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Accepted, queueResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, deleteResponse.StatusCode);
+        Assert.Equal("portfolio_in_use", body.GetProperty("code").GetString());
+    }
+
     [Fact]
     public async Task Import_requires_a_csrf_token()
     {
@@ -240,6 +286,48 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("return_below_minus_one", body.GetProperty("code").GetString());
+    }
+
+
+    private static async Task<HttpResponseMessage> DeleteAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid portfolioId)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/portfolios/{portfolioId}/delete");
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
+    }
+
+    private static async Task<HttpResponseMessage> QueueAsync(
+        HttpClient client,
+        Guid workspaceId,
+        Guid portfolioId,
+        DateTimeOffset periodStart,
+        DateTimeOffset periodEnd,
+        string timeframe)
+    {
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+
+        using var request = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"/api/v1/workspaces/{workspaceId}/calculation-runs")
+        {
+            Content = JsonContent.Create(new QueueCalculationRequest(
+                portfolioId,
+                null,
+                periodStart,
+                periodEnd,
+                timeframe))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+        return await client.SendAsync(request);
     }
 
     private static async Task LoginAsync(HttpClient client, SeededUser user)

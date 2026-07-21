@@ -7,6 +7,7 @@ import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
+  displayApiError,
   getOptimizationJob,
   listOptimizationJobs,
   queueOptimization,
@@ -271,4 +272,4 @@ function optionalNumber(value: string) { if (!value.trim()) return null; const n
 function optionalPercent(value: string) { const numeric = optionalNumber(value); return numeric === null ? null : numeric / 100 }
 function parseMddParameters(parametersJson: string): MddOptimizationParameters | null { try { const value = JSON.parse(parametersJson) as { deals?: unknown }; if (!Array.isArray(value.deals)) return null; const deals = value.deals.filter((deal): deal is { entryDrawdown: number; weight: number; exitType: "source_dd" | "strategy_dd" | "source_hwm" | "strategy_hwm"; exitValue: number } => typeof deal === "object" && deal !== null && typeof (deal as { entryDrawdown?: unknown }).entryDrawdown === "number" && typeof (deal as { weight?: unknown }).weight === "number" && typeof (deal as { exitType?: unknown }).exitType === "string" && typeof (deal as { exitValue?: unknown }).exitValue === "number"); return deals.length === value.deals.length ? { deals } : null } catch { return null } }
 function formatScore(value: number) { return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 4 }).format(value) }
-function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function toDisplayMessage(error: unknown) { return displayApiError(error) }
