@@ -12,8 +12,8 @@ calculate canonical `timestamp,diff` results.
 4. Optionally save the completed run as a versioned strategy configuration.
 
 A strategy run stores `source_calculation_run_id`; it never re-reads a newer
-portfolio or a later base run. Its result artifact contains only canonical
-`timestamp,diff`; UI metrics and charts are rebuilt from that series.
+portfolio or a later base run. Its result artifact contains canonical
+`timestamp,diff` plus per-point strategy fields used by the result table and CSV export; UI metrics and charts are rebuilt from the canonical series.
 
 The Worker loads the source artifact separately from portfolio/preset metadata.
 This keeps a long strategy source from creating a cross-product database query

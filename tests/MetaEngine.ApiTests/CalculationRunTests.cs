@@ -177,6 +177,9 @@ public sealed class CalculationRunTests(MetaEngineApiFactory factory) : IClassFi
             JsonOptions);
         Assert.NotNull(result);
         Assert.Equal(3, result.Items.Count);
+        Assert.Contains("rsi", result.Items[0].Fields.Keys);
+        Assert.Contains("signal", result.Items[0].Fields.Keys);
+        Assert.Contains("strategy_accum", result.Items[0].Fields.Keys);
 
         var saved = await SaveStrategyAsync(
             client,

@@ -46,6 +46,12 @@ timestamp,diff
 
 For saved portfolios, the production frontend loads the stored `timestamp,diff` points, derives `accum`, `hwm`, `dd`, and `mdd`, then writes only the selected columns into the downloaded file. This keeps the export module flexible while the backend API still exposes canonical points.
 
+Legacy local-lab/backend examples used this shape and remain useful as a compatibility reference:
+
+```text
+GET /api/portfolios/portfolio_a.csv/export?columns=timestamp,mdd
+```
+
 ## Current result export
 
 For portfolio versions, completed base calculation results, completed strategy results, and saved strategy results, the production UI downloads canonical `timestamp,diff` points from the API, derives `accum`, `hwm`, `dd`, and `mdd`, then assembles CSV in the browser from the selected columns.

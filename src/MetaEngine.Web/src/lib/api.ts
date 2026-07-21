@@ -36,6 +36,7 @@ export type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d" | "1M" | "1Y"
 export type PortfolioPoint = {
   timestamp: string
   diff: number
+  fields?: Record<string, unknown>
 }
 
 export type PresetSourceType = "portfolio" | "strategy"

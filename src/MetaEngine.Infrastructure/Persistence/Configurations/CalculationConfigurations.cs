@@ -258,6 +258,7 @@ internal sealed class RunArtifactPointConfiguration : IEntityTypeConfiguration<R
         builder.ToTable("run_artifact_points");
         builder.HasKey(point => new { point.RunArtifactId, point.Timestamp });
         builder.Property(point => point.Diff).HasColumnType("double precision");
+        builder.Property(point => point.FieldsJson).HasColumnType("jsonb").HasDefaultValue("{}");
 
         builder
             .HasOne(point => point.RunArtifact)

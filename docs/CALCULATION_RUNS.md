@@ -65,9 +65,7 @@ For a preset, set `portfolioId` to `null` and provide `presetId`. Supplying
 both IDs or neither one is rejected. The queue response is `202 Accepted` and
 contains the run ID and initial `queued` status.
 
-The result endpoint returns a paged canonical series of `timestamp,diff`.
-`offset` must be non-negative and `limit` is from 1 through 5,000. It returns
-`409 calculation_not_completed` until the worker has completed the run.
+The result endpoint returns a paged canonical series of `timestamp,diff`. For strategy runs, each point can also contain a `fields` object with strategy-table values such as signals, executions, active deals, weights and indicator values. `offset` must be non-negative and `limit` is from 1 through 5,000. It returns `409 calculation_not_completed` until the worker has completed the run.
 
 ## Worker and statuses
 
@@ -91,10 +89,7 @@ Queue ownership, retry budget and recovery details are described in
 
 ## Stored result
 
-The artifact stores only canonical `timestamp,diff` rows plus a SHA-256
-checksum. `accum`, HWM, DD and MDD are calculated on the worker for the summary
-and can always be rebuilt from the canonical result. This keeps results
-reproducible without persisting multiple versions of the same derived series.
+The artifact stores canonical `timestamp,diff` rows plus a SHA-256 checksum. Strategy artifacts may also store per-point `fields_json` for the strategy table/export layer: signals, executions, active deals, weights and strategy-specific indicators. `accum`, HWM, DD and MDD remain derived from canonical `diff` for base results and summaries.
 
 ## Local run
 

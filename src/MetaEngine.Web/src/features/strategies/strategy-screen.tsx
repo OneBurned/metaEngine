@@ -447,25 +447,32 @@ function toRsi(averageGain: number, averageLoss: number) {
 
 function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indicators: StrategyIndicatorPoint[], strategyType: string | null) {
   const indicatorByTimestamp = new Map(indicators.map((point) => [point.timestamp, point]))
-  const indicatorColumns = strategyType === "rsi" ? ["rsi"] : ["source_dd", "local_dd"]
+  const indicatorColumns = strategyType === "rsi"
+    ? ["rsi", "signal", "execution", "position", "source_diff", "source_accum", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
+    : ["source_diff", "source_accum", "source_dd", "local_mdd", "signal", "execution", "active_deals", "weight", "max_config_weight", "max_realized_weight", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
   const header = ["timestamp", "diff", "accum", "hwm", "dd", "mdd", ...indicatorColumns]
   const lines = metrics.map((point) => {
     const indicator = indicatorByTimestamp.get(point.timestamp)
-    const extra = strategyType === "rsi"
-      ? [formatCsvNumber(indicator?.rsi)]
-      : [formatCsvNumber(indicator?.sourceDrawdown), formatCsvNumber(indicator?.localDrawdown)]
-    return [point.timestamp, point.diff, point.accum, point.highWaterMark, point.drawdown, point.maxDrawdown].map(formatCsvNumber).concat(extra).join(",")
+    const fields = normalizeStrategyFields(point.fields)
+    if (strategyType === "rsi" && fields.rsi === undefined) fields.rsi = indicator?.rsi ?? null
+    if (strategyType !== "rsi") {
+      if (fields.source_dd === undefined) fields.source_dd = indicator?.sourceDrawdown ?? null
+      if (fields.local_mdd === undefined) fields.local_mdd = indicator?.localDrawdown ?? null
+    }
+    const values: Record<string, string | number | boolean | null | undefined> = { timestamp: point.timestamp, diff: point.diff, accum: point.accum, hwm: point.highWaterMark, dd: point.drawdown, mdd: point.maxDrawdown, ...fields }
+    return header.map((column) => formatCsvValue(values[column])).join(",")
   })
   return [header.join(","), ...lines].join("\n")
 }
 
-function formatCsvNumber(value: number | null | undefined | string) {
-  if (typeof value === "string") return value
-  return typeof value === "number" && Number.isFinite(value) ? String(value) : ""
+function normalizeStrategyFields(fields: Record<string, unknown> | undefined) { const values = Object.fromEntries(Object.entries(fields ?? {}).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)) as Record<string, string | number | boolean | null>; if (values.base_dd !== undefined && values.source_dd === undefined) values.source_dd = values.base_dd; if (values.position !== undefined && values.weight === undefined) values.weight = values.position; return values }
+function formatCsvValue(value: number | null | undefined | string | boolean) {
+  const text = value === null || value === undefined ? "" : String(value)
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
 function downloadCsv(fileName: string, csv: string) {
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" })
   const url = URL.createObjectURL(blob)
   const link = document.createElement("a")
   link.href = url

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MetaEngine.Domain.Model;
 
 namespace MetaEngine.Application.Calculations;
@@ -70,7 +71,8 @@ public sealed record CalculationRunDetails(
 
 public sealed record CalculationResultPoint(
     DateTimeOffset Timestamp,
-    double Diff);
+    double Diff,
+    IReadOnlyDictionary<string, JsonElement> Fields);
 
 public sealed record CalculationResultPage(
     int Offset,

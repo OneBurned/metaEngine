@@ -260,6 +260,8 @@ public sealed class RunArtifactPoint
     public DateTimeOffset Timestamp { get; set; }
 
     public double Diff { get; set; }
+
+    public string FieldsJson { get; set; } = "{}";
 }
 
 public sealed class AuditEvent

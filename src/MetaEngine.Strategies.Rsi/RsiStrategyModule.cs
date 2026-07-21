@@ -176,6 +176,7 @@ public sealed class RsiStrategyModule : IStrategyModule
         {
             cancellationToken.ThrowIfCancellationRequested();
             var execution = pendingExecution;
+            var signal = string.Empty;
             pendingExecution = string.Empty;
             if (execution == "buy") position = 1;
             if (execution == "sell") position = 0;
@@ -186,11 +187,13 @@ public sealed class RsiStrategyModule : IStrategyModule
                 if (previous > buyLevel && current <= buyLevel && position == 0)
                 {
                     pendingExecution = "buy";
+                    signal = "buy";
                     buyCount++;
                 }
                 else if (previous < sellLevel && current >= sellLevel && position > 0)
                 {
                     pendingExecution = "sell";
+                    signal = "sell";
                     sellCount++;
                 }
             }
@@ -208,7 +211,19 @@ public sealed class RsiStrategyModule : IStrategyModule
                 rows[index] = new StrategyResultPoint(
                     prepared.Source[index].Timestamp,
                     diff,
-                    new Dictionary<string, JsonElement>());
+                    new Dictionary<string, JsonElement>
+                    {
+                        ["rsi"] = JsonSerializer.SerializeToElement(rsi[index]),
+                        ["signal"] = JsonSerializer.SerializeToElement(signal),
+                        ["execution"] = JsonSerializer.SerializeToElement(execution),
+                        ["position"] = JsonSerializer.SerializeToElement(position),
+                        ["source_diff"] = JsonSerializer.SerializeToElement(prepared.Source[index].Diff),
+                        ["source_accum"] = JsonSerializer.SerializeToElement(prepared.Source[index].Accum),
+                        ["strategy_accum"] = JsonSerializer.SerializeToElement(accum),
+                        ["strategy_hwm"] = JsonSerializer.SerializeToElement(highWaterMark),
+                        ["strategy_dd"] = JsonSerializer.SerializeToElement(drawdown),
+                        ["strategy_mdd"] = JsonSerializer.SerializeToElement(maxDrawdown)
+                    });
             }
         }
 

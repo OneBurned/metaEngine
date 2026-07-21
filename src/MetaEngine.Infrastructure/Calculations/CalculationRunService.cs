@@ -270,14 +270,17 @@ internal sealed class CalculationRunService(
             return null;
         }
 
-        var items = await dbContext.RunArtifactPoints
+        var rawItems = await dbContext.RunArtifactPoints
             .AsNoTracking()
             .Where(point => point.RunArtifactId == artifact.Id)
             .OrderBy(point => point.Timestamp)
             .Skip(offset)
             .Take(limit)
-            .Select(point => new CalculationResultPoint(point.Timestamp, point.Diff))
+            .Select(point => new { point.Timestamp, point.Diff, point.FieldsJson })
             .ToArrayAsync(cancellationToken);
+        var items = rawItems
+            .Select(point => new CalculationResultPoint(point.Timestamp, point.Diff, DeserializePointFields(point.FieldsJson)))
+            .ToArray();
         return new CalculationResultPage(offset, limit, artifact.PointCount, items);
     }
 
@@ -482,7 +485,8 @@ internal sealed class CalculationRunService(
             artifact.Points.Add(new RunArtifactPoint
             {
                 Timestamp = DateTimeOffset.FromUnixTimeMilliseconds(row.Timestamp),
-                Diff = row.Diff
+                Diff = row.Diff,
+                FieldsJson = SerializePointFields(row.Fields)
             });
         }
 
@@ -538,7 +542,7 @@ internal sealed class CalculationRunService(
             portfolio.Timeframe,
             run.Timeframe));
         return new CalculatedRunOutput(
-            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            result.Rows.Select(row => new CalculatedRunPoint(row.Timestamp, row.Diff, new Dictionary<string, JsonElement>())).ToArray(),
             result.Summary,
             result.Warnings,
             0);
@@ -559,7 +563,7 @@ internal sealed class CalculationRunService(
             run.PeriodEnd.ToUnixTimeMilliseconds(),
             run.Timeframe));
         return new CalculatedRunOutput(
-            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            result.Rows.Select(row => new CalculatedRunPoint(row.Timestamp, row.Diff, new Dictionary<string, JsonElement>())).ToArray(),
             result.Summary,
             result.Warnings,
             0);
@@ -701,7 +705,7 @@ internal sealed class CalculationRunService(
             result.Summary.HighWaterMark,
             result.Summary.MaxDrawdown);
         return new CalculatedRunOutput(
-            result.Rows.Select(row => new ReturnPoint(row.Timestamp, row.Diff)).ToArray(),
+            result.Rows.Select(row => new CalculatedRunPoint(row.Timestamp, row.Diff, row.Fields)).ToArray(),
             summary,
             [],
             result.Summary.BuyCount + result.Summary.SellCount);
@@ -960,7 +964,22 @@ internal sealed class CalculationRunService(
         }
     }
 
-    private static string CalculateSeriesChecksum(IReadOnlyList<ReturnPoint> rows)
+    private static string SerializePointFields(IReadOnlyDictionary<string, JsonElement> fields) =>
+        fields.Count == 0 ? "{}" : JsonSerializer.Serialize(fields);
+
+    private static IReadOnlyDictionary<string, JsonElement> DeserializePointFields(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(json) ?? [];
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, JsonElement>();
+        }
+    }
+
+    private static string CalculateSeriesChecksum(IReadOnlyList<CalculatedRunPoint> rows)
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
         foreach (var row in rows)
@@ -972,8 +991,13 @@ internal sealed class CalculationRunService(
         return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
 
+    private sealed record CalculatedRunPoint(
+        long Timestamp,
+        double Diff,
+        IReadOnlyDictionary<string, JsonElement> Fields);
+
     private sealed record CalculatedRunOutput(
-        IReadOnlyList<ReturnPoint> Rows,
+        IReadOnlyList<CalculatedRunPoint> Rows,
         CalculationSummary Summary,
         IReadOnlyList<CalculationWarning> Warnings,
         int TradeCount);
