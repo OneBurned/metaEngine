@@ -89,7 +89,7 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 The **Strategies** page selects only completed base runs, exposes manual RSI
 and MDD parameters, follows queued/running status, displays the strategy result
 with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
-The result block also restores the trading-model chart from the old local lab:
+The manual strategy form and RSI/MDD optimization forms show completed base-calculation candidates with the calculation completion timestamp (`рассчитан ...`) so repeated runs with the same name and period can be distinguished. The result block also restores the trading-model chart from the old local lab:
 RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
 Local DD used for deal entries. The strategy result table reuses the calculation
 result table pattern: it is hidden by default, opens with **Показать данные**,

@@ -218,7 +218,7 @@ public sealed class RsiStrategyModule : IStrategyModule
                         ["execution"] = JsonSerializer.SerializeToElement(execution),
                         ["position"] = JsonSerializer.SerializeToElement(position),
                         ["source_diff"] = JsonSerializer.SerializeToElement(prepared.Source[index].Diff),
-                        ["source_accum"] = JsonSerializer.SerializeToElement(prepared.Source[index].Accum),
+                        ["source_accum"] = JsonSerializer.SerializeToElement(prepared.BaseMetrics.Rows[index].Accum),
                         ["strategy_accum"] = JsonSerializer.SerializeToElement(accum),
                         ["strategy_hwm"] = JsonSerializer.SerializeToElement(highWaterMark),
                         ["strategy_dd"] = JsonSerializer.SerializeToElement(drawdown),
