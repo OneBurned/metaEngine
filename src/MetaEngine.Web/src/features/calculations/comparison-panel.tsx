@@ -134,8 +134,8 @@ export function ComparisonPanel({
       {error ? <p className="lg:col-span-2 text-sm text-rose-700">{error}</p> : null}
     </div>
 
-    {selectedSources.length === 0 ? <EmptyComparison text="Добавьте два или больше рядов, чтобы сравнить их доходность." /> : <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium">Сравнение накопленной доходности</p><p className="text-xs text-slate-500">Каждый ряд начинается с 0% в своей первой точке.</p></div>
+    {selectedSources.length === 0 ? <EmptyComparison text="Добавьте два или больше рядов, чтобы сравнить Accum." /> : <div className="rounded-lg border border-slate-200 bg-white p-4 sm:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><p className="text-sm font-medium">Сравнение Accum</p><p className="text-xs text-slate-500">Каждый ряд начинается с 0% в своей первой точке.</p></div>
       <ChartContainer config={chartConfig} className="h-[420px] w-full aspect-auto" aria-label="Сравнение рядов">
         <LineChart data={chartPoints} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}>
           <CartesianGrid vertical={false} />
