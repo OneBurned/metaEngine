@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell"
-import { calculationDisplayName } from "@/features/calculations/run-presentation"
+import { calculationDisplayName, calculationSourceLabel } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -325,7 +325,19 @@ export function StrategyScreen() {
 }
 
 function calculationRunOptionLabel(run: CalculationRun, presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] }) {
-  return `${calculationDisplayName(run, presentationSources)} · рассчитан ${formatDateTime(run.completedAt ?? run.createdAt)} · Accum ${formatPercent(run.finalAccum)}`
+  return `${calculationSourceLabel(run, presentationSources)} · ${formatCompactDateTime(run.completedAt ?? run.createdAt)} · ${formatCompactPercent(run.finalAccum)}`
+}
+
+function formatCompactDateTime(value: string | null | undefined) {
+  if (!value) return "-"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "-"
+  const pad = (item: number) => String(item).padStart(2, "0")
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+}
+
+function formatCompactPercent(value: number | null | undefined) {
+  return formatPercent(value ?? null).replace(/\s+%$/, "%")
 }
 
 function RsiFields({ period, buy, sell, onPeriod, onBuy, onSell }: { period: number; buy: number; sell: number; onPeriod: (value: number) => void; onBuy: (value: number) => void; onSell: (value: number) => void }) {
