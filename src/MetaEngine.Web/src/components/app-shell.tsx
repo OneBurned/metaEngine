@@ -13,7 +13,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
-import { BarChart3, Database, FolderInput, Layers3, LogOut, Workflow } from "lucide-react"
+import { BarChart3, Database, FileDown, FolderInput, Layers3, LogOut, Workflow } from "lucide-react"
 import { Link, useRouterState } from "@tanstack/react-router"
 import type { PropsWithChildren } from "react"
 
@@ -49,6 +49,10 @@ export function AppShell({ children, onSignOut }: PropsWithChildren<{ onSignOut:
             <Link to="/strategies" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/strategies" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <Database className="size-4" aria-hidden="true" />
               Стратегии
+            </Link>
+            <Link to="/export" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/export" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
+              <FileDown className="size-4" aria-hidden="true" />
+              Экспорт
             </Link>
             <Link to="/presets" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/presets" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <Layers3 className="size-4" aria-hidden="true" />

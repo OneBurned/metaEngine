@@ -82,7 +82,9 @@ and MDD parameters, follows queued/running status, displays the strategy result
 with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
 The result block also restores the trading-model chart from the old local lab:
 RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
-Local DD used for deal entries. A current-result CSV export button downloads the
-visible strategy result columns. Its **Optimization** tab provides the full
+Local DD used for deal entries. A current-result CSV export shortcut downloads the
+visible strategy result columns, while the dedicated **Экспорт** tab can export
+strategy results alongside portfolio versions and base calculations with any
+selected column set. Its **Optimization** tab provides the full
 production RSI/MDD workflow: queue, progress, stop, sort and apply. The
 **Presets** page can use that saved result alongside portfolio sources.
