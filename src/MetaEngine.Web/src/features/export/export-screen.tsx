@@ -56,7 +56,7 @@ export function ExportScreen() {
   async function handleExport() {
     if (!workspace || !selectedSource) return
     setIsExporting(true); setError(null)
-    try { const csv = await buildExportCsv(workspace.id, selectedSource, selectedColumns); downloadCsv(`${slugify(selectedSource.title)}_${selectedColumns.join("_")}.csv`, csv); toast.success("CSV экспортирован") }
+    try { const csv = await buildExportCsv(workspace.id, selectedSource, selectedColumns); downloadCsv(`${slugify(selectedSource.title)}_${formatFileTimestamp(new Date())}_${selectedColumns.join("_")}.csv`, csv); toast.success("CSV экспортирован") }
     catch (requestError) { setError(toDisplayMessage(requestError)) }
     finally { setIsExporting(false) }
   }
@@ -78,6 +78,7 @@ function toRsi(averageGain: number, averageLoss: number) { return averageLoss ==
 function parseJson(json: string | null | undefined) { try { return json ? JSON.parse(json) as Record<string, unknown> : {} } catch { return {} } }
 function numberValue(value: unknown, fallback: number) { return typeof value === "number" && Number.isFinite(value) ? value : fallback }
 function formatCsvDate(value: string) { return new Date(value).toISOString().replace("T", " ").replace(".000Z", " UTC") }
+function formatFileTimestamp(value: Date) { return value.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15) }
 function csvCell(value: string | number | null | undefined) { const text = value === null || value === undefined ? "" : String(value); return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text }
 function downloadCsv(fileName: string, csv: string) { const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url) }
 function slugify(value: string) { return value.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "export" }
