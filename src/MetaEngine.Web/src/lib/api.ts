@@ -263,7 +263,9 @@ async function request<T>(
   requiresCsrf = false,
 ): Promise<T> {
   const headers = new Headers(init.headers)
-  if (requiresCsrf) {
+  const method = (init.method ?? "GET").toUpperCase()
+  const needsCsrf = requiresCsrf || !["GET", "HEAD", "OPTIONS"].includes(method)
+  if (needsCsrf) {
     headers.set("X-CSRF-TOKEN", await getCsrfToken())
   }
 
