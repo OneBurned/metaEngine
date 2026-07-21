@@ -100,10 +100,12 @@ export function formatDateTime(value: string | null) {
   if (!value) {
     return "-"
   }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "-"
+  }
+  const pad = (item: number) => String(item).padStart(2, "0")
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
 }
 
 export function toDateTimeLocal(value: string) {

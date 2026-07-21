@@ -10,10 +10,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useSession } from "@/features/session/session-context"
-import { importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
+import { deletePortfolio, importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
 import { formatDateTime } from "@/lib/metrics"
 import { useNavigate } from "@tanstack/react-router"
-import { AlertCircle, Database, LoaderCircle, RefreshCw, Upload } from "lucide-react"
+import { AlertCircle, Database, LoaderCircle, RefreshCw, Trash2, Upload } from "lucide-react"
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from "react"
 import { toast } from "sonner"
 
@@ -70,6 +70,20 @@ export function DataScreen() {
     await refresh()
   }
 
+  async function handleDeletePortfolio(portfolio: Portfolio) {
+    if (!workspace || !window.confirm(`Удалить портфолио «${portfolio.name}» v${portfolio.version}?`)) {
+      return
+    }
+
+    try {
+      await deletePortfolio(workspace.id, portfolio.id)
+      toast.success("Портфолио удалено", { description: `${portfolio.name} · v${portfolio.version}` })
+      await refresh()
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    }
+  }
+
   return (
     <AppShell onSignOut={() => void handleSignOut()}>
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -99,7 +113,7 @@ export function DataScreen() {
           <div className="mb-3 flex items-center gap-2"><Database className="size-4 text-teal-700" /><h2 id="library-heading" className="text-base font-semibold">Библиотека</h2></div>
           <Tabs defaultValue="portfolios">
             <TabsList><TabsTrigger value="portfolios">Портфели ({portfolios.length})</TabsTrigger><TabsTrigger value="strategies">Стратегии ({strategies.length})</TabsTrigger><TabsTrigger value="presets">Пресеты ({presets.length})</TabsTrigger></TabsList>
-            <TabsContent value="portfolios" className="mt-4"><PortfolioLibrary items={portfolios} isLoading={isLoading} /></TabsContent>
+            <TabsContent value="portfolios" className="mt-4"><PortfolioLibrary items={portfolios} isLoading={isLoading} canWrite={workspace.canWrite} onDelete={(portfolio) => void handleDeletePortfolio(portfolio)} /></TabsContent>
             <TabsContent value="strategies" className="mt-4"><StrategyLibrary items={strategies} isLoading={isLoading} /></TabsContent>
             <TabsContent value="presets" className="mt-4"><PresetLibrary items={presets} isLoading={isLoading} /></TabsContent>
           </Tabs>
@@ -131,13 +145,14 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
       return
     }
 
+    const form = event.currentTarget
     setIsSubmitting(true)
     setError(null)
     try {
       await onImport(file, name.trim(), valueType)
       setFile(null)
       setName("")
-      event.currentTarget.reset()
+      form.reset()
     } catch (requestError) {
       setError(toDisplayMessage(requestError))
     } finally {
@@ -155,8 +170,8 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
   </form>
 }
 
-function PortfolioLibrary({ items, isLoading }: { items: Portfolio[]; isLoading: boolean }) {
-  return <LibraryTable><TableHeader><TableRow><TableHead>Название</TableHead><TableHead className="hidden sm:table-cell">Период</TableHead><TableHead className="hidden sm:table-cell text-right">Точек</TableHead><TableHead className="hidden lg:table-cell">Создан</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={4} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={4} text="Портфелей пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">v{item.version} · {item.sourceFileName ?? "CSV"}</div></TableCell><TableCell className="hidden sm:table-cell"><div>{formatDateTime(item.startsAt)} — {formatDateTime(item.endsAt)}</div><div className="text-xs text-slate-500">ТФ {item.timeframe}</div></TableCell><TableCell className="hidden sm:table-cell text-right tabular-nums">{item.pointCount.toLocaleString("ru-RU")}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(item.createdAt)}</TableCell></TableRow>)}</TableBody></LibraryTable>
+function PortfolioLibrary({ items, isLoading, canWrite, onDelete }: { items: Portfolio[]; isLoading: boolean; canWrite: boolean; onDelete: (portfolio: Portfolio) => void }) {
+  return <LibraryTable><TableHeader><TableRow><TableHead>Название</TableHead><TableHead className="hidden sm:table-cell">Период</TableHead><TableHead className="hidden sm:table-cell text-right">Точек</TableHead><TableHead className="hidden lg:table-cell">Создан</TableHead><TableHead className="w-32 text-right">Действия</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={5} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={5} text="Портфелей пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">v{item.version} · {item.sourceFileName ?? "CSV"}</div></TableCell><TableCell className="hidden sm:table-cell"><div>{formatDateTime(item.startsAt)} — {formatDateTime(item.endsAt)}</div><div className="text-xs text-slate-500">ТФ {item.timeframe}</div></TableCell><TableCell className="hidden sm:table-cell text-right tabular-nums">{item.pointCount.toLocaleString("ru-RU")}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(item.createdAt)}</TableCell><TableCell className="text-right">{canWrite ? <Button variant="ghost" size="sm" onClick={() => onDelete(item)}><Trash2 />Удалить</Button> : null}</TableCell></TableRow>)}</TableBody></LibraryTable>
 }
 
 function StrategyLibrary({ items, isLoading }: { items: SavedStrategy[]; isLoading: boolean }) {

@@ -10,7 +10,7 @@ user interface for the ASP.NET Core / PostgreSQL production workflow.
 After signing in, the user can:
 
 1. select an accessible workspace;
-2. use **Data** to import two-column portfolio CSV with or without header, choose whether the second column is `Accum` or `Diff`, and inspect all saved portfolio, strategy and preset versions;
+2. use **Data** to import two-column portfolio CSV with or without header, choose whether the second column is `Accum` or `Diff`, inspect all saved portfolio, strategy and preset versions, and delete unused portfolio versions;
 3. choose a portfolio or preset directly in **Calculations**;
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;
@@ -58,7 +58,7 @@ comes from the saved calculation run. The current-result chart uses one shared
 percent scale for Diff/Accum/HWM/DD/MDD. The **Calculations** page intentionally
 lists only completed or queued base calculations, while strategy runs are
 managed on the **Strategies** page. Both run tables support deleting inactive
-unused rows and bulk cleanup that skips protected rows; the UI sends cleanup through POST action endpoints to avoid DELETE method limitations in development/proxy environments. The shared API client attaches a CSRF token to every mutating request method, not only to individually marked calls, so queue/retry/cleanup actions use the same security behavior.
+unused rows and bulk cleanup that skips protected rows; portfolio, preset and saved-strategy libraries also expose delete actions for unused versions. The UI sends cleanup through POST action endpoints to avoid DELETE method limitations in development/proxy environments. All production date/time labels use the shared compact `YYYY-MM-DD HH:MM` formatter instead of locale-specific month names. The shared API client attaches a CSRF token to every mutating request method, not only to individually marked calls, so queue/retry/cleanup actions use the same security behavior.
 
 ## Authentication and local development
 

@@ -185,6 +185,61 @@ internal sealed class PortfolioService(
         return new PortfolioPointPage(offset, limit, total.Value, items);
     }
 
+    public async Task<bool> DeleteAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid portfolioId,
+        CancellationToken cancellationToken)
+    {
+        var portfolio = await dbContext.Portfolios
+            .SingleOrDefaultAsync(candidate => candidate.Id == portfolioId && candidate.WorkspaceId == workspaceId, cancellationToken);
+        if (portfolio is null)
+        {
+            return false;
+        }
+
+        if (await HasPortfolioDependenciesAsync(workspaceId, portfolioId, cancellationToken))
+        {
+            throw new PortfolioImportValidationException(
+                "portfolio_in_use",
+                "This portfolio is used by calculations, presets, optimizations, or saved strategies and cannot be deleted.");
+        }
+
+        dbContext.Portfolios.Remove(portfolio);
+        dbContext.AuditEvents.Add(new AuditEvent
+        {
+            WorkspaceId = workspaceId,
+            UserId = userId,
+            Action = "portfolio_deleted",
+            EntityType = "portfolio",
+            EntityId = portfolio.Id,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                portfolio.PortfolioKey,
+                portfolio.Version,
+                portfolio.PointCount,
+                portfolio.SourceChecksum,
+                portfolio.SeriesChecksum
+            })
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    private async Task<bool> HasPortfolioDependenciesAsync(
+        Guid workspaceId,
+        Guid portfolioId,
+        CancellationToken cancellationToken) =>
+        await dbContext.CalculationRuns.AnyAsync(run =>
+            run.WorkspaceId == workspaceId &&
+            (run.PortfolioId == portfolioId || run.SourcePortfolioId == portfolioId), cancellationToken) ||
+        await dbContext.OptimizationJobs.AnyAsync(job =>
+            job.WorkspaceId == workspaceId &&
+            (job.PortfolioId == portfolioId || job.SourcePortfolioId == portfolioId), cancellationToken) ||
+        await dbContext.PresetItems.AnyAsync(item => item.PortfolioId == portfolioId, cancellationToken) ||
+        await dbContext.Strategies.AnyAsync(strategy =>
+            strategy.WorkspaceId == workspaceId && strategy.SourcePortfolioId == portfolioId, cancellationToken);
+
     private async Task<PortfolioVersion?> FindDuplicateAsync(
         Guid workspaceId,
         string sourceChecksum,

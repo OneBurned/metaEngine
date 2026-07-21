@@ -4,7 +4,7 @@
 загружает canonical CSV, API нормализует его и сохраняет неизменяемую версию
 портфеля в PostgreSQL. P4 production UI позволяет выполнить этот сценарий в
 браузере; Node.js local lab продолжает работать по прежним правилам.
-Библиотека production UI показывает для загруженного портфеля не только ТФ, но и период данных от первой до последней точки.
+Библиотека production UI показывает для загруженного портфеля не только ТФ, но и период данных от первой до последней точки. Все даты в UI отображаются в едином компактном формате `YYYY-MM-DD HH:MM`.
 
 ## Формат CSV
 
@@ -76,11 +76,14 @@ POST /api/v1/workspaces/{workspaceId}/portfolios/import
 GET  /api/v1/workspaces/{workspaceId}/portfolios
 GET  /api/v1/workspaces/{workspaceId}/portfolios/{portfolioId}
 GET  /api/v1/workspaces/{workspaceId}/portfolios/{portfolioId}/points?offset=0&limit=1000
+POST /api/v1/workspaces/{workspaceId}/portfolios/{portfolioId}/delete
+POST /api/v1/workspaces/{workspaceId}/cleanup/portfolios/{portfolioId}
+DELETE /api/v1/workspaces/{workspaceId}/portfolios/{portfolioId}
 ```
 
-`Admin` и `Researcher` могут импортировать. `Viewer` может читать metadata и
-points, но получает `403` на импорт. Пользователь без membership получает `404`,
-чтобы существование чужого workspace не раскрывалось. POST требует auth-cookie
+`Admin` и `Researcher` могут импортировать и удалять неиспользуемые версии портфелей. Удаление блокируется, если версия портфеля уже используется расчетом, preset, optimization job или сохраненной стратегией. `Viewer` может читать metadata и
+points, но получает `403` на импорт и удаление. Пользователь без membership получает `404`,
+чтобы существование чужого workspace не раскрывалось. Мутирующие запросы требуют auth-cookie
 и свежий CSRF-токен.
 
 После входа по инструкции `docs/PRODUCTION_AUTH.md`:
@@ -106,6 +109,5 @@ curl -s -b /tmp/metaengine-cookies.txt \
 ## Еще не реализовано
 
 - явный выбор decimal/percent;
-- удаление/архивация портфеля;
 - импорт исторических файлов из `samples/portfolios`;
 - расчет `accum/hwm/dd/mdd` из сохраненных points.

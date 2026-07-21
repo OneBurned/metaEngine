@@ -107,6 +107,9 @@ POST /api/v1/workspaces/{id}/portfolios/import  импорт portfolio CSV accum
 GET /api/v1/workspaces/{id}/portfolios          список всех версий
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}  metadata версии
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}/points  точки с pagination
+POST /api/v1/workspaces/{id}/portfolios/{portfolioId}/delete
+POST /api/v1/workspaces/{id}/cleanup/portfolios/{portfolioId} удалить неиспользуемую версию портфеля
+DELETE /api/v1/workspaces/{id}/portfolios/{portfolioId} alias для API-клиентов
 POST /api/v1/workspaces/{id}/presets             создать новую версию пресета
 POST /api/v1/workspaces/{id}/presets/{presetId}/delete
 POST /api/v1/workspaces/{id}/cleanup/presets/{presetId} удалить неиспользуемую версию пресета

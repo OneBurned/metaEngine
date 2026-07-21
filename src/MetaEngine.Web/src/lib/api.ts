@@ -346,6 +346,14 @@ export async function listPortfolios(workspaceId: string) {
 
 export type PortfolioImportValueType = "accum" | "diff"
 
+export async function deletePortfolio(workspaceId: string, portfolioId: string) {
+  return requestWithMethodFallback<void>([
+    { path: `/api/v1/workspaces/${workspaceId}/portfolios/${portfolioId}/delete`, init: { method: "POST" } },
+    { path: `/api/v1/workspaces/${workspaceId}/cleanup/portfolios/${portfolioId}`, init: { method: "POST" } },
+    { path: `/api/v1/workspaces/${workspaceId}/portfolios/${portfolioId}`, init: { method: "DELETE" } },
+  ], true)
+}
+
 export async function importPortfolio(workspaceId: string, file: File, name: string, valueType: PortfolioImportValueType = "accum") {
   const form = new FormData()
   form.set("name", name)

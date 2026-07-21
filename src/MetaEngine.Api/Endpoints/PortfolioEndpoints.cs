@@ -13,6 +13,12 @@ public static class PortfolioEndpoints
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/portfolios", ListAsync);
         workspaces.MapGet("/{workspaceId:guid}/portfolios/{portfolioId:guid}", FindAsync);
+        workspaces.MapPost("/{workspaceId:guid}/portfolios/{portfolioId:guid}/delete", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/cleanup/portfolios/{portfolioId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapDelete("/{workspaceId:guid}/portfolios/{portfolioId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/portfolios/{portfolioId:guid}/points", GetPointsAsync);
         return workspaces;
     }
@@ -166,6 +172,42 @@ public static class PortfolioEndpoints
 
         var portfolio = await portfolioService.FindAsync(workspaceId, portfolioId, cancellationToken);
         return portfolio is null ? Results.NotFound() : Results.Ok(portfolio);
+    }
+
+
+    private static async Task<IResult> DeleteAsync(
+        Guid workspaceId,
+        Guid portfolioId,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        IPortfolioService portfolioService,
+        CancellationToken cancellationToken)
+    {
+        var access = await FindAccessAsync(
+            httpContext,
+            workspaceAccessService,
+            workspaceId,
+            cancellationToken);
+        if (access.Result is not null)
+        {
+            return access.Result;
+        }
+
+        if (!access.Access!.CanWrite)
+        {
+            return Results.Forbid();
+        }
+
+        try
+        {
+            return await portfolioService.DeleteAsync(workspaceId, access.Access.UserId, portfolioId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound();
+        }
+        catch (PortfolioImportValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
     }
 
     private static async Task<IResult> GetPointsAsync(

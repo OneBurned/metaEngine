@@ -86,6 +86,12 @@ public interface IPortfolioService
         int offset,
         int limit,
         CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid portfolioId,
+        CancellationToken cancellationToken);
 }
 
 public sealed class PortfolioImportValidationException(string code, string message)
