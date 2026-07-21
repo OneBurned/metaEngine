@@ -77,7 +77,7 @@ export function ExportScreen() {
   async function handleExport() {
     if (!workspace || !selectedSource) return
     setIsExporting(true); setError(null)
-    try { const csv = await buildExportCsv(workspace.id, selectedSource, selectedColumns); downloadCsv(`${slugify(selectedSource.title)}_${formatFileTimestamp(new Date())}.csv`, csv); toast.success("CSV экспортирован") }
+    try { const csv = await buildExportCsv(workspace.id, selectedSource, selectedColumns); downloadCsv(`${slugify(exportFileBase(selectedSource))}_${formatFileTimestamp(new Date())}.csv`, csv); toast.success("CSV экспортирован") }
     catch (requestError) { setError(toDisplayMessage(requestError)) }
     finally { setIsExporting(false) }
   }
@@ -89,7 +89,14 @@ export function ExportScreen() {
   </AppShell>
 }
 
-function buildSources(type: SourceType, portfolios: Portfolio[], presets: Preset[], runs: CalculationRun[], strategies: SavedStrategy[]): ExportSource[] { const presentationSources = { portfolios, presets, runs }; if (type === "portfolio") return portfolios.map((portfolio) => ({ id: portfolio.id, type, title: `${portfolio.name} · v${portfolio.version} · ${formatDateTime(portfolio.startsAt)} — ${formatDateTime(portfolio.endsAt)}`, subtitle: `Создано ${formatDateTime(portfolio.createdAt)} · ТФ ${portfolio.timeframe} · ${portfolio.pointCount.toLocaleString("ru-RU")} точек`, portfolio })); if (type === "savedStrategy") return strategies.map((strategy) => ({ id: strategy.id, type, title: `${strategy.name} · v${strategy.version} · ${formatDateTime(strategy.resultPeriodStart)} — ${formatDateTime(strategy.resultPeriodEnd)}`, subtitle: `${strategyTypeLabel(strategy.strategyType)} · сохранена ${formatDateTime(strategy.createdAt)} · ТФ ${strategy.resultTimeframe}`, savedStrategy: strategy })); const kind = type === "strategyResult" ? "strategy" : "base"; return runs.filter((run) => run.status === "completed" && run.kind === kind).map((run) => ({ id: run.id, type, title: `${calculationDisplayName(run, presentationSources)} · ${formatDateTime(run.periodStart)} — ${formatDateTime(run.periodEnd)}`, subtitle: `${run.kind === "strategy" ? strategyTypeLabel(run.strategyType) : "Базовый расчет"} · создан ${formatDateTime(run.createdAt)} · ТФ ${run.timeframe}`, run })) }
+function buildSources(type: SourceType, portfolios: Portfolio[], presets: Preset[], runs: CalculationRun[], strategies: SavedStrategy[]): ExportSource[] { const presentationSources = { portfolios, presets, runs }; if (type === "portfolio") return portfolios.map((portfolio) => ({ id: portfolio.id, type, title: `${portfolio.name} · v${portfolio.version} · ${formatDateTime(portfolio.startsAt)} — ${formatDateTime(portfolio.endsAt)}`, subtitle: `Создано ${formatDateTime(portfolio.createdAt)} · ТФ ${portfolio.timeframe} · ${portfolio.pointCount.toLocaleString("ru-RU")} точек`, portfolio })); if (type === "savedStrategy") return strategies.map((strategy) => ({ id: strategy.id, type, title: `${strategy.name} · v${strategy.version} · рассчитан ${formatDateTime(strategy.createdAt)}`, subtitle: `${strategyTypeLabel(strategy.strategyType)} · период ${formatDateTime(strategy.resultPeriodStart)} — ${formatDateTime(strategy.resultPeriodEnd)} · ТФ ${strategy.resultTimeframe}`, savedStrategy: strategy })); const kind = type === "strategyResult" ? "strategy" : "base"; return runs.filter((run) => run.status === "completed" && run.kind === kind).map((run) => ({ id: run.id, type, title: `${calculationDisplayName(run, presentationSources)} · рассчитан ${formatDateTime(run.completedAt ?? run.createdAt)}`, subtitle: `${run.kind === "strategy" ? strategyTypeLabel(run.strategyType) : "Базовый расчет"} · период ${formatDateTime(run.periodStart)} — ${formatDateTime(run.periodEnd)} · создан ${formatDateTime(run.createdAt)} · ТФ ${run.timeframe}`, run })) }
+function exportFileBase(source: ExportSource) {
+  if (source.portfolio) return `${source.portfolio.name}_v${source.portfolio.version}`
+  if (source.savedStrategy) return `${source.savedStrategy.name}_v${source.savedStrategy.version}_${source.savedStrategy.strategyType}`
+  if (source.run) return `${source.run.strategyType ?? source.run.kind}_${source.run.id.slice(0, 8)}`
+  return source.title
+}
+
 function buildColumns(source: ExportSource | undefined) { const strategyType = source?.run?.strategyType ?? source?.savedStrategy?.strategyType ?? null; if (strategyType === "rsi") return [{ id: "timestamp", label: "Timestamp" }, { id: "date", label: "Date" }, ...rsiColumns]; if (strategyType) return [{ id: "timestamp", label: "Timestamp" }, { id: "date", label: "Date" }, ...mddColumns]; return baseColumns }
 async function buildExportCsv(workspaceId: string, source: ExportSource, columns: string[]) { const available = buildColumns(source); const selected = available.filter((column) => columns.includes(column.id)); const rows = await buildExportRows(workspaceId, source, selected.map((column) => column.id)); return [selected.map((column) => csvCell(column.label)).join(","), ...rows.map((row) => row.map(csvCell).join(","))].join("\n") }
 async function buildExportRows(workspaceId: string, source: ExportSource, columns: string[]) { const { points, run } = await loadSourcePoints(workspaceId, source); const metrics = deriveMetricSeries(points); const indicator = run?.kind === "strategy" ? await loadStrategyIndicators(workspaceId, run, points) : new Map<string, Record<string, string | number | null>>(); return metrics.map((point) => { const extra = indicator.get(point.timestamp) ?? {}; const fields = normalizePointFields(point.fields); const sourceDiff = numberValue(fields.source_diff ?? extra.source_diff, Number.NaN); const values: Record<string, string | number | boolean | null> = { timestamp: formatUnixTimestamp(point.timestamp), date: formatCsvDate(point.timestamp), diff: point.diff, accum: point.accum, hwm: point.highWaterMark, dd: point.drawdown, mdd: point.maxDrawdown, ...fields, ...extra }; if (values.weight === undefined && values.position === undefined) values.weight = inferWeight(point.diff, sourceDiff); if (values.position === undefined && values.weight !== undefined) values.position = values.weight; return columns.map((column) => values[column] ?? "") }) }
@@ -104,7 +111,17 @@ function formatCsvDate(value: string) { return new Date(value).toISOString().rep
 function formatUnixTimestamp(value: string) { return String(new Date(value).getTime()) }
 function formatFileTimestamp(value: Date) { return value.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15) }
 function normalizePointFields(fields: Record<string, unknown> | undefined) { const values = Object.fromEntries(Object.entries(fields ?? {}).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)) as Record<string, string | number | boolean | null>; if (values.base_dd !== undefined && values.source_dd === undefined) values.source_dd = values.base_dd; if (values.position !== undefined && values.weight === undefined) values.weight = values.position; return values }
-function csvCell(value: string | number | boolean | null | undefined) { const raw = value === null || value === undefined ? "" : String(value); const text = raw.match(/^'-?\d+(\.\d+)?$/) ? raw.slice(1) : raw; return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text }
+function csvCell(value: string | number | boolean | null | undefined) {
+  const raw = value === null || value === undefined ? "" : String(value)
+  const text = stripSpreadsheetApostrophe(raw)
+  return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+function stripSpreadsheetApostrophe(value: string) {
+  const trimmed = value.trimStart()
+  if (!trimmed.startsWith("'")) return value
+  const candidate = trimmed.slice(1).replace(",", ".")
+  return /^[-+]?\d+(\.\d+)?$/.test(candidate) ? value.slice(0, value.length - trimmed.length) + trimmed.slice(1) : value
+}
 function downloadCsv(fileName: string, csv: string) { const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }); const url = URL.createObjectURL(blob); const link = document.createElement("a"); link.href = url; link.download = fileName; link.click(); URL.revokeObjectURL(url) }
 function slugify(value: string) { return value.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "export" }
 function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить экспорт." }

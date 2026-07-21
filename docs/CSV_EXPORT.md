@@ -54,11 +54,11 @@ GET /api/portfolios/portfolio_a.csv/export?columns=timestamp,mdd
 
 ## Current result export
 
-For portfolio versions, completed base calculation results, completed strategy results, and saved strategy results, the production UI downloads canonical `timestamp,diff` points from the API, derives `accum`, `hwm`, `dd`, and `mdd`, then assembles CSV in the browser from the selected columns. The downloaded header uses English export labels for strategy columns, and numeric cells are written as numbers without leading apostrophes so Excel opens them as numbers.
+For portfolio versions, completed base calculation results, completed strategy results, and saved strategy results, the production UI downloads canonical `timestamp,diff` points from the API, derives `accum`, `hwm`, `dd`, and `mdd`, then assembles CSV in the browser from the selected columns. The downloaded header uses English export labels for strategy columns, source/result columns keep the IN/OUT naming (`IN DD`, not `Source DD`), and numeric cells are written as numbers after stripping spreadsheet-leading apostrophes so Excel opens them as numbers.
 
 ## File names
 
-Downloaded file names include only the source and current date-time to seconds, not every selected column, for example:
+Downloaded file names include only the source and current date-time to seconds, not every selected column. Source selector titles for completed calculation and strategy runs include the calculation completion date (`рассчитан ...`) so repeated sources with the same name and period can be distinguished. Examples:
 
 ```text
 portfolio_20260721_154233.csv

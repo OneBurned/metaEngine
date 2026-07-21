@@ -1060,7 +1060,7 @@ confirmation; queued/running runs and runs that have already been saved as
 versioned strategies are protected. The strategy result table is hidden by
 default, opens with **Показать данные**, shows 100 rows first and adds 500 rows
 per click. MDD strategy artifacts persist `source_diff`, `source_accum` and
-`source_dd` so `IN Diff`, `IN Accum` and `DD исходника` stay populated in the
+`source_dd` so `IN Diff`, `IN Accum` and `IN DD` stay populated in the
 table and current-result CSV export. This preserves the rule that analogous
 production UI elements reuse the same visible pattern instead of inventing a
 new one per tab.
@@ -1075,4 +1075,4 @@ main user workflow. **Последние запуски** in Calculations and **
 strategy versions; **Сохранённые пресеты** can delete unused preset versions.
 Strategy result tables use the same visible pattern as calculation result
 tables, and old RSI/MDD runs without stored source fields fall back to the
-source base result by timestamp for `IN Diff`, `IN Accum`, MDD `IN DD`, Local DD and inferable Weight. The UI uses POST cleanup action endpoints while keeping DELETE aliases, preventing proxy/browser environments from turning deletion clicks into 405 responses. Dedicated CSV export keeps selected columns in UI order, places download above preview, exports `timestamp` as Unix milliseconds and writes English export labels and short source_timestamp filenames without selected column names.
+source base result by timestamp for `IN Diff`, `IN Accum`, MDD `IN DD`, Local DD and inferable Weight. The UI tries multiple cleanup endpoints in order (POST delete action, POST cleanup alias, then DELETE alias) and falls through on both 404 and 405 so proxy/browser route differences do not leave delete clicks stuck on method/not-found errors. Dedicated CSV export keeps selected columns in UI order, places download above preview, shows calculation completion timestamps in repeated source names, exports `timestamp` as Unix milliseconds, strips spreadsheet-leading apostrophes from numeric cells, and writes English export labels plus short source_timestamp filenames without selected column names.

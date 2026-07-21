@@ -623,8 +623,14 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
 function normalizeStrategyFields(fields: Record<string, unknown> | undefined) { const values = Object.fromEntries(Object.entries(fields ?? {}).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)) as Record<string, string | number | boolean | null>; if (values.base_dd !== undefined && values.source_dd === undefined) values.source_dd = values.base_dd; if (values.position !== undefined && values.weight === undefined) values.weight = values.position; return values }
 function formatCsvValue(value: number | null | undefined | string | boolean) {
   const raw = value === null || value === undefined ? "" : String(value)
-  const text = raw.match(/^'-?\d+(\.\d+)?$/) ? raw.slice(1) : raw
+  const text = stripSpreadsheetApostrophe(raw)
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
+}
+function stripSpreadsheetApostrophe(value: string) {
+  const trimmed = value.trimStart()
+  if (!trimmed.startsWith("'")) return value
+  const candidate = trimmed.slice(1).replace(",", ".")
+  return /^[-+]?\d+(\.\d+)?$/.test(candidate) ? value.slice(0, value.length - trimmed.length) + trimmed.slice(1) : value
 }
 
 function downloadCsv(fileName: string, csv: string) {
