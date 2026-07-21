@@ -58,12 +58,12 @@ For portfolio versions, completed base calculation results, completed strategy r
 
 ## File names
 
-Downloaded file names should include the source and selected columns, for example:
+Downloaded file names include the source, current date-time to seconds and selected columns, for example:
 
 ```text
-portfolio_timestamp_mdd.csv
-base_result_timestamp_accum.csv
-strategy_result_timestamp_diff_accum_mdd.csv
+portfolio_20260721_154233_timestamp_mdd.csv
+base_result_20260721_154233_timestamp_accum.csv
+strategy_result_20260721_154233_timestamp_diff_accum_mdd.csv
 ```
 
 ## Tests
@@ -75,6 +75,8 @@ Export tests should verify:
 - column toggles exist;
 - timestamp/date can be enabled or disabled like any other column;
 - the client builds selected columns;
+- source groups are split into portfolio, base calculation, strategy result and saved strategy;
+- the preview table renders the selected columns before download;
 - the export flow avoids fixed `format` / `exportFormat` presets.
 
 
@@ -94,4 +96,4 @@ For MDD Mean Reversion, the export columns are:
 timestamp,in_diff,in_accum,in_dd,local_mdd,signal,execution,active_deals,weight,out_diff,out_accum,out_hwm,out_dd,out_mdd,max_config_weight,max_realized_weight
 ```
 
-Saved strategy configs are not CSV result series. To export strategy rows, first calculate or save the strategy result, then use either the **Экспорт CSV** shortcut in the strategy result block or the dedicated **Экспорт** tab with source type **Сохраненная стратегия** / **Расчет / результат стратегии**.
+Saved strategy configs are not CSV result series. To export strategy rows, first calculate or save the strategy result, then use either the **Экспорт CSV** shortcut in the strategy result block or the dedicated **Экспорт** tab with source type **Результаты стратегий** / **Сохранённые стратегии**.

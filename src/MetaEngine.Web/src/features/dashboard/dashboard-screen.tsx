@@ -66,11 +66,12 @@ export function DashboardScreen() {
         listSavedStrategies(workspace.id),
         listCalculationRuns(workspace.id),
       ])
+      const nextBaseRuns = nextRuns.filter((run) => run.kind === "base")
       setPortfolios(nextPortfolios)
       setPresets(nextPresets)
       setStrategies(nextStrategies)
-      setRuns(nextRuns)
-      setSelectedRunId((current) => current && nextRuns.some((run) => run.id === current) ? current : (nextRuns[0]?.id ?? null))
+      setRuns(nextBaseRuns)
+      setSelectedRunId((current) => current && nextBaseRuns.some((run) => run.id === current) ? current : (nextBaseRuns[0]?.id ?? null))
       setError(null)
     } catch (requestError) {
       setError(toDisplayMessage(requestError))

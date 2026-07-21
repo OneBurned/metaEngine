@@ -62,7 +62,7 @@ export function aggregatePortfolioPoints(points: PortfolioPoint[], sourceTimefra
     const equity = 1 + point.accum
     const diff = previousEquity === 0 ? 0 : equity / previousEquity - 1
     previousEquity = equity
-    return { timestamp: point.timestamp, diff }
+    return { timestamp: point.timestamp, diff, fields: point.fields }
   })
 }
 
