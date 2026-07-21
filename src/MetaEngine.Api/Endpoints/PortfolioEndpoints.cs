@@ -1,6 +1,7 @@
 using MetaEngine.Api.Security;
 using MetaEngine.Application.Portfolios;
 using MetaEngine.Application.Security;
+using MetaEngine.Domain.Model;
 
 namespace MetaEngine.Api.Endpoints;
 
@@ -76,6 +77,12 @@ public static class PortfolioEndpoints
                 portfolioKey = parsedPortfolioKey;
             }
 
+            var valueType = ParseValueType(form["valueType"].FirstOrDefault());
+            if (valueType is null)
+            {
+                return ValidationError("invalid_value_type", "Portfolio CSV value type must be accum or diff.");
+            }
+
             await using var content = file.OpenReadStream();
             var result = await portfolioService.ImportAsync(
                 new ImportPortfolioCommand(
@@ -84,7 +91,8 @@ public static class PortfolioEndpoints
                     name ?? string.Empty,
                     Path.GetFileName(file.FileName),
                     portfolioKey,
-                    content),
+                    content,
+                    valueType.Value),
                 cancellationToken);
             return result.Created
                 ? Results.Created(
@@ -100,6 +108,21 @@ public static class PortfolioEndpoints
         {
             return ValidationError("invalid_multipart", "Multipart request is invalid.");
         }
+    }
+
+    private static PortfolioValueType? ParseValueType(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return PortfolioValueType.Diff;
+        }
+
+        return value.Trim().ToLowerInvariant() switch
+        {
+            "accum" => PortfolioValueType.Accum,
+            "diff" => PortfolioValueType.Diff,
+            _ => null
+        };
     }
 
     private static async Task<IResult> ListAsync(

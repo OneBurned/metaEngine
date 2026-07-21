@@ -16,7 +16,8 @@ public sealed record ImportPortfolioCommand(
     string Name,
     string SourceFileName,
     Guid? PortfolioKey,
-    Stream Content);
+    Stream Content,
+    PortfolioValueType SourceValueType = PortfolioValueType.Diff);
 
 public sealed record PortfolioSummary(
     Guid Id,
@@ -30,6 +31,8 @@ public sealed record PortfolioSummary(
     string SourceChecksum,
     string SeriesChecksum,
     int PointCount,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
     DateTimeOffset CreatedAt,
     Guid? CreatedByUserId);
 

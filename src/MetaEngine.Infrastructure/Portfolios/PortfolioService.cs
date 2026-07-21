@@ -10,7 +10,7 @@ internal sealed class PortfolioService(
     MetaEngineDbContext dbContext,
     PortfolioCsvNormalizer normalizer) : IPortfolioService
 {
-    private const string NormalizationVersion = "portfolio-diff-v1";
+    private const string NormalizationVersion = "portfolio-diff-v2";
 
     public async Task<PortfolioImportResult> ImportAsync(
         ImportPortfolioCommand command,
@@ -25,7 +25,7 @@ internal sealed class PortfolioService(
                 "Source file name cannot exceed 512 characters.");
         }
 
-        var normalized = await normalizer.NormalizeAsync(command.Content, cancellationToken);
+        var normalized = await normalizer.NormalizeAsync(command.Content, command.SourceValueType, cancellationToken);
         var duplicate = await FindDuplicateAsync(
             command.WorkspaceId,
             normalized.SourceChecksum,
@@ -47,7 +47,7 @@ internal sealed class PortfolioService(
             Version = version,
             Name = name,
             SourceFileName = sourceFileName,
-            ValueType = PortfolioValueType.Diff,
+            ValueType = command.SourceValueType,
             ValueScale = PortfolioValueScale.Decimal,
             Timeframe = normalized.Timeframe,
             NormalizationVersion = NormalizationVersion,
@@ -114,7 +114,22 @@ internal sealed class PortfolioService(
             .OrderBy(portfolio => portfolio.Name)
             .ThenBy(portfolio => portfolio.PortfolioKey)
             .ThenByDescending(portfolio => portfolio.Version)
-            .Select(portfolio => ToSummary(portfolio))
+            .Select(portfolio => new PortfolioSummary(
+                portfolio.Id,
+                portfolio.PortfolioKey,
+                portfolio.Version,
+                portfolio.Name,
+                portfolio.SourceFileName,
+                portfolio.ValueType,
+                portfolio.ValueScale,
+                portfolio.Timeframe,
+                portfolio.SourceChecksum,
+                portfolio.SeriesChecksum,
+                portfolio.PointCount,
+                portfolio.Points.Min(point => point.Timestamp),
+                portfolio.Points.Max(point => point.Timestamp),
+                portfolio.CreatedAt,
+                portfolio.CreatedByUserId))
             .ToArrayAsync(cancellationToken);
 
     public Task<PortfolioSummary?> FindAsync(
@@ -124,7 +139,22 @@ internal sealed class PortfolioService(
         dbContext.Portfolios
             .AsNoTracking()
             .Where(portfolio => portfolio.WorkspaceId == workspaceId && portfolio.Id == portfolioId)
-            .Select(portfolio => ToSummary(portfolio))
+            .Select(portfolio => new PortfolioSummary(
+                portfolio.Id,
+                portfolio.PortfolioKey,
+                portfolio.Version,
+                portfolio.Name,
+                portfolio.SourceFileName,
+                portfolio.ValueType,
+                portfolio.ValueScale,
+                portfolio.Timeframe,
+                portfolio.SourceChecksum,
+                portfolio.SeriesChecksum,
+                portfolio.PointCount,
+                portfolio.Points.Min(point => point.Timestamp),
+                portfolio.Points.Max(point => point.Timestamp),
+                portfolio.CreatedAt,
+                portfolio.CreatedByUserId))
             .SingleOrDefaultAsync(cancellationToken);
 
     public async Task<PortfolioPointPage?> GetPointsAsync(
@@ -218,7 +248,7 @@ internal sealed class PortfolioService(
         NormalizedPortfolioSeries normalized) =>
         new(
             created,
-            ToSummary(portfolio),
+            ToSummary(portfolio, normalized.Points[0].Timestamp, normalized.Points[^1].Timestamp),
             new PortfolioImportReport(
                 normalized.Points.Count,
                 normalized.Timeframe,
@@ -228,7 +258,10 @@ internal sealed class PortfolioService(
                 normalized.Warnings,
                 normalized.WarningsTruncated));
 
-    private static PortfolioSummary ToSummary(PortfolioVersion portfolio) =>
+    private static PortfolioSummary ToSummary(
+        PortfolioVersion portfolio,
+        DateTimeOffset startsAt,
+        DateTimeOffset endsAt) =>
         new(
             portfolio.Id,
             portfolio.PortfolioKey,
@@ -241,6 +274,8 @@ internal sealed class PortfolioService(
             portfolio.SourceChecksum,
             portfolio.SeriesChecksum,
             portfolio.PointCount,
+            startsAt,
+            endsAt,
             portfolio.CreatedAt,
             portfolio.CreatedByUserId);
 }

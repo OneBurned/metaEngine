@@ -1,3 +1,4 @@
+using System.Text.Json;
 using MetaEngine.Domain.Model;
 
 namespace MetaEngine.Application.Calculations;
@@ -33,6 +34,7 @@ public sealed record CalculationRunSummary(
     Guid? SourceCalculationRunId,
     string? StrategyType,
     int? StrategySchemaVersion,
+    string? StrategyParametersJson,
     DateTimeOffset PeriodStart,
     DateTimeOffset PeriodEnd,
     string Timeframe,
@@ -69,7 +71,8 @@ public sealed record CalculationRunDetails(
 
 public sealed record CalculationResultPoint(
     DateTimeOffset Timestamp,
-    double Diff);
+    double Diff,
+    IReadOnlyDictionary<string, JsonElement> Fields);
 
 public sealed record CalculationResultPage(
     int Offset,

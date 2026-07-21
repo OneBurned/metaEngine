@@ -103,7 +103,7 @@ POST /api/v1/auth/logout      завершение сессии
 GET /api/v1/auth/me           текущий пользователь и его workspace
 GET /api/v1/workspaces/       доступные текущему пользователю workspace
 GET /api/v1/workspaces/{id}   workspace только при наличии membership
-POST /api/v1/workspaces/{id}/portfolios/import  импорт canonical CSV
+POST /api/v1/workspaces/{id}/portfolios/import  импорт portfolio CSV accum/diff
 GET /api/v1/workspaces/{id}/portfolios          список всех версий
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}  metadata версии
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}/points  точки с pagination

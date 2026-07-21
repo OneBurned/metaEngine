@@ -4,25 +4,43 @@
 загружает canonical CSV, API нормализует его и сохраняет неизменяемую версию
 портфеля в PostgreSQL. P4 production UI позволяет выполнить этот сценарий в
 браузере; Node.js local lab продолжает работать по прежним правилам.
+Библиотека production UI показывает для загруженного портфеля не только ТФ, но и период данных от первой до последней точки.
 
 ## Формат CSV
 
-Файл должен быть UTF-8 и иметь ровно две колонки с заголовком:
+Файл должен быть UTF-8 и содержать две колонки:
 
 ```csv
-timestamp,diff
 1704499200000,0.01
-1704502800000,-0.02
-1704506400000,0.03
+1704502800000,0.03
+1704506400000,0.00
 ```
 
-`timestamp` принимается как Unix milliseconds, `YYYY-MM-DD HH:mm`,
-`YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. `diff` — конечное
-число в decimal scale: `0.01` означает `1%`. Percent и `accum` input появятся
-отдельным расширением; сейчас они не принимаются.
+Header можно не добавлять. Если header есть, названия колонок могут быть любыми: import определяет header по первой строке, которая не похожа на данные `timestamp,value`, пропускает ее и дальше проверяет структуру строк данных. Например, допустимы `timestamp,accum`, `timestamp,diff`, `timestamp,value`, `Timestamp,Unrealized_profits` или пользовательские названия вроде `Data_i_vremya_v_tsifrah,Protsentiki`:
 
-`diff` не может быть меньше `-1` (`-100%`). Ровно `-1` допустимо и означает
-полную потерю капитала; дальнейший базовый расчет остается на `accum=-100%`.
+```csv
+Timestamp,Unrealized_profits
+1704499200000,0.01
+1704502800000,0.03
+```
+
+Важна структура строк данных: ровно две колонки, где первая колонка — timestamp, а вторая — числовое значение выбранного типа.
+
+В production UI пользователь явно выбирает смысл второй колонки: `Accum` или
+`Diff`. По умолчанию выбран `Accum`, чтобы старые пользовательские CSV без
+заголовка можно было загрузить без предварительной правки файла. API принимает
+multipart field `valueType=accum|diff`; для обратной совместимости отсутствие
+поля трактуется как `diff`.
+
+`timestamp` принимается как Unix milliseconds, `YYYY-MM-DD HH:mm`,
+`YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. Значения доходности
+пока принимаются в decimal scale: `0.01` означает `1%`. Если выбран `Accum`, API
+пересчитывает накопленную доходность в canonical `diff` перед сохранением.
+Percent input появится отдельным расширением.
+
+`diff` и `accum` не могут быть меньше `-1` (`-100%`). Ровно `-1` допустимо и
+означает полную потерю капитала; для `accum` восстановление после `-100%`
+отклоняется как невалидная последовательность.
 
 Поддерживаемые интервалы: `1m`, `5m`, `15m`, `1h`, `1d`. Строки сортируются по
 времени. Повтор timestamp отклоняет весь импорт. Пропуски не заполняются в БД,
@@ -75,6 +93,7 @@ CSRF=$(curl -s -b /tmp/metaengine-cookies.txt -c /tmp/metaengine-cookies.txt \
 curl -s -b /tmp/metaengine-cookies.txt -c /tmp/metaengine-cookies.txt \
   -H "X-CSRF-TOKEN: $CSRF" \
   -F "name=Primary portfolio" \
+  -F "valueType=accum" \
   -F "file=@portfolio.csv;type=text/csv" \
   "http://localhost:5080/api/v1/workspaces/$WORKSPACE_ID/portfolios/import" | jq
 curl -s -b /tmp/metaengine-cookies.txt \
@@ -86,7 +105,7 @@ curl -s -b /tmp/metaengine-cookies.txt \
 
 ## Еще не реализовано
 
-- import `accum` и явный выбор decimal/percent;
+- явный выбор decimal/percent;
 - удаление/архивация портфеля;
 - импорт исторических файлов из `samples/portfolios`;
 - расчет `accum/hwm/dd/mdd` из сохраненных points.

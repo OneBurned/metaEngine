@@ -57,16 +57,17 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
-    public void Canonical_result_artifact_stores_only_timestamp_and_diff_per_point()
+    public void Canonical_result_artifact_stores_timestamp_diff_and_optional_fields_per_point()
     {
         using var dbContext = CreateDbContext();
         var point = dbContext.Model.FindEntityType(typeof(RunArtifactPoint));
 
         Assert.NotNull(point);
         Assert.Equal(
-            [nameof(RunArtifactPoint.Diff), nameof(RunArtifactPoint.RunArtifactId), nameof(RunArtifactPoint.Timestamp)],
+            [nameof(RunArtifactPoint.Diff), nameof(RunArtifactPoint.FieldsJson), nameof(RunArtifactPoint.RunArtifactId), nameof(RunArtifactPoint.Timestamp)],
             point.GetProperties().Select(property => property.Name).Order(StringComparer.Ordinal));
         Assert.Equal("double precision", point.FindProperty(nameof(RunArtifactPoint.Diff))?.GetColumnType());
+        Assert.Equal("jsonb", point.FindProperty(nameof(RunArtifactPoint.FieldsJson))?.GetColumnType());
     }
 
     [Fact]

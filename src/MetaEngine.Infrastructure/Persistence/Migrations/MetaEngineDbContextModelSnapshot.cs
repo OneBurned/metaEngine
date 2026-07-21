@@ -815,6 +815,13 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("double precision")
                         .HasColumnName("diff");
 
+                    b.Property<string>("FieldsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("fields_json")
+                        .HasDefaultValue("{}");
+
                     b.HasKey("RunArtifactId", "Timestamp")
                         .HasName("pk_run_artifact_points");
 

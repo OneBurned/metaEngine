@@ -135,10 +135,7 @@ only the current period's prepared RSI series and reuses it for all buy/sell
 pairs; it then discards that series when the period changes. Optimizer
 evaluations use summary metrics without allocating full candidate result rows.
 
-MDD uses the same bounded result workflow. Its simple mode expands a common DD
-and weight range into the chosen number of entries while enforcing the minimum
-DD delta and nondecreasing target weights. Detailed mode provides an independent
-DD/weight range for every entry. Random search has a finite requested candidate
+MDD uses the same bounded result workflow. Its simple mode expands a common entry Local DD range and additive weight range into the chosen number of independent deals while enforcing only the minimum DD delta between entries. Detailed mode provides an independent DD/weight range for every deal. Random search has a finite requested candidate
 count; full search remains streamed and intentionally avoids counting the whole
 space before running.
 
@@ -364,13 +361,13 @@ PostgreSQL bootstrap/login/workspace integration test. The integration test is
 conditionally skipped on developer machines without a dedicated test database,
 but is mandatory in GitHub Actions. See `docs/PRODUCTION_CI.md`.
 
-The production importer accepts only canonical UTF-8 `timestamp,diff` CSV,
-normalizes UTC
-ordering, rejects duplicate timestamps, reports gaps, and stores immutable
-versions with raw and normalized-series SHA-256 checksums. Re-importing the same
-file or semantic series returns the existing version. This intentionally does
-not yet replace the local lab's broader `timestamp,value` plus `diff/accum`
-upload. See `docs/PORTFOLIO_IMPORT.md`.
+The production importer accepts two-column UTF-8 portfolio CSV with or without
+a header. The second column can be `accum` or `diff`: the production UI defaults
+to `accum`, the API accepts multipart `valueType=accum|diff`, and stored points
+remain canonical `timestamp,diff`. Import normalizes UTC ordering, rejects
+duplicate timestamps, reports gaps, and stores immutable versions with raw and
+normalized-series SHA-256 checksums. Re-importing the same file or semantic
+series returns the existing version. See `docs/PORTFOLIO_IMPORT.md`.
 
 The pure C# base calculation core builds the selected source grid, applies
 `missing diff = 0`, calculates
@@ -989,14 +986,14 @@ Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the str
 MDD Mean Reversion:
 
 - type: `mdd_mean_reversion`;
-- calculates local MDD for the current drawdown cycle and resets it when base DD returns to `0`;
-- default grid: `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`;
-- grid weights are target total weights, can exceed `100%`, and cannot be negative;
-- all weight changes execute on the next point;
-- after DD recovers to `0`, TP waits for base-asset movement after recovery; `TP 1%` with `10%` weight adds about `0.1%` during the TP leg;
-- the MDD result table includes `Local Accum`, which starts at `0%` on DD recovery and makes the TP trigger visible when it reaches the configured TP;
-- `TP 0%` closes after recovery from the next point;
-- if DD returns below `0` before TP, TP waiting is cancelled and grid logic resumes.
+- calculates Local DD исходника for the current source drawdown cycle and resets it when source DD returns to `0`;
+- uses independent deals rather than one target-weight grid;
+- each deal has entry Local DD исходника, additive opening weight, exit type and exit value;
+- supported exits are DD исходника, DD стратегии, HWM исходника and HWM стратегии;
+- active weight is the sum of open deals, so leverage such as 150% is valid;
+- a deal can open only once in a source drawdown cycle and can open again only after source DD recovers to `0`;
+- all entry and exit signals are executed on the next point;
+- MDD optimizer searches candidates under the same independent-deal model and no longer requires nondecreasing weights or a maximum summed weight.
 
 Strategy tables and current-strategy CSV export follow the IN/OUT table convention: `IN ...` columns are input values from the base calculation, while `OUT ...` columns are the strategy result. Saved strategy configs can be applied back into block 5 with **Применить**; CSV exports the current calculated strategy result table, not saved JSON configs.
 
@@ -1009,7 +1006,7 @@ Strategy optimizer:
 - supports stop: the current candidate finishes, then no new candidates are taken and current best results are shown;
 - result rows can be sorted and applied back to block 5 to calculate and plot the strategy.
 
-RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies level count, DD levels, target weights and TP. MDD weights are target total position weights, not incremental buys; weights must be nondecreasing, equality is allowed, and “Макс. общий вес” limits the maximum target weight level rather than the sum of all levels.
+RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies deal count, entry Local DD levels and additive opening weights; simple mode uses default exit `DD исходника 0%`. MDD weights are independent deal weights, can decrease on deeper entries, and are not limited by their sum.
 
 Graph layout:
 
@@ -1051,3 +1048,5 @@ portfolio_timestamp_mdd.csv
 base_result_timestamp_accum.csv
 strategy_result_timestamp_diff_accum_mdd.csv
 ```
+
+- P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching through `1M/1Y` plus line/histogram chart modes. Line mode shows Accum/HWM/DD/MDD on one shared percent scale; histogram mode switches to Diff bars by default, matching the old local lab behavior.

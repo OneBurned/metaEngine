@@ -25,15 +25,18 @@ export type Portfolio = {
   sourceChecksum: string
   seriesChecksum: string
   pointCount: number
+  startsAt: string
+  endsAt: string
   createdAt: string
   createdByUserId: string | null
 }
 
-export type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d"
+export type Timeframe = "1m" | "5m" | "15m" | "1h" | "1d" | "1M" | "1Y"
 
 export type PortfolioPoint = {
   timestamp: string
   diff: number
+  fields?: Record<string, unknown>
 }
 
 export type PresetSourceType = "portfolio" | "strategy"
@@ -78,6 +81,7 @@ export type CalculationRun = {
   sourceCalculationRunId: string | null
   strategyType: string | null
   strategySchemaVersion: number | null
+  strategyParametersJson?: string | null
   periodStart: string
   periodEnd: string
   timeframe: Timeframe
@@ -183,11 +187,10 @@ export type MddOptimizationSearchSpace = {
   parameterMode: "simple" | "detailed"
   levelCount: number
   minEntryDelta: number
-  maxTotalWeight: number
   drawdown?: OptimizationNumericRange
   weight?: OptimizationNumericRange
   levels?: Array<{ drawdown: OptimizationNumericRange; weight: OptimizationNumericRange }>
-  takeProfit: OptimizationNumericRange
+  exitValue: OptimizationNumericRange
   searchMode: "random" | "full"
   maxCandidates: number
 }
@@ -323,9 +326,12 @@ export async function listPortfolios(workspaceId: string) {
   return response.items
 }
 
-export async function importPortfolio(workspaceId: string, file: File, name: string) {
+export type PortfolioImportValueType = "accum" | "diff"
+
+export async function importPortfolio(workspaceId: string, file: File, name: string, valueType: PortfolioImportValueType = "accum") {
   const form = new FormData()
   form.set("name", name)
+  form.set("valueType", valueType)
   form.set("file", file)
   return request<{ portfolio: Portfolio }>(
     `/api/v1/workspaces/${workspaceId}/portfolios/import`,
@@ -588,4 +594,4 @@ export async function saveStrategy(workspaceId: string, name: string, strategyRu
   )
 }
 
-export const timeframeOptions: Timeframe[] = ["1m", "5m", "15m", "1h", "1d"]
+export const timeframeOptions: Timeframe[] = ["1m", "5m", "15m", "1h", "1d", "1M", "1Y"]

@@ -12,8 +12,8 @@ calculate canonical `timestamp,diff` results.
 4. Optionally save the completed run as a versioned strategy configuration.
 
 A strategy run stores `source_calculation_run_id`; it never re-reads a newer
-portfolio or a later base run. Its result artifact contains only canonical
-`timestamp,diff`; UI metrics and charts are rebuilt from that series.
+portfolio or a later base run. Its result artifact contains canonical
+`timestamp,diff` plus per-point strategy fields used by the result table and CSV export; UI metrics and charts are rebuilt from the canonical series.
 
 The Worker loads the source artifact separately from portfolio/preset metadata.
 This keeps a long strategy source from creating a cross-product database query
@@ -43,9 +43,12 @@ Queue body example:
 }
 ```
 
-MDD parameters use decimal values: `drawdown: -0.1` is -10%, `weight: 0.1`
-is 10%, and `takeProfit: 0.01` is 1%. Target weights must be nondecreasing;
-equal weights are allowed.
+MDD parameters use decimal values: `entryDrawdown: -0.1` is -10%, `weight: 0.1`
+is 10%, and `exitValue: 0` means the configured exit threshold. MDD configs now
+store independent `deals`; each deal has entry by Local DD исходника, additive
+opening weight, `exitType` (`source_dd`, `strategy_dd`, `source_hwm`,
+`strategy_hwm`) and `exitValue`. Weights do not have to be nondecreasing and the
+sum of open deal weights is not capped.
 
 Save body example:
 
@@ -75,7 +78,15 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 ## UI
 
 The **Strategies** page selects only completed base runs, exposes manual RSI
-and MDD parameters, follows queued/running status, displays the saved strategy
-result and saves its configuration. Its **Optimization** tab provides the full
+and MDD parameters, follows queued/running status, displays the strategy result
+with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
+The result block also restores the trading-model chart from the old local lab:
+RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
+Local DD used for deal entries. The strategy result table shows IN/OUT columns,
+signals, executions and position/weight fields. A current-result CSV export
+shortcut downloads the visible strategy result columns, while the dedicated
+**Экспорт** tab can export strategy results alongside portfolio versions and
+base calculations with any selected column set and a preview table. Its
+**Optimization** tab provides the full
 production RSI/MDD workflow: queue, progress, stop, sort and apply. The
 **Presets** page can use that saved result alongside portfolio sources.

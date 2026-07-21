@@ -19,11 +19,11 @@ separate from the local Node.js optimizer.
   aggregate results are stored. Full rows for every candidate are never written
   to the database or materialized in process; the optimizer evaluates summary
   metrics only.
-- MDD supports a **simple** mode (entry count, minimum DD delta, common DD and
-  weight ranges, maximum target weight and TP range) and a **detailed** mode
-  with separate DD/weight ranges for every entry. Its weights are target total
-  positions, must be nondecreasing and may be equal. Maximum total weight caps
-  the deepest target weight; it is not a sum of entry weights.
+- MDD supports a **simple** mode (deal count, minimum DD delta, common entry DD
+  and additive weight ranges, default exit `DD исходника 0%`) and keeps a
+  detailed mode for separate entry/weight ranges per deal. Its weights are
+  independent additive deal weights, may decrease on deeper entries, and are not
+  capped by their sum.
 - MDD random search produces the requested candidate count with a deterministic
   seed. Full search streams every valid candidate and deliberately reports an
   unknown total, avoiding a pre-count that could itself exhaust memory.

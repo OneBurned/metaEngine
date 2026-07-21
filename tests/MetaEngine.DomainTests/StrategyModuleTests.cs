@@ -106,6 +106,50 @@ public sealed class StrategyModuleTests
         Assert.Equal(1, result.Summary.BuyCount);
     }
 
+
+    [Fact]
+    public async Task Mdd_gap_opens_all_crossed_independent_deals_with_additive_weight()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.35),
+            new StrategySourcePoint(3, 0)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {"deals":[
+              {"entryDrawdown":-0.1,"weight":0.1,"exitType":"source_dd","exitValue":0},
+              {"entryDrawdown":-0.2,"weight":0.2,"exitType":"source_dd","exitValue":0},
+              {"entryDrawdown":-0.3,"weight":0.3,"exitType":"source_dd","exitValue":0}
+            ]}
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        Assert.Equal(0, result.Rows[1].Fields["position"].GetDouble());
+        Assert.Equal(0.6, result.Rows[2].Fields["position"].GetDouble(), 10);
+        Assert.Equal(3, result.Summary.BuyCount);
+        Assert.Contains("сделка 1", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("сделка 3", result.Rows[1].Fields["signal"].GetString());
+    }
+
+    [Fact]
+    public void Mdd_allows_decreasing_weights_and_leverage_sum()
+    {
+        var module = new MddMeanReversionStrategyModule();
+        using var parameters = JsonDocument.Parse("""
+            {"deals":[
+              {"entryDrawdown":-0.1,"weight":0.5,"exitType":"source_dd","exitValue":0},
+              {"entryDrawdown":-0.2,"weight":0.1,"exitType":"source_dd","exitValue":0},
+              {"entryDrawdown":-0.3,"weight":1.0,"exitType":"source_dd","exitValue":0}
+            ]}
+            """);
+
+        Assert.True(module.ValidateParameters(parameters.RootElement).IsValid);
+    }
+
     [Fact]
     public async Task Mdd_summary_matches_full_calculation()
     {
@@ -132,7 +176,7 @@ public sealed class StrategyModuleTests
     }
 
     [Fact]
-    public async Task Mdd_generates_random_candidates_with_ordered_levels_and_target_weights()
+    public async Task Mdd_generates_random_candidates_with_ordered_deals_and_additive_weights()
     {
         var module = new MddMeanReversionStrategyModule();
         using var searchSpace = JsonDocument.Parse("""
@@ -140,10 +184,9 @@ public sealed class StrategyModuleTests
               "parameterMode": "simple",
               "levelCount": 3,
               "minEntryDelta": 5,
-              "maxTotalWeight": 40,
               "drawdown": { "from": 5, "to": 25, "step": 5 },
               "weight": { "from": 10, "to": 50, "step": 10 },
-              "takeProfit": { "from": 0, "to": 2, "step": 1 },
+              "exitValue": { "from": 0, "to": 0, "step": 1 },
               "searchMode": "random",
               "maxCandidates": 4
             }
@@ -161,19 +204,18 @@ public sealed class StrategyModuleTests
         Assert.Equal(4, candidates.Count);
         foreach (var candidate in candidates)
         {
-            var levels = candidate.GetProperty("levels").EnumerateArray().ToArray();
-            Assert.Equal(3, levels.Length);
+            var deals = candidate.GetProperty("deals").EnumerateArray().ToArray();
+            Assert.Equal(3, deals.Length);
             var previousDrawdown = 0d;
-            var previousWeight = double.NegativeInfinity;
-            foreach (var level in levels)
+            foreach (var deal in deals)
             {
-                var drawdown = level.GetProperty("drawdown").GetDouble();
-                var weight = level.GetProperty("weight").GetDouble();
+                var drawdown = deal.GetProperty("entryDrawdown").GetDouble();
+                var weight = deal.GetProperty("weight").GetDouble();
                 Assert.True(drawdown < previousDrawdown);
                 Assert.True(Math.Abs(drawdown - previousDrawdown) >= 0.05 - 1e-12);
-                Assert.InRange(weight, previousWeight, 0.4);
+                Assert.InRange(weight, 0.1, 0.5);
+                Assert.Equal("source_dd", deal.GetProperty("exitType").GetString());
                 previousDrawdown = drawdown;
-                previousWeight = weight;
             }
         }
     }
@@ -187,12 +229,11 @@ public sealed class StrategyModuleTests
               "parameterMode": "detailed",
               "levelCount": 2,
               "minEntryDelta": 5,
-              "maxTotalWeight": 30,
               "levels": [
                 { "drawdown": { "from": 5, "to": 5, "step": 1 }, "weight": { "from": 10, "to": 10, "step": 1 } },
                 { "drawdown": { "from": 10, "to": 10, "step": 1 }, "weight": { "from": 20, "to": 20, "step": 1 } }
               ],
-              "takeProfit": { "from": 1, "to": 2, "step": 1 },
+              "exitValue": { "from": 0, "to": 0, "step": 1 },
               "searchMode": "full",
               "maxCandidates": 1
             }
@@ -207,9 +248,9 @@ public sealed class StrategyModuleTests
             candidates.Add(candidate);
         }
 
-        Assert.Equal(2, candidates.Count);
-        Assert.Equal(-0.05, candidates[0].GetProperty("levels")[0].GetProperty("drawdown").GetDouble(), 10);
-        Assert.Equal(0.2, candidates[0].GetProperty("levels")[1].GetProperty("weight").GetDouble(), 10);
+        Assert.Single(candidates);
+        Assert.Equal(-0.05, candidates[0].GetProperty("deals")[0].GetProperty("entryDrawdown").GetDouble(), 10);
+        Assert.Equal(0.2, candidates[0].GetProperty("deals")[1].GetProperty("weight").GetDouble(), 10);
     }
 
     [Fact]
@@ -221,10 +262,9 @@ public sealed class StrategyModuleTests
               "parameterMode": "simple",
               "levelCount": 2,
               "minEntryDelta": 0,
-              "maxTotalWeight": 100,
               "drawdown": { "from": 5, "to": 5, "step": 1 },
               "weight": { "from": 10, "to": 10, "step": 1 },
-              "takeProfit": { "from": 0, "to": 0, "step": 1 },
+              "exitValue": { "from": 0, "to": 0, "step": 1 },
               "searchMode": "random",
               "maxCandidates": 1
             }

@@ -78,32 +78,17 @@ The second trading strategy is MDD Mean Reversion:
 
 - type: `mdd_mean_reversion`;
 - source: already calculated base portfolio/preset rows;
-- it uses standard base equity metrics (`equity = 1 + accum`, HWM, DD) and adds a **local MDD** for the current drawdown cycle;
-- local MDD resets to `0` every time base DD returns to `0`;
-- default grid has five levels: `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`;
-- grid weights are target total position weights, not incremental buys;
-- weights may be greater than `100%` for leverage, but cannot be negative;
-- if one point gaps through multiple levels, the deepest crossed level wins immediately;
-- every weight change is executed on the next point, not the signal point;
-- after DD returns to `0` while a position is open, the strategy waits for TP;
-- TP is defined as base asset movement after recovery, so `TP 1%` with `10%` weight adds roughly `0.1%` to strategy equity during the TP leg;
-- `TP 0%` closes after recovery, still from the next point;
-- if the base series returns to DD `< 0` before TP, TP waiting is cancelled and the MDD grid becomes active again.
+- entry uses **Local DD исходника**, the worst source DD inside the current source drawdown cycle;
+- each configuration row is an independent deal with entry DD, additive opening weight, exit type and exit value;
+- the active strategy weight is the sum of all open deals;
+- default deals are `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`, all exiting by `DD исходника 0%`;
+- if one point gaps through several entry levels, all crossed deals receive entry signals;
+- each deal can open only once in the current source drawdown cycle and becomes eligible again after source DD recovers to `0%`;
+- every entry and exit signal is executed on the next point;
+- supported exits are `DD исходника`, `DD стратегии`, `HWM исходника`, and `HWM стратегии`;
+- weights may decrease between deeper entries and the sum of weights is not capped.
 
-MDD strategy rows should distinguish:
-
-- `base_equity` — current source equity;
-- `base_dd` — current source DD;
-- `local_mdd` — local MDD of the current drawdown cycle;
-- `local_accum` — source equity growth from the TP-start point after DD has recovered to `0`; this is the visible value that reaches TP, for example `Local Accum >= 1%` triggers `TP` when TP is `1%`;
-- `signal` — target-weight or TP-close signal on the current point;
-- `execution` — weight change executed on the current point;
-- `position` — current target weight after execution;
-- `tp_state` — waiting / hit / cancelled state for the TP automaton;
-- `source_diff` / `source_accum` — source calculation values;
-- `strategy_diff`, `strategy_accum`, `strategy_hwm`, `strategy_dd`, `strategy_mdd` — strategy result series.
-
-For charts, MDD follows the same layout as RSI: first the base result graph plus an indicator subgraph, then the separate strategy-result graph and table. The MDD indicator subgraph shows base DD, local MDD, and the configured grid levels. In the result table input columns are shown first (`IN Diff`, `IN Accum`, `IN DD`), then local MDD/TP fields and output strategy columns (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). User-facing labels are localized: `target_weight:0.1` is displayed as `Вес 10%`, `weight:0` as `Вес 0%`, `take_profit_close` as `TP`, and TP states as `Ждем TP`, `TP`, or `TP отменен`.
+MDD strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, Local DD исходника), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). Summary/result metadata exposes “Максимально возможный вес конфигурации” and “Максимально набранный вес в расчете”.
 
 ## Strategy optimizer
 
@@ -128,14 +113,13 @@ For RSI, `upperLevel` and `lowerLevel` in the form mirror `sellLevel` and `buyLe
 
 MDD Mean Reversion optimizer parameters:
 
-- level count;
-- drawdown levels;
-- target weights;
-- take profit;
-- minimum drawdown delta between levels;
-- maximum total target weight.
+- deal count;
+- entry Local DD исходника;
+- additive opening weights;
+- default exit `DD исходника 0%` in simple mode;
+- minimum drawdown delta between entries.
 
-MDD optimizer weights are **target total position weights**, not incremental buys. For example, levels `10%`, `20%`, `30%` mean the deepest level targets `30%` total exposure. The optimizer requires weights to be nondecreasing, equality is allowed. “Макс. общий вес” limits the maximum target weight level, not the sum of all level values.
+MDD optimizer weights are additive deal weights, not target total position weights. The optimizer does not require nondecreasing weights and does not cap candidates by the sum of weights.
 
 ## Adding future strategies
 

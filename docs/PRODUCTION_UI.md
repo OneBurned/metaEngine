@@ -10,8 +10,7 @@ user interface for the ASP.NET Core / PostgreSQL production workflow.
 After signing in, the user can:
 
 1. select an accessible workspace;
-2. use **Data** to import canonical `timestamp,diff` portfolio CSV and inspect
-   all saved portfolio, strategy and preset versions;
+2. use **Data** to import two-column portfolio CSV with or without header, choose whether the second column is `Accum` or `Diff`, and inspect all saved portfolio, strategy and preset versions;
 3. choose a portfolio or preset directly in **Calculations**;
 4. set an exact calculation period and an allowed target timeframe;
 5. queue a base calculation;
@@ -44,16 +43,17 @@ controls.
 
 The UI supports RSI and MDD Mean Reversion optimization. Retry actions are
 available for failed or interrupted calculation and optimization jobs. User
-management and CSV export remain future work or are governed by their API and
-domain contracts.
+management remains future work. CSV export is available through a dedicated
+**Экспорт** tab with separate source groups for portfolios, base calculations,
+strategy results and saved strategy results.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only
 the rendered chart so a long series remains responsive; the summary always
-comes from the saved calculation run. The current-result chart has independent
-drawdown and accumulated-return axes. The comparison chart can overlay up to
-five series and optionally their drawdowns; all axes are displayed as
-percentages.
+comes from the saved calculation run. The current-result chart uses one shared
+percent scale for Diff/Accum/HWM/DD/MDD. The **Calculations** page intentionally
+lists only completed or queued base calculations, while strategy runs are
+managed on the **Strategies** page.
 
 ## Authentication and local development
 
@@ -101,3 +101,10 @@ The root Node reference suite and the .NET solution remain separate checks:
 npm test
 dotnet test MetaEngine.slnx
 ```
+
+
+## Portfolio library and result chart parity
+
+The production data library shows each imported portfolio with its source period (`startsAt` → `endsAt`) alongside the detected timeframe, so users can distinguish files without opening the raw CSV. The main calculation result chart keeps the local-lab analysis controls: display timeframe can be switched for an already completed run, including calendar `1M` and `1Y` display aggregation; the chart can switch between line and histogram modes, and the same percent scale is used for Accum/HWM/DD/MDD so drawdown and return lines are visually comparable. Histogram mode follows the local-lab behavior: switching to histogram enables `Diff` bars and turns off Accum/HWM/DD/MDD until the user switches back to line mode or manually toggles series.
+
+Parity audit against the old local lab for the production calculation result currently covers: source period in the library, Accum/HWM/DD/MDD metrics and table columns, one shared percent chart scale, display timeframe switching from the calculation timeframe up to `1Y`, and line/histogram chart modes. The strategy result view follows the same parity rule: итог торговли uses one shared percent scale for Diff/Accum/HWM/DD/MDD, supports display timeframe and histogram mode, provides a current strategy CSV export shortcut, shows a separate trading-model chart (RSI line with buy/sell thresholds or MDD source/local drawdown), and restores the strategy result table with IN/OUT columns, signals, executions and weights. Production also has a dedicated **Экспорт** tab where users can export portfolio versions, completed base calculations, completed strategy runs, or saved strategy results with any selected column set and a preview table. Remaining lower-timeframe display is intentionally limited by the saved calculation result: production can show `1m` only for a result calculated at `1m`; it does not synthesize lower timeframe rows from an already saved `1h` result.

@@ -71,7 +71,7 @@ HTTP `503` и `status = not_ready`. В ответ не попадают connecti
 | `optimization_jobs` | Состояние, progress, seed и search space оптимизации |
 | `optimization_results` | Только top-N метрик и параметров без полных рядов кандидатов |
 | `run_artifacts` | Метаданные неизменяемого результата и checksum |
-| `run_artifact_points` | Канонический результат только `timestamp,diff` |
+| `run_artifact_points` | Канонический `timestamp,diff` и optional `fields_json` для строк стратегии |
 | `audit_events` | Изменения доступа и действия с данными/jobs |
 
 `accum`, `hwm`, `dd` и `mdd` не являются источником истины. Они строятся из
@@ -102,10 +102,7 @@ HTTP `503` и `status = not_ready`. В ответ не попадают connecti
 ends_at)` и может быть открытым; периоды одной и той же portfolio version не
 пересекаются. Контракт API и расчета находится в `docs/PRESETS.md`.
 
-P3 использует существующие `calculation_runs`, `run_artifacts` и
-`run_artifact_points`: постановка задачи и обработка Worker не меняют схему и
-не требуют новой migration. Завершенный artifact содержит только
-`timestamp,diff` и SHA-256 checksum; summary и warnings хранятся в run.
+P3 использует `calculation_runs`, `run_artifacts` и `run_artifact_points`. Завершенный artifact содержит `timestamp,diff`, SHA-256 checksum и, для стратегий, optional `fields_json` с данными таблицы результата; summary и warnings хранятся в run.
 Подробный workflow: `docs/CALCULATION_RUNS.md`.
 
 После выбора результата оптимизации полный расчет создает `run_artifact` и его
