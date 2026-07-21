@@ -80,6 +80,7 @@ export type CalculationRun = {
   sourceCalculationRunId: string | null
   strategyType: string | null
   strategySchemaVersion: number | null
+  strategyParametersJson?: string | null
   periodStart: string
   periodEnd: string
   timeframe: Timeframe

@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } from "@/components/ui/chart"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -28,12 +29,14 @@ import {
   type PortfolioPoint,
   type Preset,
   type SavedStrategy,
+  type Timeframe,
+  timeframeOptions,
 } from "@/lib/api"
-import { deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent } from "@/lib/metrics"
+import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent } from "@/lib/metrics"
 import { useSession } from "@/features/session/session-context"
-import { AlertCircle, BookMarked, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react"
+import { AlertCircle, BookMarked, Download, LoaderCircle, Play, Plus, Save, Trash2 } from "lucide-react"
 import { useNavigate } from "@tanstack/react-router"
-import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts"
+import { Bar, Brush, CartesianGrid, ComposedChart, Line, ReferenceLine, XAxis, YAxis } from "recharts"
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
 import { toast } from "sonner"
 
@@ -48,8 +51,14 @@ const defaultDeals: MddDeal[] = [
 ]
 
 const chartConfig = {
+  diff: { label: "Diff", color: "#0f766e" },
   accum: { label: "Доходность", color: "#2563eb" },
+  highWaterMark: { label: "HWM", color: "#16a34a" },
   drawdown: { label: "Просадка", color: "#e11d48" },
+  maxDrawdown: { label: "MDD", color: "#7c2d12" },
+  sourceDrawdown: { label: "DD исходника", color: "#f97316" },
+  localDrawdown: { label: "Local DD", color: "#9333ea" },
+  rsi: { label: "RSI", color: "#7c3aed" },
 } satisfies ChartConfig
 
 const activeStatuses = new Set<CalculationRun["status"]>(["queued", "running"])
@@ -252,7 +261,7 @@ export function StrategyScreen() {
         </Card>
 
         <section className="mt-7"><SectionTitle icon={<Play className="size-4" />} title="Запуски стратегий" /><StrategyRunTable runs={strategyRuns} selectedId={selectedRunId} onSelect={setSelectedRunId} presentationSources={presentationSources} /></section>
-        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult details={selectedRun} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
+        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult workspaceId={workspace.id} details={selectedRun} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
         <section className="mt-7"><SectionTitle icon={<Save className="size-4" />} title="Сохраненные стратегии" /><SavedStrategyTable items={savedStrategies} onApply={applySaved} /></section>
       </> : null}
     </AppShell>
@@ -274,15 +283,200 @@ function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: {
   return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Доходность</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{formatDateTime(run.createdAt)}</div></TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
 }
 
-function StrategyResult({ details, title, points, saveName, onSaveName, onSave, canWrite }: { details: CalculationRunDetails | null; title: string | null; points: PortfolioPoint[]; saveName: string; onSaveName: (value: string) => void; onSave: () => void; canWrite: boolean }) {
-  const metrics = useMemo(() => deriveMetricSeries(points), [points])
+function StrategyResult({ workspaceId, details, title, points, saveName, onSaveName, onSave, canWrite }: { workspaceId: string; details: CalculationRunDetails | null; title: string | null; points: PortfolioPoint[]; saveName: string; onSaveName: (value: string) => void; onSave: () => void; canWrite: boolean }) {
+  const [sourcePoints, setSourcePoints] = useState<PortfolioPoint[]>([])
+  const [displayTimeframe, setDisplayTimeframe] = useState<Timeframe | null>(null)
+  const [chartMode, setChartMode] = useState<"line" | "histogram">("line")
+  const [visibleLines, setVisibleLines] = useState({ diff: false, accum: true, highWaterMark: true, drawdown: true, maxDrawdown: true })
+  const strategyParameters = useMemo(() => parseStrategyParameters(details?.run.strategyParametersJson), [details?.run.strategyParametersJson])
+  const displayTimeframes = useMemo(() => details ? allowedDisplayTimeframes(details.run.timeframe, timeframeOptions) : [], [details])
+  const selectedDisplayTimeframe = displayTimeframe && displayTimeframes.includes(displayTimeframe)
+    ? displayTimeframe
+    : (details?.run.timeframe ?? "1h")
+  const displayedPoints = useMemo(() => details ? aggregatePortfolioPoints(points, details.run.timeframe, selectedDisplayTimeframe) : points, [details, points, selectedDisplayTimeframe])
+  const metrics = useMemo(() => deriveMetricSeries(displayedPoints), [displayedPoints])
   const chartPoints = useMemo(() => downsampleForChart(metrics), [metrics])
+  const sourceMetrics = useMemo(() => deriveMetricSeries(sourcePoints), [sourcePoints])
+  const indicatorPoints = useMemo(() => buildIndicatorPoints(sourceMetrics, details?.run.strategyType ?? null, strategyParameters), [details?.run.strategyType, sourceMetrics, strategyParameters])
+
+  useEffect(() => {
+    let cancelled = false
+    async function loadSource() {
+      if (!details?.run.sourceCalculationRunId) {
+        setSourcePoints([])
+        return
+      }
+      const items = await getAllCalculationResult(workspaceId, details.run.sourceCalculationRunId)
+      if (!cancelled) setSourcePoints(items)
+    }
+    void loadSource().catch(() => { if (!cancelled) setSourcePoints([]) })
+    return () => { cancelled = true }
+  }, [details?.run.sourceCalculationRunId, workspaceId])
+
+  useEffect(() => {
+    setDisplayTimeframe(details?.run.timeframe ?? null)
+    setChartMode("line")
+    setVisibleLines({ diff: false, accum: true, highWaterMark: true, drawdown: true, maxDrawdown: true })
+  }, [details?.run.id, details?.run.timeframe])
+
+  function handleChartModeChange(value: "line" | "histogram") {
+    setChartMode(value)
+    setVisibleLines(value === "histogram"
+      ? { diff: true, accum: false, highWaterMark: false, drawdown: false, maxDrawdown: false }
+      : { diff: false, accum: true, highWaterMark: true, drawdown: true, maxDrawdown: true })
+  }
+
+  function handleExport() {
+    if (!details) return
+    const csv = buildStrategyCsv(metrics, indicatorPoints, details.run.strategyType)
+    downloadCsv(`${slugify(title ?? "strategy_result")}_${selectedDisplayTimeframe}.csv`, csv)
+  }
+
   if (!details) return <EmptyPanel text="Выберите запуск стратегии." />
   if (details.run.status !== "completed") return <EmptyPanel text={details.run.status === "failed" || details.run.status === "interrupted" ? `Расчет не завершился: ${details.run.errorCode ?? "unknown_error"}. Повторить его можно на странице «Расчеты».` : "Стратегия выполняется. Статус обновляется автоматически."} />
-  return <div className="space-y-5"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · {details.run.timeframe}</p></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><ChartContainer config={chartConfig} className="h-[340px] w-full aspect-auto"><LineChart data={chartPoints}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis yAxisId="dd" width={72} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 1)} /><YAxis yAxisId="accum" orientation="right" width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><Line yAxisId="accum" dataKey="accum" stroke="var(--color-accum)" dot={false} strokeWidth={1.75} /><Line yAxisId="dd" dataKey="drawdown" stroke="var(--color-drawdown)" dot={false} strokeWidth={1.5} /></LineChart></ChartContainer></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
+  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · расчет {details.run.timeframe} · отображение {selectedDisplayTimeframe}</p></div><Button type="button" variant="outline" onClick={handleExport}><Download />Экспорт CSV</Button></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Доходность" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-4 text-sm"><ChartToggle label="Diff" checked={visibleLines.diff} onChange={(checked) => setVisibleLines((current) => ({ ...current, diff: checked }))} /><ChartToggle label="Доходность" checked={visibleLines.accum} onChange={(checked) => setVisibleLines((current) => ({ ...current, accum: checked }))} /><ChartToggle label="HWM" checked={visibleLines.highWaterMark} onChange={(checked) => setVisibleLines((current) => ({ ...current, highWaterMark: checked }))} /><ChartToggle label="DD" checked={visibleLines.drawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, drawdown: checked }))} /><ChartToggle label="MDD" checked={visibleLines.maxDrawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, maxDrawdown: checked }))} /></div><div className="flex flex-wrap items-center gap-2"><Select value={selectedDisplayTimeframe} onValueChange={(value) => setDisplayTimeframe(value as Timeframe)}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{displayTimeframes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select><Select value={chartMode} onValueChange={(value) => handleChartModeChange(value as "line" | "histogram")}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="line">Линии</SelectItem><SelectItem value="histogram">Гистограмма</SelectItem></SelectContent></Select></div></div><ChartContainer config={chartConfig} className="h-[360px] w-full aspect-auto" aria-label="Итог стратегии: Diff, доходность, HWM, DD и MDD"><ComposedChart data={chartPoints} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />}/>{visibleLines.diff ? chartMode === "histogram" ? <Bar dataKey="diff" fill="var(--color-diff)" opacity={0.65} /> : <Line type="monotone" dataKey="diff" stroke="var(--color-diff)" strokeWidth={1.25} dot={false} /> : null}{visibleLines.accum ? <Line type="monotone" dataKey="accum" stroke="var(--color-accum)" strokeWidth={1.75} dot={false} /> : null}{visibleLines.highWaterMark ? <Line type="monotone" dataKey="highWaterMark" stroke="var(--color-highWaterMark)" strokeWidth={1.5} dot={false} /> : null}{visibleLines.drawdown ? <Line type="monotone" dataKey="drawdown" stroke="var(--color-drawdown)" strokeWidth={1.35} dot={false} /> : null}{visibleLines.maxDrawdown ? <Line type="monotone" dataKey="maxDrawdown" stroke="var(--color-maxDrawdown)" strokeWidth={1.35} dot={false} strokeDasharray="5 5" /> : null}<Brush dataKey="label" height={28} stroke="#0f766e" travellerWidth={8} /></ComposedChart></ChartContainer></div><StrategyIndicatorChart strategyType={details.run.strategyType} points={indicatorPoints} parameters={strategyParameters} /><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
 }
 
 function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
+
+function StrategyIndicatorChart({ strategyType, points, parameters }: { strategyType: string | null; points: StrategyIndicatorPoint[]; parameters: StrategyParameters | null }) {
+  if (points.length === 0) return <EmptyPanel text="График торговли появится после загрузки исходного ряда стратегии." />
+  if (strategyType === "rsi") {
+    const rsiParameters = parameters?.type === "rsi" ? parameters : null
+    return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-3"><p className="text-sm font-semibold text-slate-950">График торговли RSI</p><p className="mt-1 text-xs text-slate-500">RSI считается по исходной equity-кривой базового расчета. Линии покупки/продажи показывают выбранные уровни.</p></div><ChartContainer config={chartConfig} className="h-[280px] w-full aspect-auto" aria-label="График RSI"><ComposedChart data={downsampleForChart(points)} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} width={56} tickLine={false} axisLine={false} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => Number(value).toFixed(2)} />} /><ReferenceLine y={rsiParameters?.buyLevel ?? 30} stroke="#16a34a" strokeDasharray="4 4" label="Купить" /><ReferenceLine y={rsiParameters?.sellLevel ?? 70} stroke="#dc2626" strokeDasharray="4 4" label="Продать" /><Line type="monotone" dataKey="rsi" stroke="var(--color-rsi)" strokeWidth={1.6} dot={false} connectNulls /></ComposedChart></ChartContainer></div>
+  }
+  return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-3"><p className="text-sm font-semibold text-slate-950">График модели MDD</p><p className="mt-1 text-xs text-slate-500">Показывает текущий DD исходника и Local DD текущего цикла, по которому срабатывают входы сделок.</p></div><ChartContainer config={chartConfig} className="h-[280px] w-full aspect-auto" aria-label="График MDD модели"><ComposedChart data={downsampleForChart(points)} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><ReferenceLine y={0} stroke="#94a3b8" /><Line type="monotone" dataKey="sourceDrawdown" stroke="var(--color-sourceDrawdown)" strokeWidth={1.45} dot={false} /><Line type="monotone" dataKey="localDrawdown" stroke="var(--color-localDrawdown)" strokeWidth={1.45} dot={false} strokeDasharray="5 5" /></ComposedChart></ChartContainer></div>
+}
+
+type StrategyParameters =
+  | { type: "rsi"; period: number; buyLevel: number; sellLevel: number }
+  | { type: "mdd"; deals: MddDeal[] }
+
+type StrategyIndicatorPoint = {
+  timestamp: string
+  label: string
+  rsi?: number | null
+  sourceDrawdown?: number
+  localDrawdown?: number
+}
+
+function parseStrategyParameters(json: string | null | undefined): StrategyParameters | null {
+  if (!json) return null
+  try {
+    const value = JSON.parse(json) as Record<string, unknown>
+    if (typeof value.rsiPeriod === "number") {
+      return {
+        type: "rsi",
+        period: Math.max(1, Math.trunc(value.rsiPeriod)),
+        buyLevel: numberValue(value.buyLevel, 30),
+        sellLevel: numberValue(value.sellLevel, 70),
+      }
+    }
+    if (Array.isArray(value.deals)) {
+      return {
+        type: "mdd",
+        deals: value.deals.map((deal) => {
+          const item = deal as Record<string, unknown>
+          return {
+            entryDrawdown: Math.abs(numberValue(item.entryDrawdown, -0.1) * 100),
+            weight: numberValue(item.weight, 0.1) * 100,
+            exitType: typeof item.exitType === "string" && ["source_dd", "strategy_dd", "source_hwm", "strategy_hwm"].includes(item.exitType) ? item.exitType as MddDeal["exitType"] : "source_dd",
+            exitValue: numberValue(item.exitValue, 0) * 100,
+          }
+        }),
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+function buildIndicatorPoints(sourceMetrics: ReturnType<typeof deriveMetricSeries>, strategyType: string | null, parameters: StrategyParameters | null): StrategyIndicatorPoint[] {
+  if (strategyType === "rsi") {
+    const period = parameters?.type === "rsi" ? parameters.period : 14
+    const rsi = calculateRsi(sourceMetrics.map((point) => point.accum), period)
+    return sourceMetrics.map((point, index) => ({ timestamp: point.timestamp, label: point.label, rsi: rsi[index] }))
+  }
+
+  let localDrawdown = 0
+  return sourceMetrics.map((point) => {
+    if (point.drawdown >= 0) {
+      localDrawdown = 0
+    } else {
+      localDrawdown = Math.min(localDrawdown, point.drawdown)
+    }
+    return {
+      timestamp: point.timestamp,
+      label: point.label,
+      sourceDrawdown: point.drawdown,
+      localDrawdown,
+    }
+  })
+}
+
+function calculateRsi(accumValues: number[], period: number) {
+  const values: Array<number | null> = Array(accumValues.length).fill(null)
+  if (accumValues.length <= period) return values
+  let gainSum = 0
+  let lossSum = 0
+  for (let index = 1; index <= period; index++) {
+    const delta = accumValues[index] - accumValues[index - 1]
+    if (delta >= 0) gainSum += delta
+    else lossSum -= delta
+  }
+  let averageGain = gainSum / period
+  let averageLoss = lossSum / period
+  values[period] = toRsi(averageGain, averageLoss)
+  for (let index = period + 1; index < accumValues.length; index++) {
+    const delta = accumValues[index] - accumValues[index - 1]
+    const gain = delta > 0 ? delta : 0
+    const loss = delta < 0 ? -delta : 0
+    averageGain = (averageGain * (period - 1) + gain) / period
+    averageLoss = (averageLoss * (period - 1) + loss) / period
+    values[index] = toRsi(averageGain, averageLoss)
+  }
+  return values
+}
+
+function toRsi(averageGain: number, averageLoss: number) {
+  if (averageLoss === 0) return 100
+  const rs = averageGain / averageLoss
+  return 100 - 100 / (1 + rs)
+}
+
+function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indicators: StrategyIndicatorPoint[], strategyType: string | null) {
+  const indicatorByTimestamp = new Map(indicators.map((point) => [point.timestamp, point]))
+  const indicatorColumns = strategyType === "rsi" ? ["rsi"] : ["source_dd", "local_dd"]
+  const header = ["timestamp", "diff", "accum", "hwm", "dd", "mdd", ...indicatorColumns]
+  const lines = metrics.map((point) => {
+    const indicator = indicatorByTimestamp.get(point.timestamp)
+    const extra = strategyType === "rsi"
+      ? [formatCsvNumber(indicator?.rsi)]
+      : [formatCsvNumber(indicator?.sourceDrawdown), formatCsvNumber(indicator?.localDrawdown)]
+    return [point.timestamp, point.diff, point.accum, point.highWaterMark, point.drawdown, point.maxDrawdown].map(formatCsvNumber).concat(extra).join(",")
+  })
+  return [header.join(","), ...lines].join("\n")
+}
+
+function formatCsvNumber(value: number | null | undefined | string) {
+  if (typeof value === "string") return value
+  return typeof value === "number" && Number.isFinite(value) ? String(value) : ""
+}
+
+function downloadCsv(fileName: string, csv: string) {
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function slugify(value: string) {
+  return value.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "strategy_result"
+}
 
 function NumberField({ label, value, onChange, min, max }: { label: string; value: number; onChange: (value: number) => void; min?: number; max?: number }) { return <Field label={label}><Input type="number" value={value} min={min} max={max} step="any" onChange={(event) => onChange(Number(event.target.value))} /></Field> }
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div className="grid gap-1.5"><Label>{label}</Label>{children}</div> }
@@ -293,3 +487,4 @@ function EmptyPanel({ text }: { text: string }) { return <div className="grid mi
 function Status({ status }: { status: CalculationRun["status"] }) { const labels = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка", interrupted: "Прервана" }; const classes = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800", interrupted: "border-orange-200 bg-orange-50 text-orange-800" }; return <Badge variant="outline" className={classes[status]}>{labels[status]}</Badge> }
 function numberValue(value: unknown, fallback: number) { return typeof value === "number" && Number.isFinite(value) ? value : fallback }
 function toDisplayMessage(error: unknown) { return error instanceof Error ? error.message : "Не удалось выполнить запрос." }
+function ChartToggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) { return <label className="flex items-center gap-2"><Checkbox checked={checked} onCheckedChange={(value) => onChange(value === true)} />{label}</label> }

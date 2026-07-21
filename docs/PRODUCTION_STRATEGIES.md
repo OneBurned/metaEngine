@@ -78,7 +78,11 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 ## UI
 
 The **Strategies** page selects only completed base runs, exposes manual RSI
-and MDD parameters, follows queued/running status, displays the saved strategy
-result and saves its configuration. Its **Optimization** tab provides the full
+and MDD parameters, follows queued/running status, displays the strategy result
+with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
+The result block also restores the trading-model chart from the old local lab:
+RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
+Local DD used for deal entries. A current-result CSV export button downloads the
+visible strategy result columns. Its **Optimization** tab provides the full
 production RSI/MDD workflow: queue, progress, stop, sort and apply. The
 **Presets** page can use that saved result alongside portfolio sources.

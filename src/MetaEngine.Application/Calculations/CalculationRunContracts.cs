@@ -33,6 +33,7 @@ public sealed record CalculationRunSummary(
     Guid? SourceCalculationRunId,
     string? StrategyType,
     int? StrategySchemaVersion,
+    string? StrategyParametersJson,
     DateTimeOffset PeriodStart,
     DateTimeOffset PeriodEnd,
     string Timeframe,
