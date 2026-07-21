@@ -146,10 +146,11 @@ internal sealed class CalculationRunService(
         return ToSummary(run);
     }
 
-    public async Task<bool> DeleteStrategyRunAsync(
+    public async Task<bool> DeleteRunAsync(
         Guid workspaceId,
         Guid userId,
         Guid runId,
+        CalculationRunKind? requiredKind,
         CancellationToken cancellationToken)
     {
         var run = await dbContext.CalculationRuns
@@ -162,47 +163,131 @@ internal sealed class CalculationRunService(
             return false;
         }
 
-        if (run.Kind != CalculationRunKind.Strategy)
+        await EnsureRunCanBeDeletedAsync(run, requiredKind, cancellationToken);
+        DeleteRun(workspaceId, userId, run);
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    public async Task<BulkDeleteResult> DeleteInactiveRunsAsync(
+        Guid workspaceId,
+        Guid userId,
+        CalculationRunKind? requiredKind,
+        CancellationToken cancellationToken)
+    {
+        var runs = await dbContext.CalculationRuns
+            .Include(run => run.Artifacts)
+            .Where(run => run.WorkspaceId == workspaceId && (requiredKind == null || run.Kind == requiredKind.Value))
+            .OrderBy(run => run.CreatedAt)
+            .ToArrayAsync(cancellationToken);
+
+        var deleted = 0;
+        var skipped = 0;
+        foreach (var run in runs)
+        {
+            if (await CanDeleteRunAsync(run, requiredKind, cancellationToken))
+            {
+                DeleteRun(workspaceId, userId, run);
+                deleted++;
+            }
+            else
+            {
+                skipped++;
+            }
+        }
+
+        if (deleted > 0)
+        {
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        return new BulkDeleteResult(deleted, skipped);
+    }
+
+    private async Task EnsureRunCanBeDeletedAsync(
+        CalculationRun run,
+        CalculationRunKind? requiredKind,
+        CancellationToken cancellationToken)
+    {
+        if (requiredKind is not null && run.Kind != requiredKind.Value)
         {
             throw new CalculationRunValidationException(
-                "not_strategy_run",
-                "Only strategy calculation runs can be deleted from the strategy screen.");
+                "calculation_run_wrong_kind",
+                requiredKind.Value == CalculationRunKind.Strategy
+                    ? "Only strategy calculation runs can be deleted from the strategy screen."
+                    : "Only base calculation runs can be deleted from the calculations screen.");
         }
 
         if (run.Status is JobStatus.Queued or JobStatus.Running)
         {
             throw new CalculationRunValidationException(
-                "strategy_run_active",
-                "Queued or running strategy calculation runs cannot be deleted.");
+                "calculation_run_active",
+                "Queued or running calculation runs cannot be deleted.");
+        }
+
+        if (await HasRunDependenciesAsync(run, cancellationToken))
+        {
+            throw new CalculationRunValidationException(
+                "calculation_run_in_use",
+                "This calculation run is used by another saved object or run and cannot be deleted.");
+        }
+    }
+
+    private async Task<bool> CanDeleteRunAsync(
+        CalculationRun run,
+        CalculationRunKind? requiredKind,
+        CancellationToken cancellationToken)
+    {
+        if (requiredKind is not null && run.Kind != requiredKind.Value)
+        {
+            return false;
+        }
+
+        if (run.Status is JobStatus.Queued or JobStatus.Running)
+        {
+            return false;
+        }
+
+        return !await HasRunDependenciesAsync(run, cancellationToken);
+    }
+
+    private async Task<bool> HasRunDependenciesAsync(CalculationRun run, CancellationToken cancellationToken)
+    {
+        if (await dbContext.CalculationRuns.AnyAsync(candidate => candidate.SourceCalculationRunId == run.Id, cancellationToken))
+        {
+            return true;
+        }
+
+        if (await dbContext.OptimizationJobs.AnyAsync(job => job.SourceCalculationRunId == run.Id, cancellationToken))
+        {
+            return true;
         }
 
         var artifactIds = run.Artifacts.Select(artifact => artifact.Id).ToArray();
-        if (artifactIds.Length > 0 && await dbContext.Strategies.AnyAsync(
+        return artifactIds.Length > 0 && await dbContext.Strategies.AnyAsync(
             strategy => artifactIds.Contains(strategy.ResultArtifactId),
-            cancellationToken))
-        {
-            throw new CalculationRunValidationException(
-                "strategy_run_saved",
-                "A strategy calculation run saved as a versioned strategy cannot be deleted.");
-        }
+            cancellationToken);
+    }
 
+    private void DeleteRun(Guid workspaceId, Guid userId, CalculationRun run)
+    {
         dbContext.CalculationRuns.Remove(run);
         dbContext.AuditEvents.Add(new AuditEvent
         {
             WorkspaceId = workspaceId,
             UserId = userId,
-            Action = "strategy_run_deleted",
+            Action = run.Kind == CalculationRunKind.Strategy ? "strategy_run_deleted" : "calculation_run_deleted",
             EntityType = "calculation_run",
             EntityId = run.Id,
             DetailsJson = JsonSerializer.Serialize(new
             {
+                run.Kind,
+                run.InputType,
                 run.StrategyType,
                 run.SourceCalculationRunId,
                 run.Status
             })
         });
-        await dbContext.SaveChangesAsync(cancellationToken);
-        return true;
     }
 
     public async Task<IReadOnlyList<CalculationRunSummary>> ListAsync(

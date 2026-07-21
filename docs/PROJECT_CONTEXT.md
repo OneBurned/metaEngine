@@ -1064,3 +1064,15 @@ per click. MDD strategy artifacts persist `source_diff`, `source_accum` and
 table and current-result CSV export. This preserves the rule that analogous
 production UI elements reuse the same visible pattern instead of inventing a
 new one per tab.
+
+## P6 follow-up: unified cleanup actions
+
+Production cleanup actions now follow the same row-action pattern across the
+main user workflow. **Последние запуски** in Calculations and **Запуски
+стратегий** in Strategies can delete inactive unused runs one by one or through
+**Удалить все**, which skips queued/running and referenced runs. **Сохраненные
+стратегии** moved directly after strategy runs and can delete unused saved
+strategy versions; **Сохранённые пресеты** can delete unused preset versions.
+Strategy result tables use the same visible pattern as calculation result
+tables, and old RSI/MDD runs without stored source fields fall back to the
+source base result by timestamp for `IN Diff`, `IN Accum` and MDD `DD исходника`.

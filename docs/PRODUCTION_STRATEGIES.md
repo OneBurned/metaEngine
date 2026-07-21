@@ -26,8 +26,10 @@ All endpoints are workspace-scoped. `Admin` and `Researcher` can create data;
 
 ```text
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
-DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/strategy-run
+DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}?kind=strategy
+DELETE /api/v1/workspaces/{workspaceId}/calculation-runs?kind=strategy
 POST   /api/v1/workspaces/{workspaceId}/strategies
+DELETE /api/v1/workspaces/{workspaceId}/strategies/{strategyId}
 GET    /api/v1/workspaces/{workspaceId}/strategies
 ```
 
@@ -89,8 +91,10 @@ starts from 100 rows and then adds rows through **Показать ещё 500** 
 strategies remain reachable without scrolling through a huge table. The table
 shows IN/OUT columns, signals, executions and position/weight fields; MDD rows
 persist `source_diff`, `source_accum` and `source_dd` for export/table parity.
-Inactive strategy runs can be deleted from the run list after confirmation, but
-queued/running runs and runs already saved as versioned strategies are protected.
+Inactive strategy runs can be deleted from the run list after confirmation, and
+the list also has **Удалить все** for inactive unsaved runs; queued/running runs
+and runs already saved as versioned strategies are protected. Saved strategies
+can also be deleted after confirmation when no preset references them.
 A current-result CSV export shortcut downloads the visible strategy result
 columns, while the dedicated
 **Экспорт** tab can export strategy results alongside portfolio versions and

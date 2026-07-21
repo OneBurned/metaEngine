@@ -99,6 +99,46 @@ internal sealed class SavedStrategyService(MetaEngineDbContext dbContext) : ISav
                 strategy.CreatedAt))
             .ToArrayAsync(cancellationToken);
 
+    public async Task<bool> DeleteAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid strategyId,
+        CancellationToken cancellationToken)
+    {
+        var strategy = await dbContext.Strategies
+            .SingleOrDefaultAsync(candidate => candidate.Id == strategyId && candidate.WorkspaceId == workspaceId, cancellationToken);
+        if (strategy is null)
+        {
+            return false;
+        }
+
+        if (await dbContext.PresetItems.AnyAsync(item => item.StrategyId == strategyId, cancellationToken))
+        {
+            throw new SavedStrategyValidationException(
+                "strategy_in_use",
+                "This saved strategy is used in a preset and cannot be deleted.");
+        }
+
+        dbContext.Strategies.Remove(strategy);
+        dbContext.AuditEvents.Add(new AuditEvent
+        {
+            WorkspaceId = workspaceId,
+            UserId = userId,
+            Action = "strategy_deleted",
+            EntityType = "strategy",
+            EntityId = strategy.Id,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                strategy.StrategyKey,
+                strategy.Version,
+                strategy.StrategyType,
+                strategy.ResultArtifactId
+            })
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private static SavedStrategySummary ToSummary(
         SavedStrategyVersion strategy,
         CalculationRun resultRun) => new(

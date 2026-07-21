@@ -22,13 +22,13 @@ After signing in, the user can:
 8. open the point table only when needed and continue loading rows in batches;
 9. select a completed base run, calculate RSI or MDD Mean Reversion, open only
    the needed rows of the strategy result table, delete inactive unsaved strategy
-   runs when they are no longer needed, and save the resulting strategy
-   configuration.
+   runs when they are no longer needed, delete unused saved strategies, and save
+   the resulting strategy configuration.
 10. optimize RSI or MDD Mean Reversion across several sequential samples,
     follow, stop or retry the job, compare sortable top results and queue one
     configuration as a normal strategy run before saving it.
-11. create a preset from portfolio and saved-strategy sources, then select that
-   preset as the source for a base calculation.
+11. create a preset from portfolio and saved-strategy sources, delete unused
+   saved presets, then select a preset as the source for a base calculation.
 12. compare up to five portfolio, saved-strategy or completed-run series in one
    chart; each series starts at 0% on its own first point.
 
@@ -57,7 +57,8 @@ the rendered chart so a long series remains responsive; the summary always
 comes from the saved calculation run. The current-result chart uses one shared
 percent scale for Diff/Accum/HWM/DD/MDD. The **Calculations** page intentionally
 lists only completed or queued base calculations, while strategy runs are
-managed on the **Strategies** page.
+managed on the **Strategies** page. Both run tables support deleting inactive
+unused rows and bulk cleanup that skips protected rows.
 
 ## Authentication and local development
 

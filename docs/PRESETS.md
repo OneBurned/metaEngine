@@ -35,9 +35,10 @@ All endpoints require an authenticated user with membership in the workspace.
 the existing CSRF request header.
 
 ```text
-POST /api/v1/workspaces/{workspaceId}/presets
-GET  /api/v1/workspaces/{workspaceId}/presets
-GET  /api/v1/workspaces/{workspaceId}/presets/{presetId}
+POST   /api/v1/workspaces/{workspaceId}/presets
+DELETE /api/v1/workspaces/{workspaceId}/presets/{presetId}
+GET    /api/v1/workspaces/{workspaceId}/presets
+GET    /api/v1/workspaces/{workspaceId}/presets/{presetId}
 ```
 
 Example create body:
@@ -108,3 +109,5 @@ checked with the same `1e-12` absolute tolerance as the base calculation.
 npm test
 dotnet test tests/MetaEngine.DomainTests/MetaEngine.DomainTests.csproj
 ```
+
+Preset versions can be deleted from the production UI after confirmation when they are not referenced by calculation runs, optimization jobs or saved strategies.

@@ -32,7 +32,10 @@ public interface ISavedStrategyService
     Task<SavedStrategySummary> SaveAsync(SaveStrategyCommand command, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<SavedStrategySummary>> ListAsync(Guid workspaceId, CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(Guid workspaceId, Guid userId, Guid strategyId, CancellationToken cancellationToken);
 }
+
 
 public sealed class SavedStrategyValidationException(string code, string message) : Exception(message)
 {

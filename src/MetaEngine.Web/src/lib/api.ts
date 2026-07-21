@@ -384,6 +384,14 @@ export async function getPreset(workspaceId: string, presetId: string) {
   return request<PresetDetails>(`/api/v1/workspaces/${workspaceId}/presets/${presetId}`)
 }
 
+export async function deletePreset(workspaceId: string, presetId: string) {
+  return request<void>(
+    `/api/v1/workspaces/${workspaceId}/presets/${presetId}`,
+    { method: "DELETE" },
+    true,
+  )
+}
+
 export async function createPreset(
   workspaceId: string,
   input: {
@@ -559,12 +567,26 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
   )
 }
 
-export async function deleteStrategyRun(workspaceId: string, runId: string) {
+export async function deleteCalculationRun(workspaceId: string, runId: string, kind?: "base" | "strategy") {
+  const suffix = kind ? `?kind=${kind}` : ""
   return request<void>(
-    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/strategy-run`,
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}${suffix}`,
     { method: "DELETE" },
     true,
   )
+}
+
+export async function deleteCalculationRuns(workspaceId: string, kind?: "base" | "strategy") {
+  const suffix = kind ? `?kind=${kind}` : ""
+  return request<{ deleted: number; skipped: number }>(
+    `/api/v1/workspaces/${workspaceId}/calculation-runs${suffix}`,
+    { method: "DELETE" },
+    true,
+  )
+}
+
+export async function deleteStrategyRun(workspaceId: string, runId: string) {
+  return deleteCalculationRun(workspaceId, runId, "strategy")
 }
 
 export async function getAllCalculationResult(workspaceId: string, runId: string) {
@@ -598,6 +620,14 @@ export async function saveStrategy(workspaceId: string, name: string, strategyRu
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, strategyRunId, strategyKey: strategyKey ?? null }),
     },
+    true,
+  )
+}
+
+export async function deleteSavedStrategy(workspaceId: string, strategyId: string) {
+  return request<void>(
+    `/api/v1/workspaces/${workspaceId}/strategies/${strategyId}`,
+    { method: "DELETE" },
     true,
   )
 }

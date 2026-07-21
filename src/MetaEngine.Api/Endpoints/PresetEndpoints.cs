@@ -11,6 +11,8 @@ public static class PresetEndpoints
     {
         workspaces.MapPost("/{workspaceId:guid}/presets", CreateAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapDelete("/{workspaceId:guid}/presets/{presetId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/presets", ListAsync);
         workspaces.MapGet("/{workspaceId:guid}/presets/{presetId:guid}", FindAsync);
         return workspaces;
@@ -60,6 +62,42 @@ public static class PresetEndpoints
             return Results.Created(
                 $"/api/v1/workspaces/{workspaceId}/presets/{preset.Preset.Id}",
                 preset);
+        }
+        catch (PresetValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
+    }
+
+    private static async Task<IResult> DeleteAsync(
+        Guid workspaceId,
+        Guid presetId,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        IPresetService presetService,
+        CancellationToken cancellationToken)
+    {
+        if (!httpContext.User.TryGetUserId(out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var access = await workspaceAccessService.FindForUserAsync(userId, workspaceId, cancellationToken);
+        if (access is null)
+        {
+            return Results.NotFound();
+        }
+
+        if (!access.CanWrite)
+        {
+            return Results.Forbid();
+        }
+
+        try
+        {
+            return await presetService.DeleteAsync(workspaceId, userId, presetId, cancellationToken)
+                ? Results.NoContent()
+                : Results.NotFound();
         }
         catch (PresetValidationException exception)
         {

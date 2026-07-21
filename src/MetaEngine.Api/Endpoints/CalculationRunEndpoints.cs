@@ -17,7 +17,11 @@ public static class CalculationRunEndpoints
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost("/{workspaceId:guid}/calculation-runs/{runId:guid}/retry", RetryAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapDelete("/{workspaceId:guid}/calculation-runs/{runId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapDelete("/{workspaceId:guid}/calculation-runs/{runId:guid}/strategy-run", DeleteStrategyRunAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapDelete("/{workspaceId:guid}/calculation-runs", DeleteManyAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs", ListAsync);
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs/{runId:guid}", FindAsync);
@@ -195,6 +199,37 @@ public static class CalculationRunEndpoints
     }
 
 
+    private static async Task<IResult> DeleteAsync(
+        Guid workspaceId,
+        Guid runId,
+        string? kind,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        ICalculationRunService calculationRunService,
+        CancellationToken cancellationToken)
+    {
+        var access = await FindWriteAccessAsync(httpContext, workspaceAccessService, workspaceId, cancellationToken);
+        if (access.Result is not null)
+        {
+            return access.Result;
+        }
+
+        if (!TryGetRunKind(kind, out var requiredKind, out var validationResult))
+        {
+            return validationResult!;
+        }
+
+        try
+        {
+            var deleted = await calculationRunService.DeleteRunAsync(workspaceId, access.UserId, runId, requiredKind, cancellationToken);
+            return deleted ? Results.NoContent() : Results.NotFound();
+        }
+        catch (CalculationRunValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
+    }
+
     private static async Task<IResult> DeleteStrategyRunAsync(
         Guid workspaceId,
         Guid runId,
@@ -203,30 +238,53 @@ public static class CalculationRunEndpoints
         ICalculationRunService calculationRunService,
         CancellationToken cancellationToken)
     {
-        if (!httpContext.User.TryGetUserId(out var userId))
+        var access = await FindWriteAccessAsync(httpContext, workspaceAccessService, workspaceId, cancellationToken);
+        if (access.Result is not null)
         {
-            return Results.Unauthorized();
-        }
-
-        var access = await workspaceAccessService.FindForUserAsync(userId, workspaceId, cancellationToken);
-        if (access is null)
-        {
-            return Results.NotFound();
-        }
-        if (!access.CanWrite)
-        {
-            return Results.Forbid();
+            return access.Result;
         }
 
         try
         {
-            var deleted = await calculationRunService.DeleteStrategyRunAsync(workspaceId, userId, runId, cancellationToken);
+            var deleted = await calculationRunService.DeleteRunAsync(
+                workspaceId,
+                access.UserId,
+                runId,
+                CalculationRunKind.Strategy,
+                cancellationToken);
             return deleted ? Results.NoContent() : Results.NotFound();
         }
         catch (CalculationRunValidationException exception)
         {
             return ValidationError(exception.Code, exception.Message);
         }
+    }
+
+    private static async Task<IResult> DeleteManyAsync(
+        Guid workspaceId,
+        string? kind,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        ICalculationRunService calculationRunService,
+        CancellationToken cancellationToken)
+    {
+        var access = await FindWriteAccessAsync(httpContext, workspaceAccessService, workspaceId, cancellationToken);
+        if (access.Result is not null)
+        {
+            return access.Result;
+        }
+
+        if (!TryGetRunKind(kind, out var requiredKind, out var validationResult))
+        {
+            return validationResult!;
+        }
+
+        var result = await calculationRunService.DeleteInactiveRunsAsync(
+            workspaceId,
+            access.UserId,
+            requiredKind,
+            cancellationToken);
+        return Results.Ok(result);
     }
 
     private static async Task<IResult> GetResultAsync(
@@ -306,6 +364,51 @@ public static class CalculationRunEndpoints
             "calculation_input_required",
             "Exactly one of portfolioId or presetId is required.");
         return false;
+    }
+
+    private static bool TryGetRunKind(string? kind, out CalculationRunKind? requiredKind, out IResult? validationResult)
+    {
+        requiredKind = null;
+        validationResult = null;
+        if (string.IsNullOrWhiteSpace(kind))
+        {
+            return true;
+        }
+
+        if (string.Equals(kind, "base", StringComparison.OrdinalIgnoreCase))
+        {
+            requiredKind = CalculationRunKind.Base;
+            return true;
+        }
+
+        if (string.Equals(kind, "strategy", StringComparison.OrdinalIgnoreCase))
+        {
+            requiredKind = CalculationRunKind.Strategy;
+            return true;
+        }
+
+        validationResult = ValidationError("invalid_run_kind", "Run kind must be base or strategy.");
+        return false;
+    }
+
+    private static async Task<(Guid UserId, IResult? Result)> FindWriteAccessAsync(
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        Guid workspaceId,
+        CancellationToken cancellationToken)
+    {
+        if (!httpContext.User.TryGetUserId(out var userId))
+        {
+            return (Guid.Empty, Results.Unauthorized());
+        }
+
+        var access = await workspaceAccessService.FindForUserAsync(userId, workspaceId, cancellationToken);
+        if (access is null)
+        {
+            return (Guid.Empty, Results.NotFound());
+        }
+
+        return access.CanWrite ? (userId, null) : (Guid.Empty, Results.Forbid());
     }
 
     private static async Task<(WorkspaceAccess? Access, IResult? Result)> FindAccessAsync(

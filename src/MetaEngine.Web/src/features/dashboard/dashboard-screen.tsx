@@ -15,10 +15,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ComparisonPanel } from "@/features/calculations/comparison-panel"
 import { calculationDisplayName, calculationKindLabel } from "@/features/calculations/run-presentation"
 import { useSession } from "@/features/session/session-context"
-import { getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, retryCalculationRun, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
+import { deleteCalculationRun, deleteCalculationRuns, getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, retryCalculationRun, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
 import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent, toDateTimeLocal, toIsoDateTime } from "@/lib/metrics"
 import { Link, useNavigate } from "@tanstack/react-router"
-import { AlertCircle, BarChart3, CalendarClock, ChevronDown, ChevronUp, Layers3, LoaderCircle, Play, RefreshCw, RotateCcw, TableProperties } from "lucide-react"
+import { AlertCircle, BarChart3, CalendarClock, ChevronDown, ChevronUp, Layers3, LoaderCircle, Play, RefreshCw, RotateCcw, TableProperties, Trash2 } from "lucide-react"
 import { Bar, Brush, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts"
 import { toast } from "sonner"
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react"
@@ -135,6 +135,42 @@ export function DashboardScreen() {
     await refreshOverview()
   }
 
+  async function handleDeleteRun(run: CalculationRun) {
+    if (!workspace?.canWrite) return
+    if (activeStatuses.has(run.status)) {
+      setError("Запуск еще выполняется, поэтому его нельзя удалить.")
+      return
+    }
+    if (!window.confirm("Удалить этот запуск расчета? Это действие нельзя отменить.")) return
+    try {
+      await deleteCalculationRun(workspace.id, run.id, "base")
+      if (selectedRunId === run.id) {
+        setSelectedRunId(null)
+        setSelectedRun(null)
+        setResultPoints([])
+      }
+      toast.success("Запуск расчета удален")
+      await refreshOverview()
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    }
+  }
+
+  async function handleDeleteAllRuns() {
+    if (!workspace?.canWrite) return
+    if (!window.confirm("Удалить все неактивные и неиспользуемые запуски расчетов? Активные и связанные запуски будут пропущены.")) return
+    try {
+      const result = await deleteCalculationRuns(workspace.id, "base")
+      setSelectedRunId(null)
+      setSelectedRun(null)
+      setResultPoints([])
+      toast.success(`Удалено: ${result.deleted}. Пропущено: ${result.skipped}.`)
+      await refreshOverview()
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    }
+  }
+
   async function handleRetry(runId: string) {
     if (!workspace) return
     try {
@@ -162,7 +198,7 @@ export function DashboardScreen() {
     {error ? <Alert variant="destructive" className="mt-5 rounded-md"><AlertCircle className="size-4" /><AlertTitle>Операция не выполнена</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     {!workspace ? <Alert className="mt-6 rounded-md border-amber-200 bg-amber-50 text-amber-950"><AlertCircle className="size-4 text-amber-700" /><AlertTitle>Нет доступного workspace</AlertTitle><AlertDescription>Обратитесь к администратору, чтобы получить доступ к workspace.</AlertDescription></Alert> : <>
       <section className="mt-6"><CalculationPanel canWrite={workspace.canWrite} portfolios={portfolios} presets={presets} workspaceId={workspace.id} onQueue={handleQueue} /></section>
-      <section className="mt-7" aria-labelledby="runs-heading"><SectionHeading id="runs-heading" icon={<CalendarClock className="size-4" />} title="Последние запуски" /><RecentRunTable isLoading={isLoading} runs={runs} selectedId={selectedRunId} onSelect={setSelectedRunId} onRetry={handleRetry} canWrite={workspace.canWrite} presentationSources={presentationSources} /></section>
+      <section className="mt-7" aria-labelledby="runs-heading"><SectionHeading id="runs-heading" icon={<CalendarClock className="size-4" />} title="Последние запуски" /><RecentRunTable isLoading={isLoading} runs={runs} selectedId={selectedRunId} onSelect={setSelectedRunId} onRetry={handleRetry} onDelete={(run) => void handleDeleteRun(run)} onDeleteAll={() => void handleDeleteAllRuns()} canWrite={workspace.canWrite} presentationSources={presentationSources} /></section>
       <section className="mt-7" aria-labelledby="analysis-heading"><SectionHeading id="analysis-heading" icon={<BarChart3 className="size-4" />} title="Анализ" /><Tabs defaultValue="result"><TabsList><TabsTrigger value="result">Текущий результат</TabsTrigger><TabsTrigger value="comparison">Сравнение</TabsTrigger></TabsList><TabsContent value="result" className="mt-4"><ResultPanel details={selectedRun} isLoading={isLoadingResult} points={resultPoints} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} canRetry={workspace.canWrite} onRetry={handleRetry} /></TabsContent><TabsContent value="comparison" className="mt-4"><ComparisonPanel workspaceId={workspace.id} portfolios={portfolios} presets={presets} strategies={strategies} runs={runs} /></TabsContent></Tabs></section>
     </>}
   </AppShell>
@@ -238,11 +274,11 @@ function CalculationPanel({ canWrite, portfolios, presets, workspaceId, onQueue 
   </form></CardContent></Card>
 }
 
-function RecentRunTable({ isLoading, runs, selectedId, onSelect, onRetry, canWrite, presentationSources }: { isLoading: boolean; runs: CalculationRun[]; selectedId: string | null; onSelect: (id: string) => void; onRetry: (id: string) => void; canWrite: boolean; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
+function RecentRunTable({ isLoading, runs, selectedId, onSelect, onRetry, onDelete, onDeleteAll, canWrite, presentationSources }: { isLoading: boolean; runs: CalculationRun[]; selectedId: string | null; onSelect: (id: string) => void; onRetry: (id: string) => void; onDelete: (run: CalculationRun) => void; onDeleteAll: () => void; canWrite: boolean; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
   const [showAll, setShowAll] = useState(false)
   const visibleRuns = showAll ? runs : runs.slice(0, 5)
 
-  return <div className="space-y-3"><div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Период</TableHead><TableHead className="hidden lg:table-cell text-right">Accum</TableHead><TableHead className="w-28 text-right">Детали</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRows columns={5} /> : null}{!isLoading && runs.length === 0 ? <EmptyRow columns={5} text="Запусков пока нет." /> : visibleRuns.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationKindLabel(run)} · {run.timeframe}</div></TableCell><TableCell><StatusBadge status={run.status} />{queueStatusNote(run) ? <div className="mt-1 text-xs text-slate-500">{queueStatusNote(run)}</div> : null}</TableCell><TableCell className="hidden md:table-cell text-sm">{formatDateTime(run.periodStart)} - {formatDateTime(run.periodEnd)}</TableCell><TableCell className="hidden lg:table-cell text-right tabular-nums">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1">{canWrite && isRetryable(run) ? <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onRetry(run.id)} aria-label="Повторить расчёт"><RotateCcw className="size-4" /></Button></TooltipTrigger><TooltipContent>Повторить</TooltipContent></Tooltip> : null}<Button variant="outline" size="sm" onClick={() => onSelect(run.id)}>Открыть</Button></div></TableCell></TableRow>)}</TableBody></Table></div>{runs.length > 5 ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>{showAll ? <ChevronUp /> : <ChevronDown />}{showAll ? "Скрыть старые" : `Вся история (${runs.length})`}</Button></div> : null}</div>
+  return <div className="space-y-3"><div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Период</TableHead><TableHead className="hidden lg:table-cell text-right">Accum</TableHead><TableHead className="w-52 text-right">Действия</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRows columns={5} /> : null}{!isLoading && runs.length === 0 ? <EmptyRow columns={5} text="Запусков пока нет." /> : visibleRuns.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationKindLabel(run)} · {run.timeframe}</div></TableCell><TableCell><StatusBadge status={run.status} />{queueStatusNote(run) ? <div className="mt-1 text-xs text-slate-500">{queueStatusNote(run)}</div> : null}</TableCell><TableCell className="hidden md:table-cell text-sm">{formatDateTime(run.periodStart)} - {formatDateTime(run.periodEnd)}</TableCell><TableCell className="hidden lg:table-cell text-right tabular-nums">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1">{canWrite && isRetryable(run) ? <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onRetry(run.id)} aria-label="Повторить расчёт"><RotateCcw className="size-4" /></Button></TooltipTrigger><TooltipContent>Повторить</TooltipContent></Tooltip> : null}<Button variant="outline" size="sm" onClick={() => onSelect(run.id)}>Открыть</Button>{canWrite ? <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled={activeStatuses.has(run.status)} onClick={() => onDelete(run)} aria-label="Удалить запуск расчета"><Trash2 className="size-4" /></Button></TooltipTrigger><TooltipContent>Удалить запуск</TooltipContent></Tooltip> : null}</div></TableCell></TableRow>)}</TableBody></Table></div><div className="flex flex-wrap justify-center gap-2">{runs.length > 5 ? <Button type="button" variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>{showAll ? <ChevronUp /> : <ChevronDown />}{showAll ? "Скрыть старые" : `Вся история (${runs.length})`}</Button> : null}{canWrite && runs.length > 0 ? <Button type="button" variant="outline" size="sm" onClick={onDeleteAll}><Trash2 className="size-4" />Удалить все</Button> : null}</div></div>
 }
 
 function ResultPanel({ details, isLoading, points, title, canRetry, onRetry }: { details: CalculationRunDetails | null; isLoading: boolean; points: PortfolioPoint[]; title: string | null; canRetry: boolean; onRetry: (id: string) => void }) {

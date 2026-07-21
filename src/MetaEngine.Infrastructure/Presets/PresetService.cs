@@ -107,6 +107,48 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
         return ToDetails(preset, sourcesByKey);
     }
 
+    public async Task<bool> DeleteAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid presetId,
+        CancellationToken cancellationToken)
+    {
+        var preset = await dbContext.Presets
+            .Include(candidate => candidate.Items)
+            .SingleOrDefaultAsync(candidate => candidate.Id == presetId && candidate.WorkspaceId == workspaceId, cancellationToken);
+        if (preset is null)
+        {
+            return false;
+        }
+
+        if (await dbContext.CalculationRuns.AnyAsync(run => run.PresetId == presetId, cancellationToken) ||
+            await dbContext.OptimizationJobs.AnyAsync(job => job.PresetId == presetId, cancellationToken) ||
+            await dbContext.Strategies.AnyAsync(strategy => strategy.SourcePresetId == presetId, cancellationToken))
+        {
+            throw new PresetValidationException(
+                "preset_in_use",
+                "This preset is used by a calculation, optimization or saved strategy and cannot be deleted.");
+        }
+
+        dbContext.Presets.Remove(preset);
+        dbContext.AuditEvents.Add(new AuditEvent
+        {
+            WorkspaceId = workspaceId,
+            UserId = userId,
+            Action = "preset_deleted",
+            EntityType = "preset",
+            EntityId = preset.Id,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                preset.PresetKey,
+                preset.Version,
+                ItemCount = preset.Items.Count
+            })
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     private async Task<IReadOnlyDictionary<PresetSourceKey, PresetSource>> LoadSourcesAsync(
         Guid workspaceId,
         IReadOnlyList<PresetItemInput> items,

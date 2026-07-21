@@ -12,6 +12,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useSession } from "@/features/session/session-context"
 import {
   createPreset,
+  deletePreset,
   getPortfolioBounds,
   getPreset,
   listPortfolios,
@@ -181,6 +182,22 @@ export function PresetScreen() {
     setError(null)
   }
 
+  async function handleDeletePreset(preset: Preset) {
+    if (!workspace?.canWrite) return
+    if (!window.confirm("Удалить сохраненный пресет? Если он используется в расчетах или стратегиях, удаление будет запрещено.")) return
+    try {
+      await deletePreset(workspace.id, preset.id)
+      if (selectedPresetId === preset.id) {
+        setSelectedPresetId("")
+        setSelectedPreset(null)
+      }
+      toast.success("Сохраненный пресет удален")
+      await refresh()
+    } catch (requestError) {
+      setError(toDisplayMessage(requestError))
+    }
+  }
+
   async function savePreset() {
     if (!workspace || !presetName.trim() || !items.length) {
       setError("Укажите название и добавьте хотя бы один источник.")
@@ -248,7 +265,7 @@ export function PresetScreen() {
           </CardContent>
         </Card>
 
-        <section className="mt-7"><SectionTitle icon={<Layers3 className="size-4" />} title="Сохранённые пресеты" /><PresetTable presets={presets} selectedId={selectedPresetId} onSelect={setSelectedPresetId} isLoading={isLoading} /></section>
+        <section className="mt-7"><SectionTitle icon={<Layers3 className="size-4" />} title="Сохранённые пресеты" /><PresetTable presets={presets} selectedId={selectedPresetId} onSelect={setSelectedPresetId} onDelete={(preset) => void handleDeletePreset(preset)} canWrite={workspace.canWrite} isLoading={isLoading} /></section>
         <section className="mt-7"><SectionTitle icon={<BookOpenCheck className="size-4" />} title="Состав пресета" /><PresetDetailsTable details={selectedPreset} /></section>
       </> : null}
     </AppShell>
@@ -259,8 +276,8 @@ function DraftItemsTable({ items, onRemove }: { items: DraftItem[]; onRemove: (i
   return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Источник</TableHead><TableHead className="hidden md:table-cell">Тип</TableHead><TableHead>Вес</TableHead><TableHead className="hidden lg:table-cell">Период</TableHead><TableHead className="w-14 text-right"> </TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={5} text="Добавьте источник для пресета." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.sourceName}</div><div className="text-xs text-slate-500">{item.sourceTimeframe}</div></TableCell><TableCell className="hidden md:table-cell">{item.sourceType === "portfolio" ? "Портфолио" : "Стратегия"}</TableCell><TableCell className="tabular-nums">{formatPercent(item.weight)}</TableCell><TableCell className="hidden lg:table-cell text-sm">{formatDateTime(item.startsAt)} - {item.endsAt ? formatDateTime(item.endsAt) : "До конца"}</TableCell><TableCell className="text-right"><Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => onRemove(item.id)} aria-label="Удалить источник"><Trash2 className="size-4" /></Button></TooltipTrigger><TooltipContent>Удалить источник</TooltipContent></Tooltip></TableCell></TableRow>)}</TableBody></Table></div>
 }
 
-function PresetTable({ presets, selectedId, onSelect, isLoading }: { presets: Preset[]; selectedId: string; onSelect: (id: string) => void; isLoading: boolean }) {
-  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead className="hidden md:table-cell">Источников</TableHead><TableHead className="hidden lg:table-cell">Создан</TableHead><TableHead className="w-24 text-right">Выбор</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <EmptyRow columns={4} text="Загрузка..." /> : null}{!isLoading && presets.length === 0 ? <EmptyRow columns={4} text="Сохранённых пресетов пока нет." /> : null}{presets.map((preset) => <TableRow key={preset.id} data-state={selectedId === preset.id ? "selected" : undefined}><TableCell><div className="font-medium">{preset.name}</div><div className="text-xs text-slate-500">v{preset.version}</div></TableCell><TableCell className="hidden md:table-cell tabular-nums">{preset.itemCount}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(preset.createdAt)}</TableCell><TableCell className="text-right"><Button variant={selectedId === preset.id ? "default" : "outline"} size="sm" onClick={() => onSelect(preset.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
+function PresetTable({ presets, selectedId, onSelect, onDelete, canWrite, isLoading }: { presets: Preset[]; selectedId: string; onSelect: (id: string) => void; onDelete: (preset: Preset) => void; canWrite: boolean; isLoading: boolean }) {
+  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead className="hidden md:table-cell">Источников</TableHead><TableHead className="hidden lg:table-cell">Создан</TableHead><TableHead className="w-44 text-right">Действия</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <EmptyRow columns={4} text="Загрузка..." /> : null}{!isLoading && presets.length === 0 ? <EmptyRow columns={4} text="Сохранённых пресетов пока нет." /> : null}{presets.map((preset) => <TableRow key={preset.id} data-state={selectedId === preset.id ? "selected" : undefined}><TableCell><div className="font-medium">{preset.name}</div><div className="text-xs text-slate-500">v{preset.version}</div></TableCell><TableCell className="hidden md:table-cell tabular-nums">{preset.itemCount}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(preset.createdAt)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant={selectedId === preset.id ? "default" : "outline"} size="sm" onClick={() => onSelect(preset.id)}>Открыть</Button>{canWrite ? <Button variant="ghost" size="sm" onClick={() => onDelete(preset)}><Trash2 />Удалить</Button> : null}</div></TableCell></TableRow>)}</TableBody></Table></div>
 }
 
 function PresetDetailsTable({ details }: { details: PresetDetails | null }) {

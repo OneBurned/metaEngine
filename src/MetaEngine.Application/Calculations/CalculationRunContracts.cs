@@ -80,6 +80,8 @@ public sealed record CalculationResultPage(
     int Total,
     IReadOnlyList<CalculationResultPoint> Items);
 
+public sealed record BulkDeleteResult(int Deleted, int Skipped);
+
 public interface ICalculationRunService
 {
     Task<CalculationRunSummary> QueueAsync(
@@ -96,11 +98,24 @@ public interface ICalculationRunService
         Guid runId,
         CancellationToken cancellationToken);
 
+    Task<bool> DeleteRunAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid runId,
+        CalculationRunKind? requiredKind,
+        CancellationToken cancellationToken);
+
+    Task<BulkDeleteResult> DeleteInactiveRunsAsync(
+        Guid workspaceId,
+        Guid userId,
+        CalculationRunKind? requiredKind,
+        CancellationToken cancellationToken);
+
     Task<bool> DeleteStrategyRunAsync(
         Guid workspaceId,
         Guid userId,
         Guid runId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken) => DeleteRunAsync(workspaceId, userId, runId, CalculationRunKind.Strategy, cancellationToken);
 
     Task<IReadOnlyList<CalculationRunSummary>> ListAsync(
         Guid workspaceId,

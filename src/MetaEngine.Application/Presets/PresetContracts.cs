@@ -56,7 +56,14 @@ public interface IPresetService
         Guid workspaceId,
         Guid presetId,
         CancellationToken cancellationToken);
+
+    Task<bool> DeleteAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid presetId,
+        CancellationToken cancellationToken);
 }
+
 
 public sealed class PresetValidationException(string code, string message)
     : Exception(message)
