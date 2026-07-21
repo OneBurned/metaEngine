@@ -50,13 +50,13 @@ export function AppShell({ children, onSignOut }: PropsWithChildren<{ onSignOut:
               <Database className="size-4" aria-hidden="true" />
               Стратегии
             </Link>
-            <Link to="/export" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/export" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
-              <FileDown className="size-4" aria-hidden="true" />
-              Экспорт
-            </Link>
             <Link to="/presets" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/presets" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
               <Layers3 className="size-4" aria-hidden="true" />
               Пресеты
+            </Link>
+            <Link to="/export" className={`flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium ${pathname === "/export" ? "bg-teal-50 text-teal-800" : "text-slate-600 hover:bg-slate-100"}`}>
+              <FileDown className="size-4" aria-hidden="true" />
+              Экспорт
             </Link>
           </nav>
         </aside>
