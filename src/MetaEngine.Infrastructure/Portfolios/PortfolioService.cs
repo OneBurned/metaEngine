@@ -232,10 +232,10 @@ internal sealed class PortfolioService(
         CancellationToken cancellationToken) =>
         await dbContext.CalculationRuns.AnyAsync(run =>
             run.WorkspaceId == workspaceId &&
-            (run.PortfolioId == portfolioId || run.SourcePortfolioId == portfolioId), cancellationToken) ||
+            run.PortfolioId == portfolioId, cancellationToken) ||
         await dbContext.OptimizationJobs.AnyAsync(job =>
             job.WorkspaceId == workspaceId &&
-            (job.PortfolioId == portfolioId || job.SourcePortfolioId == portfolioId), cancellationToken) ||
+            job.PortfolioId == portfolioId, cancellationToken) ||
         await dbContext.PresetItems.AnyAsync(item => item.PortfolioId == portfolioId, cancellationToken) ||
         await dbContext.Strategies.AnyAsync(strategy =>
             strategy.WorkspaceId == workspaceId && strategy.SourcePortfolioId == portfolioId, cancellationToken);
