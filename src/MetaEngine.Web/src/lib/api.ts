@@ -559,6 +559,14 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
   )
 }
 
+export async function deleteStrategyRun(workspaceId: string, runId: string) {
+  return request<void>(
+    `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/strategy-run`,
+    { method: "DELETE" },
+    true,
+  )
+}
+
 export async function getAllCalculationResult(workspaceId: string, runId: string) {
   const items: PortfolioPoint[] = []
   let offset = 0

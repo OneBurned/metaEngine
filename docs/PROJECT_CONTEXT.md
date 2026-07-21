@@ -1050,3 +1050,17 @@ strategy_result_timestamp_diff_accum_mdd.csv
 ```
 
 - P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching through `1M/1Y` plus line/histogram chart modes. Line mode shows Accum/HWM/DD/MDD on one shared percent scale; histogram mode switches to Diff bars by default, matching the old local lab behavior.
+
+## P6 follow-up: strategy run table/deletion parity
+
+After PR #19 the production Strategies page keeps MDD independent-deal behavior
+but aligns strategy-run UX with the existing Calculations table pattern.
+Inactive unsaved strategy runs can be deleted from **Запуски стратегий** with a
+confirmation; queued/running runs and runs that have already been saved as
+versioned strategies are protected. The strategy result table is hidden by
+default, opens with **Показать данные**, shows 100 rows first and adds 500 rows
+per click. MDD strategy artifacts persist `source_diff`, `source_accum` and
+`source_dd` so `IN Diff`, `IN Accum` and `DD исходника` stay populated in the
+table and current-result CSV export. This preserves the rule that analogous
+production UI elements reuse the same visible pattern instead of inventing a
+new one per tab.

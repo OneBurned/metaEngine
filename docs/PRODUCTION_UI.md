@@ -20,8 +20,10 @@ After signing in, the user can:
 7. open a completed result under its source/type title, inspect summary metrics
    and explore the equity/drawdown chart with the mouse range brush;
 8. open the point table only when needed and continue loading rows in batches;
-9. select a completed base run, calculate RSI or MDD Mean Reversion, and save
-   the resulting strategy configuration.
+9. select a completed base run, calculate RSI or MDD Mean Reversion, open only
+   the needed rows of the strategy result table, delete inactive unsaved strategy
+   runs when they are no longer needed, and save the resulting strategy
+   configuration.
 10. optimize RSI or MDD Mean Reversion across several sequential samples,
     follow, stop or retry the job, compare sortable top results and queue one
     configuration as a normal strategy run before saving it.
@@ -48,7 +50,9 @@ management remains future work. CSV export is available through a dedicated
 strategy results and saved strategy results.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
-HWM and drawdown for display. It loads all result pages, then down-samples only
+HWM and drawdown for display. Strategy result rows also carry source IN fields
+for the table/export contract, including MDD `source_diff`, `source_accum` and
+`source_dd`. It loads all result pages, then down-samples only
 the rendered chart so a long series remains responsive; the summary always
 comes from the saved calculation run. The current-result chart uses one shared
 percent scale for Diff/Accum/HWM/DD/MDD. The **Calculations** page intentionally
@@ -107,4 +111,4 @@ dotnet test MetaEngine.slnx
 
 The production data library shows each imported portfolio with its source period (`startsAt` → `endsAt`) alongside the detected timeframe, so users can distinguish files without opening the raw CSV. The main calculation result chart keeps the local-lab analysis controls: display timeframe can be switched for an already completed run, including calendar `1M` and `1Y` display aggregation; the chart can switch between line and histogram modes, and the same percent scale is used for Accum/HWM/DD/MDD so drawdown and return lines are visually comparable. Histogram mode follows the local-lab behavior: switching to histogram enables `Diff` bars and turns off Accum/HWM/DD/MDD until the user switches back to line mode or manually toggles series.
 
-Parity audit against the old local lab for the production calculation result currently covers: source period in the library, Accum/HWM/DD/MDD metrics and table columns, one shared percent chart scale, display timeframe switching from the calculation timeframe up to `1Y`, and line/histogram chart modes. The strategy result view follows the same parity rule: итог торговли uses one shared percent scale for Diff/Accum/HWM/DD/MDD, supports display timeframe and histogram mode, provides a current strategy CSV export shortcut, shows a separate trading-model chart (RSI line with buy/sell thresholds or MDD source/local drawdown), and restores the strategy result table with IN/OUT columns, signals, executions and weights. Production also has a dedicated **Экспорт** tab where users can export portfolio versions, completed base calculations, completed strategy runs, or saved strategy results with any selected column set and a preview table. Remaining lower-timeframe display is intentionally limited by the saved calculation result: production can show `1m` only for a result calculated at `1m`; it does not synthesize lower timeframe rows from an already saved `1h` result.
+Parity audit against the old local lab for the production calculation result currently covers: source period in the library, Accum/HWM/DD/MDD metrics and table columns, one shared percent chart scale, display timeframe switching from the calculation timeframe up to `1Y`, and line/histogram chart modes. The strategy result view follows the same parity rule: итог торговли uses one shared percent scale for Diff/Accum/HWM/DD/MDD, supports display timeframe and histogram mode, provides a current strategy CSV export shortcut, shows a separate trading-model chart (RSI line with buy/sell thresholds or MDD source/local drawdown), and restores the strategy result table with IN/OUT columns, signals, executions and weights. The strategy table follows the same hidden-by-default pattern as calculation result tables: **Показать данные** opens the first 100 rows and **Показать ещё 500** extends the visible batch. Production also has a dedicated **Экспорт** tab where users can export portfolio versions, completed base calculations, completed strategy runs, or saved strategy results with any selected column set and a preview table. Remaining lower-timeframe display is intentionally limited by the saved calculation result: production can show `1m` only for a result calculated at `1m`; it does not synthesize lower timeframe rows from an already saved `1h` result.

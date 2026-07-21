@@ -25,9 +25,10 @@ All endpoints are workspace-scoped. `Admin` and `Researcher` can create data;
 `Viewer` can read it.
 
 ```text
-POST /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
-POST /api/v1/workspaces/{workspaceId}/strategies
-GET  /api/v1/workspaces/{workspaceId}/strategies
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
+DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/strategy-run
+POST   /api/v1/workspaces/{workspaceId}/strategies
+GET    /api/v1/workspaces/{workspaceId}/strategies
 ```
 
 Queue body example:
@@ -82,9 +83,16 @@ and MDD parameters, follows queued/running status, displays the strategy result
 with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
 The result block also restores the trading-model chart from the old local lab:
 RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
-Local DD used for deal entries. The strategy result table shows IN/OUT columns,
-signals, executions and position/weight fields. A current-result CSV export
-shortcut downloads the visible strategy result columns, while the dedicated
+Local DD used for deal entries. The strategy result table reuses the calculation
+result table pattern: it is hidden by default, opens with **Показать данные**,
+starts from 100 rows and then adds rows through **Показать ещё 500** so saved
+strategies remain reachable without scrolling through a huge table. The table
+shows IN/OUT columns, signals, executions and position/weight fields; MDD rows
+persist `source_diff`, `source_accum` and `source_dd` for export/table parity.
+Inactive strategy runs can be deleted from the run list after confirmation, but
+queued/running runs and runs already saved as versioned strategies are protected.
+A current-result CSV export shortcut downloads the visible strategy result
+columns, while the dedicated
 **Экспорт** tab can export strategy results alongside portfolio versions and
 base calculations with any selected column set and a preview table. Its
 **Optimization** tab provides the full

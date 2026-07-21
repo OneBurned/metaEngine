@@ -113,6 +113,7 @@ GET /api/v1/workspaces/{id}/presets/{presetId}   один пресет с ист
 POST /api/v1/workspaces/{id}/calculation-runs    поставить базовый расчет в очередь
 POST /api/v1/workspaces/{id}/calculation-runs/{baseRunId}/strategies  поставить стратегию в очередь
 POST /api/v1/workspaces/{id}/calculation-runs/{runId}/retry  повторить failed/interrupted расчет
+DELETE /api/v1/workspaces/{id}/calculation-runs/{runId}/strategy-run  удалить неактивный несохраненный strategy run
 GET /api/v1/workspaces/{id}/calculation-runs     список расчетов workspace
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}  статус, summary и artifact
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}/result  paged timestamp,diff

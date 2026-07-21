@@ -146,6 +146,65 @@ internal sealed class CalculationRunService(
         return ToSummary(run);
     }
 
+    public async Task<bool> DeleteStrategyRunAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid runId,
+        CancellationToken cancellationToken)
+    {
+        var run = await dbContext.CalculationRuns
+            .Include(candidate => candidate.Artifacts)
+            .SingleOrDefaultAsync(candidate =>
+                candidate.Id == runId && candidate.WorkspaceId == workspaceId,
+                cancellationToken);
+        if (run is null)
+        {
+            return false;
+        }
+
+        if (run.Kind != CalculationRunKind.Strategy)
+        {
+            throw new CalculationRunValidationException(
+                "not_strategy_run",
+                "Only strategy calculation runs can be deleted from the strategy screen.");
+        }
+
+        if (run.Status is JobStatus.Queued or JobStatus.Running)
+        {
+            throw new CalculationRunValidationException(
+                "strategy_run_active",
+                "Queued or running strategy calculation runs cannot be deleted.");
+        }
+
+        var artifactIds = run.Artifacts.Select(artifact => artifact.Id).ToArray();
+        if (artifactIds.Length > 0 && await dbContext.Strategies.AnyAsync(
+            strategy => artifactIds.Contains(strategy.ResultArtifactId),
+            cancellationToken))
+        {
+            throw new CalculationRunValidationException(
+                "strategy_run_saved",
+                "A strategy calculation run saved as a versioned strategy cannot be deleted.");
+        }
+
+        dbContext.CalculationRuns.Remove(run);
+        dbContext.AuditEvents.Add(new AuditEvent
+        {
+            WorkspaceId = workspaceId,
+            UserId = userId,
+            Action = "strategy_run_deleted",
+            EntityType = "calculation_run",
+            EntityId = run.Id,
+            DetailsJson = JsonSerializer.Serialize(new
+            {
+                run.StrategyType,
+                run.SourceCalculationRunId,
+                run.Status
+            })
+        });
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
     public async Task<IReadOnlyList<CalculationRunSummary>> ListAsync(
         Guid workspaceId,
         CancellationToken cancellationToken) =>

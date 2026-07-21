@@ -41,12 +41,13 @@ a run; `Viewer` can read its status and result. A non-member receives `404`.
 The `POST` request requires the normal CSRF header.
 
 ```text
-POST /api/v1/workspaces/{workspaceId}/calculation-runs
-POST /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
-POST /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry
-GET  /api/v1/workspaces/{workspaceId}/calculation-runs
-GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}
-GET  /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/result
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
+POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry
+DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/strategy-run
+GET    /api/v1/workspaces/{workspaceId}/calculation-runs
+GET    /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}
+GET    /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/result
 ```
 
 Example queue request:

@@ -17,6 +17,8 @@ public static class CalculationRunEndpoints
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost("/{workspaceId:guid}/calculation-runs/{runId:guid}/retry", RetryAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapDelete("/{workspaceId:guid}/calculation-runs/{runId:guid}/strategy-run", DeleteStrategyRunAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs", ListAsync);
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs/{runId:guid}", FindAsync);
         workspaces.MapGet("/{workspaceId:guid}/calculation-runs/{runId:guid}/result", GetResultAsync);
@@ -185,6 +187,41 @@ public static class CalculationRunEndpoints
             var run = await calculationRunService.RequestRetryAsync(workspaceId, userId, runId, cancellationToken);
             return run is null ? Results.NotFound() : Results.Accepted(
                 $"/api/v1/workspaces/{workspaceId}/calculation-runs/{run.Id}", run);
+        }
+        catch (CalculationRunValidationException exception)
+        {
+            return ValidationError(exception.Code, exception.Message);
+        }
+    }
+
+
+    private static async Task<IResult> DeleteStrategyRunAsync(
+        Guid workspaceId,
+        Guid runId,
+        HttpContext httpContext,
+        IWorkspaceAccessService workspaceAccessService,
+        ICalculationRunService calculationRunService,
+        CancellationToken cancellationToken)
+    {
+        if (!httpContext.User.TryGetUserId(out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var access = await workspaceAccessService.FindForUserAsync(userId, workspaceId, cancellationToken);
+        if (access is null)
+        {
+            return Results.NotFound();
+        }
+        if (!access.CanWrite)
+        {
+            return Results.Forbid();
+        }
+
+        try
+        {
+            var deleted = await calculationRunService.DeleteStrategyRunAsync(workspaceId, userId, runId, cancellationToken);
+            return deleted ? Results.NoContent() : Results.NotFound();
         }
         catch (CalculationRunValidationException exception)
         {

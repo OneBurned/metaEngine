@@ -96,6 +96,12 @@ public interface ICalculationRunService
         Guid runId,
         CancellationToken cancellationToken);
 
+    Task<bool> DeleteStrategyRunAsync(
+        Guid workspaceId,
+        Guid userId,
+        Guid runId,
+        CancellationToken cancellationToken);
+
     Task<IReadOnlyList<CalculationRunSummary>> ListAsync(
         Guid workspaceId,
         CancellationToken cancellationToken);

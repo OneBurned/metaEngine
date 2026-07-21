@@ -306,6 +306,9 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                     diff,
                     new Dictionary<string, JsonElement>
                     {
+                        ["source_diff"] = JsonSerializer.SerializeToElement(prepared.Source[index].Diff),
+                        ["source_accum"] = JsonSerializer.SerializeToElement(baseRow.Accum),
+                        ["source_dd"] = JsonSerializer.SerializeToElement(dd),
                         ["base_dd"] = JsonSerializer.SerializeToElement(dd),
                         ["local_mdd"] = JsonSerializer.SerializeToElement(localMdd),
                         ["signal"] = JsonSerializer.SerializeToElement(string.Join("; ", signals)),
