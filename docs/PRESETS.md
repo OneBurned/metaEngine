@@ -37,6 +37,7 @@ the existing CSRF request header.
 ```text
 POST   /api/v1/workspaces/{workspaceId}/presets
 POST   /api/v1/workspaces/{workspaceId}/presets/{presetId}/delete
+POST   /api/v1/workspaces/{workspaceId}/cleanup/presets/{presetId}
 DELETE /api/v1/workspaces/{workspaceId}/presets/{presetId}
 GET    /api/v1/workspaces/{workspaceId}/presets
 GET    /api/v1/workspaces/{workspaceId}/presets/{presetId}

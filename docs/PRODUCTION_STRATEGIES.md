@@ -27,11 +27,14 @@ All endpoints are workspace-scoped. `Admin` and `Researcher` can create data;
 ```text
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/delete?kind=strategy
+POST   /api/v1/workspaces/{workspaceId}/cleanup/calculation-runs/{runId}?kind=strategy
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/delete-many?kind=strategy
+POST   /api/v1/workspaces/{workspaceId}/cleanup/calculation-runs?kind=strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}?kind=strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs?kind=strategy
 POST   /api/v1/workspaces/{workspaceId}/strategies
 POST   /api/v1/workspaces/{workspaceId}/strategies/{strategyId}/delete
+POST   /api/v1/workspaces/{workspaceId}/cleanup/strategies/{strategyId}
 DELETE /api/v1/workspaces/{workspaceId}/strategies/{strategyId}
 GET    /api/v1/workspaces/{workspaceId}/strategies
 ```

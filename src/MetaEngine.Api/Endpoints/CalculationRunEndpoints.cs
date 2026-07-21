@@ -19,7 +19,11 @@ public static class CalculationRunEndpoints
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost("/{workspaceId:guid}/calculation-runs/{runId:guid}/delete", DeleteAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/cleanup/calculation-runs/{runId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost("/{workspaceId:guid}/calculation-runs/delete-many", DeleteManyAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/cleanup/calculation-runs", DeleteManyAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapDelete("/{workspaceId:guid}/calculation-runs/{runId:guid}", DeleteAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();

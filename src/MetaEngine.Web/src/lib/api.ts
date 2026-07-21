@@ -294,6 +294,17 @@ async function toApiError(response: Response) {
   }
 }
 
+async function requestWithMethodFallback<T>(primaryPath: string, fallbackPath: string, init: RequestInit = {}, requiresCsrf = false): Promise<T> {
+  try {
+    return await request<T>(primaryPath, init, requiresCsrf)
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 405) {
+      return request<T>(fallbackPath, init, requiresCsrf)
+    }
+    throw error
+  }
+}
+
 export async function getCurrentUser() {
   return request<CurrentUser>("/api/v1/auth/me")
 }
@@ -385,8 +396,9 @@ export async function getPreset(workspaceId: string, presetId: string) {
 }
 
 export async function deletePreset(workspaceId: string, presetId: string) {
-  return request<void>(
+  return requestWithMethodFallback<void>(
     `/api/v1/workspaces/${workspaceId}/presets/${presetId}/delete`,
+    `/api/v1/workspaces/${workspaceId}/cleanup/presets/${presetId}`,
     { method: "POST" },
     true,
   )
@@ -569,8 +581,9 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
 
 export async function deleteCalculationRun(workspaceId: string, runId: string, kind?: "base" | "strategy") {
   const suffix = kind ? `?kind=${kind}` : ""
-  return request<void>(
+  return requestWithMethodFallback<void>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/delete${suffix}`,
+    `/api/v1/workspaces/${workspaceId}/cleanup/calculation-runs/${runId}${suffix}`,
     { method: "POST" },
     true,
   )
@@ -578,8 +591,9 @@ export async function deleteCalculationRun(workspaceId: string, runId: string, k
 
 export async function deleteCalculationRuns(workspaceId: string, kind?: "base" | "strategy") {
   const suffix = kind ? `?kind=${kind}` : ""
-  return request<{ deleted: number; skipped: number }>(
+  return requestWithMethodFallback<{ deleted: number; skipped: number }>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs/delete-many${suffix}`,
+    `/api/v1/workspaces/${workspaceId}/cleanup/calculation-runs${suffix}`,
     { method: "POST" },
     true,
   )
@@ -625,8 +639,9 @@ export async function saveStrategy(workspaceId: string, name: string, strategyRu
 }
 
 export async function deleteSavedStrategy(workspaceId: string, strategyId: string) {
-  return request<void>(
+  return requestWithMethodFallback<void>(
     `/api/v1/workspaces/${workspaceId}/strategies/${strategyId}/delete`,
+    `/api/v1/workspaces/${workspaceId}/cleanup/strategies/${strategyId}`,
     { method: "POST" },
     true,
   )

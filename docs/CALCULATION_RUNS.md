@@ -45,7 +45,9 @@ POST   /api/v1/workspaces/{workspaceId}/calculation-runs
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{baseRunId}/strategies
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/retry
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}/delete?kind=base|strategy
+POST   /api/v1/workspaces/{workspaceId}/cleanup/calculation-runs/{runId}?kind=base|strategy
 POST   /api/v1/workspaces/{workspaceId}/calculation-runs/delete-many?kind=base|strategy
+POST   /api/v1/workspaces/{workspaceId}/cleanup/calculation-runs?kind=base|strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs/{runId}?kind=base|strategy
 DELETE /api/v1/workspaces/{workspaceId}/calculation-runs?kind=base|strategy
 GET    /api/v1/workspaces/{workspaceId}/calculation-runs

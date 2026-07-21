@@ -59,7 +59,7 @@ const chartConfig = {
   highWaterMark: { label: "HWM", color: "#16a34a" },
   drawdown: { label: "Просадка", color: "#e11d48" },
   maxDrawdown: { label: "MDD", color: "#7c2d12" },
-  sourceDrawdown: { label: "DD исходника", color: "#f97316" },
+  sourceDrawdown: { label: "Source DD", color: "#f97316" },
   localDrawdown: { label: "Local DD", color: "#9333ea" },
   rsi: { label: "RSI", color: "#7c3aed" },
 } satisfies ChartConfig
@@ -394,7 +394,7 @@ function StrategyResult({ workspaceId, details, title, points, saveName, onSaveN
   function handleExport() {
     if (!details) return
     const csv = buildStrategyCsv(metrics, indicatorPoints, sourceMetrics, details.run.strategyType)
-    downloadCsv(`${slugify(title ?? "strategy_result")}_${selectedDisplayTimeframe}.csv`, csv)
+    downloadCsv(`${slugify(title ?? "strategy_result")}_${formatFileTimestamp(new Date())}.csv`, csv)
   }
 
   if (!details) return <EmptyPanel text="Выберите запуск стратегии." />
@@ -552,12 +552,12 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
   const isRsi = strategyType === "rsi"
   const columns = isRsi
     ? [
-      { id: "time", label: "Время" },
+      { id: "time", label: "Time" },
       { id: "source_diff", label: "IN Diff" },
       { id: "source_accum", label: "IN Accum" },
       { id: "rsi", label: "RSI" },
-      { id: "signal", label: "Сигнал" },
-      { id: "execution", label: "Исполнение" },
+      { id: "signal", label: "Signal" },
+      { id: "execution", label: "Execution" },
       { id: "weight", label: "Weight" },
       { id: "out_diff", label: "OUT Diff" },
       { id: "out_accum", label: "OUT Accum" },
@@ -566,13 +566,13 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
       { id: "out_mdd", label: "OUT MDD" },
     ]
     : [
-      { id: "time", label: "Время" },
+      { id: "time", label: "Time" },
       { id: "source_diff", label: "IN Diff" },
       { id: "source_accum", label: "IN Accum" },
-      { id: "source_dd", label: "DD исходника" },
+      { id: "source_dd", label: "Source DD" },
       { id: "local_mdd", label: "Local DD" },
-      { id: "signal", label: "Сигнал" },
-      { id: "execution", label: "Исполнение" },
+      { id: "signal", label: "Signal" },
+      { id: "execution", label: "Execution" },
       { id: "active_deals", label: "Active deals" },
       { id: "weight", label: "Weight" },
       { id: "out_diff", label: "OUT Diff" },
@@ -622,7 +622,8 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
 
 function normalizeStrategyFields(fields: Record<string, unknown> | undefined) { const values = Object.fromEntries(Object.entries(fields ?? {}).filter(([, value]) => ["string", "number", "boolean"].includes(typeof value) || value === null)) as Record<string, string | number | boolean | null>; if (values.base_dd !== undefined && values.source_dd === undefined) values.source_dd = values.base_dd; if (values.position !== undefined && values.weight === undefined) values.weight = values.position; return values }
 function formatCsvValue(value: number | null | undefined | string | boolean) {
-  const text = value === null || value === undefined ? "" : String(value)
+  const raw = value === null || value === undefined ? "" : String(value)
+  const text = raw.match(/^'-?\d+(\.\d+)?$/) ? raw.slice(1) : raw
   return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text
 }
 
@@ -636,6 +637,7 @@ function downloadCsv(fileName: string, csv: string) {
   URL.revokeObjectURL(url)
 }
 
+function formatFileTimestamp(value: Date) { return value.toISOString().replace(/[-:]/g, "").replace("T", "_").slice(0, 15) }
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-zа-я0-9]+/gi, "_").replace(/^_+|_+$/g, "") || "strategy_result"
 }

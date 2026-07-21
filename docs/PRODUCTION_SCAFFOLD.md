@@ -108,22 +108,26 @@ GET /api/v1/workspaces/{id}/portfolios          список всех верси
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}  metadata версии
 GET /api/v1/workspaces/{id}/portfolios/{portfolioId}/points  точки с pagination
 POST /api/v1/workspaces/{id}/presets             создать новую версию пресета
-POST /api/v1/workspaces/{id}/presets/{presetId}/delete удалить неиспользуемую версию пресета
+POST /api/v1/workspaces/{id}/presets/{presetId}/delete
+POST /api/v1/workspaces/{id}/cleanup/presets/{presetId} удалить неиспользуемую версию пресета
 DELETE /api/v1/workspaces/{id}/presets/{presetId} alias для API-клиентов
 GET /api/v1/workspaces/{id}/presets              список версий пресетов
 GET /api/v1/workspaces/{id}/presets/{presetId}   один пресет с источниками
 POST /api/v1/workspaces/{id}/calculation-runs    поставить базовый расчет в очередь
 POST /api/v1/workspaces/{id}/calculation-runs/{baseRunId}/strategies  поставить стратегию в очередь
 POST /api/v1/workspaces/{id}/calculation-runs/{runId}/retry  повторить failed/interrupted расчет
-POST /api/v1/workspaces/{id}/calculation-runs/{runId}/delete?kind=base|strategy  удалить неактивный неиспользуемый run
-POST /api/v1/workspaces/{id}/calculation-runs/delete-many?kind=base|strategy      удалить все неактивные неиспользуемые runs указанного типа
+POST /api/v1/workspaces/{id}/calculation-runs/{runId}/delete?kind=base|strategy
+POST /api/v1/workspaces/{id}/cleanup/calculation-runs/{runId}?kind=base|strategy  удалить неактивный неиспользуемый run
+POST /api/v1/workspaces/{id}/calculation-runs/delete-many?kind=base|strategy
+POST /api/v1/workspaces/{id}/cleanup/calculation-runs?kind=base|strategy      удалить все неактивные неиспользуемые runs указанного типа
 DELETE /api/v1/workspaces/{id}/calculation-runs/{runId}?kind=base|strategy        alias для API-клиентов
 DELETE /api/v1/workspaces/{id}/calculation-runs?kind=base|strategy                alias для API-клиентов
 GET /api/v1/workspaces/{id}/calculation-runs     список расчетов workspace
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}  статус, summary и artifact
 GET /api/v1/workspaces/{id}/calculation-runs/{runId}/result  paged timestamp,diff
 POST /api/v1/workspaces/{id}/strategies          сохранить completed strategy run
-POST /api/v1/workspaces/{id}/strategies/{strategyId}/delete удалить неиспользуемую сохраненную стратегию
+POST /api/v1/workspaces/{id}/strategies/{strategyId}/delete
+POST /api/v1/workspaces/{id}/cleanup/strategies/{strategyId} удалить неиспользуемую сохраненную стратегию
 DELETE /api/v1/workspaces/{id}/strategies/{strategyId} alias для API-клиентов
 GET /api/v1/workspaces/{id}/strategies           список сохраненных стратегий
 POST /api/v1/workspaces/{id}/calculation-runs/{baseRunId}/optimizations  поставить RSI/MDD optimization

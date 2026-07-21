@@ -13,6 +13,8 @@ public static class StrategyEndpoints
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapPost("/{workspaceId:guid}/strategies/{strategyId:guid}/delete", DeleteAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
+        workspaces.MapPost("/{workspaceId:guid}/cleanup/strategies/{strategyId:guid}", DeleteAsync)
+            .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapDelete("/{workspaceId:guid}/strategies/{strategyId:guid}", DeleteAsync)
             .AddEndpointFilter<AntiforgeryEndpointFilter>();
         workspaces.MapGet("/{workspaceId:guid}/strategies", ListAsync);
