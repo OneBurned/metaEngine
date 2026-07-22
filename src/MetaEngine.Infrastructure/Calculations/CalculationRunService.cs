@@ -400,10 +400,10 @@ internal sealed class CalculationRunService(
         }
 
         var runInMemory = await dbContext.CalculationRuns
-            .SingleOrDefaultAsync(
-                run => run.Status == JobStatus.Queued &&
-                    (run.RetryNotBefore == null || run.RetryNotBefore <= now),
-                cancellationToken);
+            .Where(run => run.Status == JobStatus.Queued &&
+                (run.RetryNotBefore == null || run.RetryNotBefore <= now))
+            .OrderBy(run => run.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
         if (runInMemory is null)
         {
             return null;
