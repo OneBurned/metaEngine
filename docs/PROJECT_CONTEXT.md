@@ -239,13 +239,16 @@ The user is not a coder. Communicate simply. Do not explain implementation detai
 
 Do not say only “pull latest” or “update branch”. Give exact commands.
 
-Preferred format when the user checks an open PR before merge:
+Preferred format when the user checks an open PR before merge. The agent should
+write a concrete PR number when it knows the current PR number; if the number is
+wrong, the user will correct it and the agent must use the corrected number in
+future instructions.
 
 ```bash
 cd /workspaces/metaEngine
 # stop server with Ctrl+C if it is running
 git fetch
-gh pr checkout <PR_NUMBER>
+gh pr checkout <PR_NUMBER> # replace with the known real PR number
 git status
 git log --oneline --decorate -5
 npm test
@@ -909,6 +912,12 @@ If the user asks to work directly in `main`, clarify that direct commits to `mai
 
 ## 23. What not to lose
 
+Keep one active PR for a coherent related stage instead of splitting every tiny
+fix into a separate PR. The agent should recommend a new PR when the current PR
+becomes overloaded by scope, risk, or size, but should not force a new PR for
+every small follow-up because that makes context transfer expensive for the
+user.
+
 Do not lose these product decisions:
 
 - use the word `strategy`, not `return`;
@@ -1050,3 +1059,15 @@ strategy_result_timestamp_diff_accum_mdd.csv
 ```
 
 - P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching through `1M/1Y` plus line/histogram chart modes. Line mode shows Accum/HWM/DD/MDD on one shared percent scale; histogram mode switches to Diff bars by default, matching the old local lab behavior.
+
+## 26. Handoff format requested by the user
+
+When the user asks for a handoff/context/summary for the next chat or for
+HANDOFF.md content, answer with exactly one markdown code block using `md` as
+the language and no text before or after the block. The block must be
+self-contained for the next agent: current state, completed work, unfinished
+work, accepted product decisions, important user complaints, next plan, and
+important files/docs/modules. Do not add terminal commands unless they are part
+of the requested handoff. If code or commands are needed inside the handoff, use
+four-backtick nested fences or indentation so the outer `md` block remains
+valid.
