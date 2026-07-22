@@ -93,17 +93,23 @@ export function formatPercent(value: number | null, digits = 2) {
     style: "percent",
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value)
+  }).format(value).replace(/\s+(?=%)/g, "")
 }
 
 export function formatDateTime(value: string | null) {
   if (!value) {
     return "-"
   }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "-"
+  }
+  const year = date.getUTCFullYear()
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0")
+  const day = String(date.getUTCDate()).padStart(2, "0")
+  const hours = String(date.getUTCHours()).padStart(2, "0")
+  const minutes = String(date.getUTCMinutes()).padStart(2, "0")
+  return `${year}-${month}-${day} ${hours}:${minutes}`
 }
 
 export function toDateTimeLocal(value: string) {

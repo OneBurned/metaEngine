@@ -471,7 +471,7 @@ Examples:
 
 Timestamp values are Unix timestamps in milliseconds.
 
-The user explicitly said not to shift displayed hours. Current implementation formats with UTC getters, so the timestamp is displayed consistently as the intended `YYYY-MM-DD HH:MM` value.
+The user explicitly said not to shift displayed hours. Production UI date labels now use UTC getters and the compact `YYYY-MM-DD HH:MM` format, so list, card and selector timestamps are consistent and do not fall back to long localized Russian dates. Base calculation selector labels include the source name/version, completed-or-created timestamp and final Accum to distinguish repeated calculations.
 
 ## 9. diff and accum rules
 

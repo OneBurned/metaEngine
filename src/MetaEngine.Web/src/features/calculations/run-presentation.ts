@@ -1,4 +1,5 @@
 import type { CalculationRun, Portfolio, Preset } from "@/lib/api"
+import { formatDateTime, formatPercent } from "@/lib/metrics"
 
 export type RunPresentationSources = {
   portfolios: Portfolio[]
@@ -40,4 +41,14 @@ export function calculationSourceLabel(run: CalculationRun, sources: RunPresenta
 
 export function calculationDisplayName(run: CalculationRun, sources: RunPresentationSources) {
   return `${calculationSourceLabel(run, sources)} · ${calculationKindLabel(run)}`
+}
+
+export function calculationCompactLabel(run: CalculationRun, sources: RunPresentationSources) {
+  const completedOrCreatedAt = run.completedAt ?? run.createdAt
+  const finalAccum = formatPercent(run.finalAccum)
+  const parts = [calculationSourceLabel(run, sources), formatDateTime(completedOrCreatedAt)]
+  if (finalAccum !== "-") {
+    parts.push(finalAccum)
+  }
+  return parts.join(" · ")
 }

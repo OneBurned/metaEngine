@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { calculationDisplayName, strategyTypeLabel } from "./run-presentation"
+import { calculationCompactLabel, calculationDisplayName, strategyTypeLabel } from "./run-presentation"
 
 const portfolio = {
   id: "portfolio-1",
@@ -44,7 +44,7 @@ const baseRun = {
   lastHeartbeatAt: null,
   createdAt: "2026-01-01T00:00:00Z",
   startedAt: null,
-  completedAt: null,
+  completedAt: "2026-01-01T03:04:00Z",
   createdByUserId: null,
 }
 
@@ -64,5 +64,13 @@ describe("calculationDisplayName", () => {
 describe("strategyTypeLabel", () => {
   it("uses readable labels for registered strategies", () => {
     expect(strategyTypeLabel("mdd_mean_reversion")).toBe("MDD Mean Reversion")
+  })
+})
+
+
+describe("calculationCompactLabel", () => {
+  it("uses source, completed date and final Accum without repeating the calculation type", () => {
+    expect(calculationCompactLabel(baseRun, { portfolios: [portfolio], presets: [], runs: [baseRun] }))
+      .toBe("Core allocation · v2 · 2026-01-01 03:04 · 10,00%")
   })
 })

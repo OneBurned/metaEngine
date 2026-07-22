@@ -207,7 +207,7 @@ export function RsiOptimizationPanel({
   return <div className="space-y-6">
     {error ? <Alert variant="destructive" className="rounded-md"><AlertTitle>Оптимизация не запущена</AlertTitle><AlertDescription>{error}</AlertDescription></Alert> : null}
     <div className="grid gap-4 border-b border-slate-200 pb-6 lg:grid-cols-3">
-      <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={onSourceRunIdChange} disabled={isLoading || !sourceRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{sourceRuns.map((run) => <SelectItem key={run.id} value={run.id}>{sourceRunLabel(run)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
+      <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={onSourceRunIdChange} disabled={isLoading || !sourceRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{sourceRuns.map((run) => <SelectItem key={run.id} value={run.id}>{sourceRunLabel(run)}</SelectItem>)}</SelectContent></Select></Field>
       <div className="lg:col-span-2"><p className="text-sm font-medium text-slate-900">Оптимизация RSI</p></div>
     </div>
 
