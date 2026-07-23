@@ -524,6 +524,7 @@ export async function retryOptimizationJob(workspaceId: string, jobId: string) {
   return request<OptimizationJob>(
     `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}/retry`,
     { method: "POST" },
+    true,
   )
 }
 
@@ -556,6 +557,7 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
   return request<CalculationRun>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/retry`,
     { method: "POST" },
+    true,
   )
 }
 

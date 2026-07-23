@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell"
+import { DateTimeField } from "@/components/date-time-field"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -235,8 +236,8 @@ export function PresetScreen() {
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <Field label="Участие с" htmlFor="preset-start"><Input id="preset-start" type="datetime-local" value={startsAt} onChange={(event) => setStartsAt(event.target.value)} disabled={!selectedSource || isLoadingBounds} /></Field>
-              <Field label="Участие по" htmlFor="preset-end"><Input id="preset-end" type="datetime-local" value={endsAt} onChange={(event) => setEndsAt(event.target.value)} disabled={!selectedSource || isLoadingBounds || isOpenEnded} /></Field>
+              <DateTimeField id="preset-start" label="Участие с" value={startsAt} onChange={setStartsAt} disabled={!selectedSource || isLoadingBounds} />
+              <DateTimeField id="preset-end" label="Участие по" value={endsAt} onChange={setEndsAt} disabled={!selectedSource || isLoadingBounds || isOpenEnded} />
               <div className="flex items-end pb-2"><Checkbox id="preset-open-end" checked={isOpenEnded} onCheckedChange={(checked) => setIsOpenEnded(checked === true)} /><Label htmlFor="preset-open-end" className="ml-2">До конца</Label></div>
             </div>
 

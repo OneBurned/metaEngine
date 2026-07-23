@@ -71,6 +71,6 @@ describe("strategyTypeLabel", () => {
 describe("calculationCompactLabel", () => {
   it("uses source, completed date and final Accum without repeating the calculation type", () => {
     expect(calculationCompactLabel(baseRun, { portfolios: [portfolio], presets: [], runs: [baseRun] }))
-      .toBe("Core allocation · v2 · 2026-01-01 03:04 · 10,00%")
+      .toBe("Core allocation · v2 · 2026.01.01 03:04 · 10,00%")
   })
 })

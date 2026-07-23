@@ -58,12 +58,12 @@ For portfolio versions, completed base calculation results, completed strategy r
 
 ## File names
 
-Downloaded file names include the source, current date-time to seconds and selected columns, for example:
+Downloaded file names include the source and current date-time to seconds. They must not include the selected column list, for example:
 
 ```text
-portfolio_20260721_154233_timestamp_mdd.csv
-base_result_20260721_154233_timestamp_accum.csv
-strategy_result_20260721_154233_timestamp_diff_accum_mdd.csv
+portfolio_20260721_154233.csv
+base_result_20260721_154233.csv
+strategy_result_20260721_154233.csv
 ```
 
 ## Tests
@@ -76,13 +76,14 @@ Export tests should verify:
 - timestamp/date can be enabled or disabled like any other column;
 - the client builds selected columns;
 - source groups are split into portfolio, base calculation, strategy result and saved strategy;
-- the preview table renders the selected columns before download;
+- the download action is placed above the preview table so users do not scroll through a long preview to find `Скачать CSV`;
+- the preview table renders the selected columns in the same order as the downloaded CSV;
 - the export flow avoids fixed `format` / `exportFormat` presets.
 
 
 ## Current strategy result export
 
-The current trading strategy result uses dynamic columns matching the currently calculated strategy table.
+The current trading strategy result uses dynamic columns matching the currently calculated strategy table. Download actions stay above preview tables; preview tables are compact and horizontally scroll inside their container.
 
 For RSI, the export columns are:
 

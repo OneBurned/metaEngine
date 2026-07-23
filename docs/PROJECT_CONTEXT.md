@@ -461,20 +461,24 @@ If input was `accum`, convert to `diff` before saving.
 UI date format:
 
 ```text
-YYYY-MM-DD HH:MM
+YYYY.MM.DD HH:MM
 ```
 
 Examples:
 
 ```text
-2026-04-30 14:00
-2025-04-09 23:00
-2021-10-03 23:00
+2026.04.30 14:00
+2025.04.09 23:00
+2021.10.03 23:00
 ```
 
 Timestamp values are Unix timestamps in milliseconds.
 
-The user explicitly said not to shift displayed hours. Production UI date labels now use UTC getters and the compact `YYYY-MM-DD HH:MM` format, so list, card and selector timestamps are consistent and do not fall back to long localized Russian dates. Base calculation selector labels include the source name/version, completed-or-created timestamp and final Accum to distinguish repeated calculations.
+The user explicitly said not to shift displayed hours. Production UI date labels now use UTC getters and the compact `YYYY.MM.DD HH:MM` format, so list, card and selector timestamps are consistent and do not fall back to long localized Russian dates. Base calculation selector labels include the source name/version, completed-or-created timestamp and final Accum to distinguish repeated calculations.
+
+The date rule is global: it applies to labels, cards, selectors, tables, tooltips, portfolio/calculation/strategy periods and visible period input fields such as `Период с` / `Период по`. If a native browser date input cannot guarantee the format, production UI should use the shared text-style date field and parse it back to UTC ISO internally.
+
+When a Codespaces/PR check fails, diagnose first: confirm the PR branch and `git log`, check whether containers were rebuilt/restarted, separate frontend proxy errors from backend build/runtime errors, and only then change code. Do not assume every transient Codespaces/GitHub state is a code defect.
 
 ## 9. diff and accum rules
 
@@ -729,7 +733,7 @@ Toggle colors should match chart line colors.
 
 Preset row inputs must not overlap visually. Use responsive grid behavior.
 
-Use date picker fields for date/time inputs.
+Use the shared compact date/time field for visible date/time inputs so period controls also show `YYYY.MM.DD HH:MM`.
 
 ## 18. API endpoints
 
@@ -1071,3 +1075,8 @@ important files/docs/modules. Do not add terminal commands unless they are part
 of the requested handoff. If code or commands are needed inside the handoff, use
 four-backtick nested fences or indentation so the outer `md` block remains
 valid.
+
+
+## 27. Export layout rule
+
+Download actions must be placed above preview tables. A user should not scroll through a long preview to find `Скачать CSV`. Preview and downloaded CSV must use the same selected columns and order; numeric cells must not receive leading apostrophes.

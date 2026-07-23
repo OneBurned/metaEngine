@@ -126,6 +126,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     if (!file || !name.trim()) {
       setError("Выберите CSV и укажите название.")
       return
@@ -137,7 +138,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
       await onImport(file, name.trim(), valueType)
       setFile(null)
       setName("")
-      event.currentTarget.reset()
+      form.reset()
     } catch (requestError) {
       setError(toDisplayMessage(requestError))
     } finally {

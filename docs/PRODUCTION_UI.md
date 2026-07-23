@@ -39,11 +39,11 @@ The forms fill source start/end automatically. The user may narrow the period.
 A `Viewer` can inspect data but does not get active import or calculation
 controls.
 
-Production UI dates in lists, cards and source selectors use a compact UTC
-`YYYY-MM-DD HH:MM` format. Base calculation selectors show the source name,
+Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact UTC
+`YYYY.MM.DD HH:MM` format. Base calculation selectors show the source name,
 version, completed/created timestamp and final Accum, for example
-`Portfolio · v1 · 2026-07-21 21:56 · 1114,43%`, so repeated calculations
-with the same name remain distinguishable without long localized date labels.
+`Portfolio · v1 · 2026.07.21 21:56 · 1114,43%`, so repeated calculations
+with the same name remain distinguishable without long localized date labels. Native browser date controls are not used where they would render localized `ДД.ММ.ГГГГ` values instead of the shared format.
 
 ## Client boundaries
 

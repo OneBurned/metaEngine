@@ -32,8 +32,8 @@ Timestamp,Unrealized_profits
 multipart field `valueType=accum|diff`; для обратной совместимости отсутствие
 поля трактуется как `diff`.
 
-`timestamp` принимается как Unix milliseconds, `YYYY-MM-DD HH:mm`,
-`YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. Значения доходности
+`timestamp` принимается как Unix milliseconds, `YYYY.MM.DD HH:mm`,
+`YYYY-MM-DD HH:mm`, `YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. Значения доходности
 пока принимаются в decimal scale: `0.01` означает `1%`. Если выбран `Accum`, API
 пересчитывает накопленную доходность в canonical `diff` перед сохранением.
 Percent input появится отдельным расширением.
