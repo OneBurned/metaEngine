@@ -261,7 +261,9 @@ dotnet build MetaEngine.slnx
 dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
 ```
 
-Перед первым запуском нужно один раз создать владельца. Пароль должен содержать
+В Docker Compose development-запуске включен упрощенный вход для Codespaces/local проверки: логин `admin`, пароль `admin`. Он работает только в `Development` при `MetaEngine__DevAuth__Enabled=true` и не предназначен для production.
+
+Для проверки настоящего cookie-auth без dev-входа или для production-подобного запуска первого владельца нужно один раз создать вручную. Пароль должен содержать
 минимум 12 символов, верхний и нижний регистр, цифру и специальный символ:
 
 ```bash

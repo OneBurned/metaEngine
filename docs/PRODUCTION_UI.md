@@ -89,7 +89,7 @@ npm install
 npm run dev
 ```
 
-Open port `3000` in Codespaces. The Worker must be running for a calculation to
+Open port `3000` in Codespaces. In the default Docker Compose development setup, sign in with `admin` / `admin`; the API creates the local admin workspace automatically. The Worker must be running for a calculation to
 progress beyond `queued`.
 
 ## Verification

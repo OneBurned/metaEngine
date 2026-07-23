@@ -1080,3 +1080,7 @@ valid.
 ## 27. Export layout rule
 
 Download actions must be placed above preview tables. A user should not scroll through a long preview to find `Скачать CSV`. Preview and downloaded CSV must use the same selected columns and order; numeric cells must not receive leading apostrophes.
+
+## 28. Codespaces development auth shortcut
+
+For local/Codespaces Docker Compose checks, the API can use a development-only login shortcut: `admin` / `admin`. It is enabled by `MetaEngine__DevAuth__Enabled=true` only under `ASPNETCORE_ENVIRONMENT=Development`. On first successful shortcut login the API creates a local active admin user, `Personal` workspace and admin membership if they do not already exist. This avoids manual bootstrap during PR smoke checks while keeping production auth and bootstrap rules unchanged.
