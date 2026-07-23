@@ -21,7 +21,7 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
     private static readonly JsonSerializerOptions JsonOptions = CreateJsonOptions();
 
     [Fact]
-    public async Task Admin_can_import_deduplicate_version_and_page_portfolio_points()
+    public async Task Admin_can_import_duplicate_data_version_and_page_portfolio_points()
     {
         var owner = await factory.CreateUserAsync(WorkspaceRole.Admin);
         using var client = factory.CreateClient();
@@ -50,10 +50,10 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
             "Ignored duplicate name");
         var duplicate = await duplicateResponse.Content.ReadFromJsonAsync<PortfolioImportResult>(JsonOptions);
 
-        Assert.Equal(HttpStatusCode.OK, duplicateResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.Created, duplicateResponse.StatusCode);
         Assert.NotNull(duplicate);
-        Assert.False(duplicate.Created);
-        Assert.Equal(first.Portfolio.Id, duplicate.Portfolio.Id);
+        Assert.True(duplicate.Created);
+        Assert.NotEqual(first.Portfolio.Id, duplicate.Portfolio.Id);
         Assert.NotEqual(
             first.Portfolio.SourceChecksum,
             Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(normalizedDuplicateCsv))));
@@ -85,7 +85,7 @@ public sealed class PortfolioTests(MetaEngineApiFactory factory) : IClassFixture
         var page = await client.GetFromJsonAsync<PortfolioPointPage>(
             $"/api/v1/workspaces/{owner.WorkspaceId}/portfolios/{first.Portfolio.Id}/points?offset=1&limit=2");
 
-        Assert.Equal(2, list.GetProperty("items").GetArrayLength());
+        Assert.Equal(3, list.GetProperty("items").GetArrayLength());
         Assert.NotNull(metadata);
         Assert.Equal(first.Portfolio.Id, metadata.Id);
         Assert.NotNull(page);

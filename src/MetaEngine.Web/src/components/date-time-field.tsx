@@ -3,7 +3,6 @@ import { Label } from "@/components/ui/label"
 
 export function DateTimeField({
   disabled,
-  help = "Формат: YYYY.MM.DD HH:MM",
   id,
   label,
   onChange,
@@ -26,6 +25,6 @@ export function DateTimeField({
       onChange={(event) => onChange(event.target.value)}
       disabled={disabled}
     />
-    <p className="text-xs text-slate-500">{help}</p>
+    {help ? <p className="text-xs text-slate-500">{help}</p> : null}
   </div>
 }

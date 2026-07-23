@@ -39,6 +39,7 @@ const baseRun = {
   highWaterMark: 0.1,
   maxDrawdown: 0,
   errorCode: null,
+  errorMessage: null,
   attemptCount: 1,
   retryNotBefore: null,
   lastHeartbeatAt: null,

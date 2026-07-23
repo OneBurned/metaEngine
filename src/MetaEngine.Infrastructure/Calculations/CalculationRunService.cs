@@ -176,6 +176,7 @@ internal sealed class CalculationRunService(
                 run.HighWaterMark,
                 run.MaxDrawdown,
                 run.ErrorCode,
+                run.ErrorMessage,
                 run.CreatedAt,
                 run.StartedAt,
                 run.CompletedAt,
@@ -202,6 +203,7 @@ internal sealed class CalculationRunService(
         }
 
         var previousErrorCode = run.ErrorCode;
+        var previousErrorMessage = run.ErrorMessage;
         run.Status = JobStatus.Queued;
         run.AttemptCount = 0;
         run.LeaseId = null;
@@ -210,13 +212,14 @@ internal sealed class CalculationRunService(
         run.StartedAt = null;
         run.CompletedAt = null;
         run.ErrorCode = null;
+        run.ErrorMessage = null;
         run.PointCount = 0;
         run.TradeCount = 0;
         run.FinalAccum = null;
         run.HighWaterMark = null;
         run.MaxDrawdown = null;
         run.WarningsJson = "[]";
-        dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_retry_requested", new { previousErrorCode }));
+        dbContext.AuditEvents.Add(CreateAuditEvent(run, "calculation_retry_requested", new { previousErrorCode, previousErrorMessage }));
         await dbContext.SaveChangesAsync(cancellationToken);
         return ToSummary(run);
     }
@@ -305,7 +308,7 @@ internal sealed class CalculationRunService(
         }
         catch (CalculationValidationException exception)
         {
-            await MarkFailedAsync(claim.Value, exception.Code, cancellationToken);
+            await MarkFailedAsync(claim.Value, exception.Code, exception.Message, cancellationToken);
             return true;
         }
         catch (Exception exception)
@@ -317,7 +320,7 @@ internal sealed class CalculationRunService(
             }
             else
             {
-                await MarkFailedAsync(claim.Value, "calculation_failed", cancellationToken);
+                await MarkFailedAsync(claim.Value, "calculation_failed", DescribeException(exception), cancellationToken);
             }
             return true;
         }
@@ -786,6 +789,7 @@ internal sealed class CalculationRunService(
     private async Task MarkFailedAsync(
         ClaimedJob claim,
         string errorCode,
+        string? errorMessage,
         CancellationToken cancellationToken)
     {
         dbContext.ChangeTracker.Clear();
@@ -805,11 +809,12 @@ internal sealed class CalculationRunService(
         run.LastHeartbeatAt = now;
         run.RetryNotBefore = null;
         run.ErrorCode = errorCode;
+        run.ErrorMessage = NormalizeErrorMessage(errorMessage);
         run.CompletedAt = now;
         dbContext.AuditEvents.Add(CreateAuditEvent(
             run,
             run.Kind == CalculationRunKind.Base ? "calculation_failed" : "strategy_calculation_failed",
-            new { errorCode, run.AttemptCount }));
+            new { errorCode, errorMessage = run.ErrorMessage, run.AttemptCount }));
         await dbContext.SaveChangesAsync(cancellationToken);
     }
 
@@ -841,6 +846,7 @@ internal sealed class CalculationRunService(
         run.LastHeartbeatAt = now;
         run.RetryNotBefore = jobProcessingPolicy.GetRetryNotBefore(now, run.AttemptCount);
         run.ErrorCode = errorCode;
+        run.ErrorMessage = null;
         run.CompletedAt = null;
     }
 
@@ -851,6 +857,7 @@ internal sealed class CalculationRunService(
         run.LastHeartbeatAt = now;
         run.RetryNotBefore = null;
         run.ErrorCode = errorCode;
+        run.ErrorMessage = null;
         run.CompletedAt = now;
     }
 
@@ -862,8 +869,29 @@ internal sealed class CalculationRunService(
         run.LastHeartbeatAt = now;
         run.RetryNotBefore = null;
         run.ErrorCode = null;
+        run.ErrorMessage = null;
         run.StartedAt = now;
         run.CompletedAt = null;
+    }
+
+
+    private static string DescribeException(Exception exception)
+    {
+        var message = string.IsNullOrWhiteSpace(exception.Message)
+            ? exception.GetType().Name
+            : exception.Message.Trim();
+        return NormalizeErrorMessage($"{exception.GetType().Name}: {message}") ?? exception.GetType().Name;
+    }
+
+    private static string? NormalizeErrorMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return null;
+        }
+
+        var normalized = message.ReplaceLineEndings(" ").Trim();
+        return normalized.Length <= 1000 ? normalized : normalized[..1000];
     }
 
     private static AuditEvent CreateAuditEvent(CalculationRun run, string action, object details) => new()
@@ -942,6 +970,7 @@ internal sealed class CalculationRunService(
             run.HighWaterMark,
             run.MaxDrawdown,
             run.ErrorCode,
+            run.ErrorMessage,
             run.CreatedAt,
             run.StartedAt,
             run.CompletedAt,

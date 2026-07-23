@@ -95,6 +95,7 @@ export type CalculationRun = {
   highWaterMark: number | null
   maxDrawdown: number | null
   errorCode: string | null
+  errorMessage: string | null
   createdAt: string
   startedAt: string | null
   completedAt: string | null

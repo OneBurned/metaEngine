@@ -95,6 +95,7 @@ internal sealed class CalculationRunConfiguration : IEntityTypeConfiguration<Cal
         builder.Property(run => run.MaxDrawdown).HasColumnType("double precision");
         builder.Property(run => run.WarningsJson).HasColumnType("jsonb");
         builder.Property(run => run.ErrorCode).HasMaxLength(100);
+        builder.Property(run => run.ErrorMessage).HasMaxLength(1000);
         builder.HasIndex(run => new { run.WorkspaceId, run.CreatedAt });
         builder.HasIndex(run => new { run.Status, run.CreatedAt });
         builder.HasIndex(run => new { run.Status, run.RetryNotBefore, run.CreatedAt });
