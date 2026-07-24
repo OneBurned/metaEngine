@@ -476,7 +476,14 @@ Examples:
 
 Timestamp values are Unix timestamps in milliseconds.
 
-Production UI date labels use the compact `YYYY.MM.DD HH:MM` format in the browser's local timezone. Backend storage, API payloads and timeframe boundaries remain UTC; only human-facing labels are localized so user-created runs show the user's clock time. Base/strategy calculation labels include source name/version, timeframe, completed-or-created timestamp and final Accum to distinguish repeated calculations without repeating redundant labels such as “Базовый расчёт”.
+Production UI date labels use the compact `YYYY.MM.DD HH:MM` format in the
+browser's local timezone. Backend storage, API payloads and timeframe boundaries
+remain UTC; only human-facing labels are localized so user-created runs show the
+user's clock time. Base/strategy calculation and saved-strategy labels share the
+same compact pattern: name/source, `vN`, strategy type when relevant, timeframe,
+completed-or-created timestamp and final Accum when available. This keeps
+repeated items distinguishable without repeating redundant labels such as
+“Базовый расчёт”.
 
 The date rule is global: it applies to labels, cards, selectors, tables, tooltips, portfolio/calculation/strategy periods and visible period input fields such as `Период с` / `Период по`. If a native browser date input cannot guarantee the format, production UI should use the shared text-style date field and parse the local label back to UTC ISO internally.
 

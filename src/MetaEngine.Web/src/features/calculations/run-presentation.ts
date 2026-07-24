@@ -1,4 +1,4 @@
-import type { CalculationRun, Portfolio, Preset } from "@/lib/api"
+import type { CalculationRun, Portfolio, Preset, SavedStrategy } from "@/lib/api"
 import { formatDateTime, formatPercent } from "@/lib/metrics"
 
 export type RunPresentationSources = {
@@ -55,4 +55,17 @@ export function calculationCompactLabel(run: CalculationRun, sources: RunPresent
     parts.push(finalAccum)
   }
   return parts.join(" · ")
+}
+
+
+export function savedStrategyDisplayName(strategy: SavedStrategy) {
+  return `${strategy.name} · v${strategy.version} · ${strategyTypeLabel(strategy.strategyType)}`
+}
+
+export function savedStrategyMetaLabel(strategy: SavedStrategy) {
+  return `${strategy.resultTimeframe} · ${formatDateTime(strategy.createdAt)}`
+}
+
+export function savedStrategyCompactLabel(strategy: SavedStrategy) {
+  return `${savedStrategyDisplayName(strategy)} · ${savedStrategyMetaLabel(strategy)}`
 }

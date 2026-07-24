@@ -42,10 +42,16 @@ controls.
 Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact
 `YYYY.MM.DD HH:MM` format in the browser's local timezone. Backend storage, API
 payloads and timeframe boundaries remain UTC; only the human-facing label is
-localized. Calculation and strategy selectors show the source name/version,
-timeframe, completed/created timestamp and final Accum, for example
-`Portfolio · v1 · 1h · 2026.07.21 21:56 · 1114,43%`, so repeated calculations
-with the same name remain distinguishable without long localized date labels. Native browser date controls are not used where they would render localized `ДД.ММ.ГГГГ` values instead of the shared format. Date fields show the example in the input placeholder; duplicate helper text under every period field is intentionally avoided.
+localized. Calculation, strategy result and saved-strategy selectors show the
+source/name, version, strategy type when relevant, timeframe, completed/created
+timestamp and final Accum when the contract has it, for example
+`Portfolio · v1 · 1h · 2026.07.21 21:56 · 1114,43%` or
+`Recovery MDD · v3 · MDD Mean Reversion · 1h · 2026.07.21 21:56`, so repeated
+items with the same name remain distinguishable without long localized date
+labels. Native browser date controls are not used where they would render
+localized `ДД.ММ.ГГГГ` values instead of the shared format. Date fields show the
+example in the input placeholder; duplicate helper text under every period field
+is intentionally avoided.
 
 ## Client boundaries
 

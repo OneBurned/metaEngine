@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { calculationCompactLabel, calculationDisplayName, calculationMetaLabel, strategyTypeLabel } from "./run-presentation"
+import { calculationCompactLabel, calculationDisplayName, calculationMetaLabel, savedStrategyCompactLabel, savedStrategyDisplayName, savedStrategyMetaLabel, strategyTypeLabel } from "./run-presentation"
 import { formatDateTime } from "@/lib/metrics"
 
 const portfolio = {
@@ -19,6 +19,26 @@ const portfolio = {
   endsAt: "2024-01-02T00:00:00Z",
   createdAt: "2026-01-01T00:00:00Z",
   createdByUserId: null,
+}
+
+
+const savedStrategy = {
+  id: "saved-strategy",
+  strategyKey: "strategy-key",
+  version: 3,
+  name: "Recovery MDD",
+  strategyType: "mdd_mean_reversion",
+  schemaVersion: 1,
+  parametersJson: "{}",
+  sourceType: "portfolio" as const,
+  sourcePortfolioId: portfolio.id,
+  sourcePresetId: null,
+  resultArtifactId: "artifact",
+  resultCalculationRunId: "strategy-run",
+  resultPeriodStart: "2024-01-01T00:00:00Z",
+  resultPeriodEnd: "2024-01-02T00:00:00Z",
+  resultTimeframe: "1h" as const,
+  createdAt: "2026-01-01T05:06:00Z",
 }
 
 const baseRun = {
@@ -80,5 +100,16 @@ describe("calculationCompactLabel", () => {
 
   it("uses timeframe and completed-or-created date as metadata", () => {
     expect(calculationMetaLabel(baseRun)).toBe(`1h · ${formatDateTime(baseRun.completedAt)}`)
+  })
+})
+
+
+describe("saved strategy labels", () => {
+  it("uses the shared compact label shape for saved strategies", () => {
+    const createdAt = formatDateTime(savedStrategy.createdAt)
+
+    expect(savedStrategyDisplayName(savedStrategy)).toBe("Recovery MDD · v3 · MDD Mean Reversion")
+    expect(savedStrategyMetaLabel(savedStrategy)).toBe(`1h · ${createdAt}`)
+    expect(savedStrategyCompactLabel(savedStrategy)).toBe(`Recovery MDD · v3 · MDD Mean Reversion · 1h · ${createdAt}`)
   })
 })
