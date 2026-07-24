@@ -93,27 +93,38 @@ export function formatPercent(value: number | null, digits = 2) {
     style: "percent",
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
-  }).format(value)
+  }).format(value).replace(/\s+(?=%)/g, "")
 }
 
 export function formatDateTime(value: string | null) {
   if (!value) {
     return "-"
   }
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value))
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return "-"
+  }
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
+  return `${year}.${month}.${day} ${hours}:${minutes}`
 }
 
 export function toDateTimeLocal(value: string) {
-  const date = new Date(value)
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 16)
+  return formatDateTime(value)
 }
 
 export function toIsoDateTime(value: string) {
-  return new Date(value).toISOString()
+  const trimmed = value.trim()
+  const match = /^(\d{4})[.-](\d{2})[.-](\d{2})[ T](\d{2}):(\d{2})$/.exec(trimmed)
+  if (!match) {
+    return new Date(trimmed).toISOString()
+  }
+
+  const [, year, month, day, hours, minutes] = match
+  return new Date(Number(year), Number(month) - 1, Number(day), Number(hours), Number(minutes)).toISOString()
 }
 
 function isBoundary(value: string, timeframe: Timeframe) {
@@ -144,11 +155,5 @@ function isBoundary(value: string, timeframe: Timeframe) {
 }
 
 function formatChartTimestamp(value: string) {
-  const date = new Date(value)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, "0")
-  const day = String(date.getDate()).padStart(2, "0")
-  const hours = String(date.getHours()).padStart(2, "0")
-  const minutes = String(date.getMinutes()).padStart(2, "0")
-  return `${year}.${month}.${day} ${hours}:${minutes}`
+  return formatDateTime(value)
 }

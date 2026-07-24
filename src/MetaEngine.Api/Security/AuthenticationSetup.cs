@@ -117,7 +117,9 @@ public static class AuthenticationSetup
             dataProtection.ProtectKeysWithCertificate(certificate);
         }
 
+        services.Configure<DevAuthOptions>(configuration.GetSection(DevAuthOptions.SectionName));
         services.AddScoped<AdminBootstrapper>();
+        services.AddScoped<DevAuthService>();
 
         return services;
     }

@@ -1,6 +1,5 @@
 import { AppShell } from "@/components/app-shell"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { savedStrategyDisplayName, savedStrategyMetaLabel } from "@/features/calculations/run-presentation"
 import { useSession } from "@/features/session/session-context"
 import { importPortfolio, listPortfolios, listPresets, listSavedStrategies, type Portfolio, type PortfolioImportValueType, type Preset, type SavedStrategy } from "@/lib/api"
 import { formatDateTime } from "@/lib/metrics"
@@ -36,21 +36,19 @@ export function DataScreen() {
     }
 
     setIsLoading(true)
-    try {
-      const [nextPortfolios, nextStrategies, nextPresets] = await Promise.all([
-        listPortfolios(workspace.id),
-        listSavedStrategies(workspace.id),
-        listPresets(workspace.id),
-      ])
-      setPortfolios(nextPortfolios)
-      setStrategies(nextStrategies)
-      setPresets(nextPresets)
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
-    }
+    const [portfolioResult, strategyResult, presetResult] = await Promise.allSettled([
+      listPortfolios(workspace.id),
+      listSavedStrategies(workspace.id),
+      listPresets(workspace.id),
+    ])
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (strategyResult.status === "fulfilled") setStrategies(strategyResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    const failures = [portfolioResult, strategyResult, presetResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   useEffect(() => { void refresh() }, [refresh])
@@ -126,6 +124,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     if (!file || !name.trim()) {
       setError("Выберите CSV и укажите название.")
       return
@@ -137,7 +136,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
       await onImport(file, name.trim(), valueType)
       setFile(null)
       setName("")
-      event.currentTarget.reset()
+      form.reset()
     } catch (requestError) {
       setError(toDisplayMessage(requestError))
     } finally {
@@ -160,7 +159,7 @@ function PortfolioLibrary({ items, isLoading }: { items: Portfolio[]; isLoading:
 }
 
 function StrategyLibrary({ items, isLoading }: { items: SavedStrategy[]; isLoading: boolean }) {
-  return <LibraryTable><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden sm:table-cell">Источник</TableHead><TableHead className="hidden lg:table-cell">Сохранена</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={4} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={4} text="Сохранённых стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">v{item.version}</div></TableCell><TableCell><Badge variant="outline">{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</Badge></TableCell><TableCell className="hidden sm:table-cell">{item.sourceType === "portfolio" ? "Портфолио" : "Пресет"}</TableCell><TableCell className="hidden lg:table-cell">{formatDateTime(item.createdAt)}</TableCell></TableRow>)}</TableBody></LibraryTable>
+  return <LibraryTable><TableHeader><TableRow><TableHead>Стратегия</TableHead><TableHead className="hidden sm:table-cell">Источник</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRow columns={2} /> : null}{!isLoading && items.length === 0 ? <EmptyRow columns={2} text="Сохранённых стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{savedStrategyDisplayName(item)}</div><div className="text-xs text-slate-500">{savedStrategyMetaLabel(item)}</div></TableCell><TableCell className="hidden sm:table-cell">{item.sourceType === "portfolio" ? "Портфолио" : "Пресет"}</TableCell></TableRow>)}</TableBody></LibraryTable>
 }
 
 function PresetLibrary({ items, isLoading }: { items: Preset[]; isLoading: boolean }) {

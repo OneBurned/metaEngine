@@ -1,13 +1,13 @@
 # Production strategies
 
-P5a makes RSI and MDD Mean Reversion executable in the production runtime.
-Both strategies validate parameters, prepare one immutable source series and
+P5a makes RSI, MDD Mean Reversion and Z-Score executable in the production runtime.
+Strategies validate parameters, prepare one immutable source series and
 calculate canonical `timestamp,diff` results.
 
 ## Workflow
 
 1. Complete a base calculation for a portfolio or preset.
-2. Queue RSI or MDD Mean Reversion against that exact completed base run.
+2. Queue RSI, MDD Mean Reversion or Z-Score against that exact completed base run.
 3. The Worker stores a `StrategyResult` artifact and summary metrics.
 4. Optionally save the completed run as a versioned strategy configuration.
 
@@ -50,6 +50,8 @@ opening weight, `exitType` (`source_dd`, `strategy_dd`, `source_hwm`,
 `strategy_hwm`) and `exitValue`. Weights do not have to be nondecreasing and the
 sum of open deal weights is not capped.
 
+Z-Score parameters also use decimal weights and independent `deals`, but each deal enters by `entryZScore` instead of Local DD. `rollingWindow` defaults to `240`; Z exits use `source_z` or `strategy_z`, while HWM exits keep `source_hwm` and `strategy_hwm`.
+
 Save body example:
 
 ```json
@@ -68,7 +70,7 @@ preset reads its exact saved `StrategyResult`; it does not rerun the strategy.
 
 ## Optimizer handoff
 
-P6 can optimize RSI or MDD Mean Reversion against a completed base calculation.
+P6 can optimize RSI or MDD Mean Reversion against a completed base calculation. Z-Score is manual-only for now.
 It stores aggregate top-N results only; the user chooses ranges, samples and
 optional filters in the **Optimization** tab, then applies one row to queue the
 corresponding normal strategy run. The user saves that completed run through the
@@ -77,16 +79,18 @@ reproducibility. Job details and API are in `docs/PRODUCTION_OPTIMIZATION.md`.
 
 ## UI
 
-The **Strategies** page selects only completed base runs, exposes manual RSI
-and MDD parameters, follows queued/running status, displays the strategy result
+The **Strategies** page selects only completed base runs, exposes manual RSI, MDD
+and Z-Score parameters, follows queued/running status, displays the strategy result
 with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
 The result block also restores the trading-model chart from the old local lab:
-RSI shows its indicator with buy/sell thresholds, while MDD shows source DD and
-Local DD used for deal entries. The strategy result table shows IN/OUT columns,
-signals, executions and position/weight fields. A current-result CSV export
-shortcut downloads the visible strategy result columns, while the dedicated
-**Экспорт** tab can export strategy results alongside portfolio versions and
-base calculations with any selected column set and a preview table. Its
-**Optimization** tab provides the full
-production RSI/MDD workflow: queue, progress, stop, sort and apply. The
+RSI shows its indicator with buy/sell thresholds, MDD shows source DD and
+Local DD used for deal entries, and Z-Score shows source/strategy Z values with deal entry levels. The strategy result table shows IN/OUT columns,
+signals, executions and position/weight fields. Stored MDD/Z-Score signal/execution
+values use ASCII English tokens such as `entry deal` and `opened deal` so CSV
+preview/download stays spreadsheet-safe even when the UI labels are localized.
+A current-result CSV export shortcut downloads the visible strategy result
+columns, while the dedicated **Экспорт** tab can export strategy results
+alongside portfolio versions and base calculations with any selected column set
+and a preview table. Its **Optimization** tab provides the full
+production RSI/MDD workflow: queue, progress, stop, sort and apply. Z-Score is hidden from optimization until a dedicated search space is designed. The
 **Presets** page can use that saved result alongside portfolio sources.

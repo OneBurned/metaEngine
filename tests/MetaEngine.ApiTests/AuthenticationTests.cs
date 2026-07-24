@@ -104,6 +104,37 @@ public sealed class AuthenticationTests(MetaEngineApiFactory factory) : IClassFi
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+
+    [Fact]
+    public async Task Development_admin_shortcut_creates_admin_workspace()
+    {
+        using var isolatedFactory = new MetaEngineApiFactory(
+            "Development",
+            new Dictionary<string, string?>
+            {
+                ["MetaEngine:DevAuth:Enabled"] = "true"
+            });
+        using var client = isolatedFactory.CreateClient();
+
+        var csrf = await client.GetFromJsonAsync<CsrfTokenResponse>("/api/v1/auth/csrf");
+        Assert.NotNull(csrf);
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/auth/login")
+        {
+            Content = JsonContent.Create(new LoginRequest("admin", "admin"))
+        };
+        request.Headers.Add("X-CSRF-TOKEN", csrf.Token);
+
+        var login = await client.SendAsync(request);
+        var currentUser = await client.GetFromJsonAsync<CurrentUserResponse>("/api/v1/auth/me", JsonOptions);
+
+        Assert.Equal(HttpStatusCode.OK, login.StatusCode);
+        Assert.NotNull(currentUser);
+        Assert.Equal("admin@metaengine.local", currentUser.Email);
+        Assert.Single(currentUser.Workspaces);
+        Assert.True(currentUser.Workspaces[0].CanWrite);
+        Assert.True(currentUser.Workspaces[0].CanAdminister);
+    }
+
     [Fact]
     public async Task Admin_bootstrap_is_idempotent_for_the_initial_owner()
     {

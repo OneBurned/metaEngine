@@ -16,5 +16,6 @@
     <ProjectReference Include="..\MetaEngine.Strategies.Abstractions\MetaEngine.Strategies.Abstractions.csproj" />
     <ProjectReference Include="..\MetaEngine.Strategies.Rsi\MetaEngine.Strategies.Rsi.csproj" />
     <ProjectReference Include="..\MetaEngine.Strategies.MddMeanReversion\MetaEngine.Strategies.MddMeanReversion.csproj" />
+    <ProjectReference Include="..\MetaEngine.Strategies.ZScore\MetaEngine.Strategies.ZScore.csproj" />
   </ItemGroup>
 </Project>

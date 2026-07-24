@@ -230,7 +230,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                     state.SourceHwmStartEquity = null;
                     state.StrategyHwmStartEquity = null;
                     buyCount++;
-                    executions.Add($"Открыта сделка {pending.DealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                    executions.Add($"opened deal {pending.DealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
                 }
                 else if (pending.Kind == PendingEventKind.Close && state.IsActive)
                 {
@@ -238,7 +238,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                     state.SourceHwmStartEquity = null;
                     state.StrategyHwmStartEquity = null;
                     sellCount++;
-                    executions.Add($"Закрыта сделка {pending.DealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
+                    executions.Add($"closed deal {pending.DealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
                 }
             }
             pendingEvents.Clear();
@@ -280,7 +280,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                 {
                     state.OpenedInCycle = true;
                     pendingEvents.Add(new(PendingEventKind.Open, dealIndex));
-                    signals.Add($"Вход: сделка {dealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                    signals.Add($"entry deal {dealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
                 }
             }
 
@@ -295,7 +295,7 @@ public sealed class MddMeanReversionStrategyModule : IStrategyModule
                 if (ShouldClose(state, dd, equity, strategyDrawdown, 1 + accum))
                 {
                     pendingEvents.Add(new(PendingEventKind.Close, dealIndex));
-                    signals.Add($"Выход: сделка {dealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
+                    signals.Add($"exit deal {dealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
                 }
             }
 

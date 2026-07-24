@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell"
-import { calculationDisplayName } from "@/features/calculations/run-presentation"
+import { calculationCompactLabel, calculationDisplayName, calculationMetaLabel, savedStrategyDisplayName, savedStrategyMetaLabel, strategyTypeLabel } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -41,6 +41,7 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react
 import { toast } from "sonner"
 
 type MddDeal = { entryDrawdown: number; weight: number; exitType: "source_dd" | "strategy_dd" | "source_hwm" | "strategy_hwm"; exitValue: number }
+type ZScoreDeal = { entryZScore: number; weight: number; exitType: "source_z" | "strategy_z" | "source_hwm" | "strategy_hwm"; exitValue: number }
 
 const defaultDeals: MddDeal[] = [
   { entryDrawdown: 10, weight: 10, exitType: "source_dd", exitValue: 0 },
@@ -48,6 +49,14 @@ const defaultDeals: MddDeal[] = [
   { entryDrawdown: 30, weight: 30, exitType: "source_dd", exitValue: 0 },
   { entryDrawdown: 40, weight: 40, exitType: "source_dd", exitValue: 0 },
   { entryDrawdown: 50, weight: 50, exitType: "source_dd", exitValue: 0 },
+]
+
+const defaultZScoreDeals: ZScoreDeal[] = [
+  { entryZScore: -1.5, weight: 10, exitType: "source_z", exitValue: 0 },
+  { entryZScore: -2.0, weight: 20, exitType: "source_z", exitValue: 0 },
+  { entryZScore: -2.5, weight: 30, exitType: "source_z", exitValue: 0 },
+  { entryZScore: -3.0, weight: 40, exitType: "source_z", exitValue: 0 },
+  { entryZScore: -3.5, weight: 50, exitType: "source_z", exitValue: 0 },
 ]
 
 const chartConfig = {
@@ -58,6 +67,8 @@ const chartConfig = {
   maxDrawdown: { label: "MDD", color: "#7c2d12" },
   sourceDrawdown: { label: "DD исходника", color: "#f97316" },
   localDrawdown: { label: "Local DD", color: "#9333ea" },
+  sourceZ: { label: "Source Z", color: "#7c3aed" },
+  strategyZ: { label: "Strategy Z", color: "#dc2626" },
   rsi: { label: "RSI", color: "#7c3aed" },
 } satisfies ChartConfig
 
@@ -78,6 +89,8 @@ export function StrategyScreen() {
   const [buyLevel, setBuyLevel] = useState(30)
   const [sellLevel, setSellLevel] = useState(70)
   const [deals, setDeals] = useState<MddDeal[]>(defaultDeals)
+  const [rollingWindow, setRollingWindow] = useState(240)
+  const [zScoreDeals, setZScoreDeals] = useState<ZScoreDeal[]>(defaultZScoreDeals)
   const [selectedRunId, setSelectedRunId] = useState("")
   const [selectedRun, setSelectedRun] = useState<CalculationRunDetails | null>(null)
   const [points, setPoints] = useState<PortfolioPoint[]>([])
@@ -91,29 +104,29 @@ export function StrategyScreen() {
       setIsLoading(false)
       return
     }
-    try {
-      const [allRuns, nextPortfolios, nextPresets, saved, availableTypes] = await Promise.all([
-        listCalculationRuns(workspace.id),
-        listPortfolios(workspace.id),
-        listPresets(workspace.id),
-        listSavedStrategies(workspace.id),
-        listStrategyTypes(),
-      ])
-      setRuns(allRuns)
-      setPortfolios(nextPortfolios)
-      setPresets(nextPresets)
-      setSavedStrategies(saved)
-      setStrategyTypes(availableTypes.map((item) => item.strategyType))
-      const baseRuns = allRuns.filter((run) => run.kind === "base" && run.status === "completed")
+    const [runResult, portfolioResult, presetResult, savedResult, typeResult] = await Promise.allSettled([
+      listCalculationRuns(workspace.id),
+      listPortfolios(workspace.id),
+      listPresets(workspace.id),
+      listSavedStrategies(workspace.id),
+      listStrategyTypes(),
+    ])
+    if (runResult.status === "fulfilled") {
+      setRuns(runResult.value)
+      const baseRuns = runResult.value.filter((run) => run.kind === "base" && run.status === "completed")
       setSourceRunId((current) => baseRuns.some((run) => run.id === current) ? current : (baseRuns[0]?.id ?? ""))
-      const strategyRuns = allRuns.filter((run) => run.kind === "strategy")
+      const strategyRuns = runResult.value.filter((run) => run.kind === "strategy")
       setSelectedRunId((current) => strategyRuns.some((run) => run.id === current) ? current : (strategyRuns[0]?.id ?? ""))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
     }
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    if (savedResult.status === "fulfilled") setSavedStrategies(savedResult.value)
+    if (typeResult.status === "fulfilled") setStrategyTypes(typeResult.value.map((item) => item.strategyType))
+    const failures = [runResult, portfolioResult, presetResult, savedResult, typeResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const loadResult = useCallback(async () => {
@@ -150,7 +163,9 @@ export function StrategyScreen() {
     try {
       const parameters = strategyType === "rsi"
         ? { rsiPeriod, buyLevel, sellLevel }
-        : { deals: deals.map((deal) => ({ entryDrawdown: -Math.abs(deal.entryDrawdown) / 100, weight: deal.weight / 100, exitType: deal.exitType, exitValue: deal.exitValue / 100 })) }
+        : strategyType === "z_score"
+          ? { rollingWindow, deals: zScoreDeals.map((deal) => ({ entryZScore: -Math.abs(deal.entryZScore), weight: deal.weight / 100, exitType: deal.exitType, exitValue: deal.exitType.endsWith("_hwm") ? deal.exitValue / 100 : deal.exitValue })) }
+          : { deals: deals.map((deal) => ({ entryDrawdown: -Math.abs(deal.entryDrawdown) / 100, weight: deal.weight / 100, exitType: deal.exitType, exitValue: deal.exitValue / 100 })) }
       const queued = await queueStrategyCalculation(workspace.id, sourceRunId, strategyType, parameters)
       setSelectedRunId(queued.id)
       setSaveName("")
@@ -187,6 +202,18 @@ export function StrategyScreen() {
         setRsiPeriod(numberValue(parameters.rsiPeriod, 14))
         setBuyLevel(numberValue(parameters.buyLevel, 30))
         setSellLevel(numberValue(parameters.sellLevel, 70))
+      } else if (saved.strategyType === "z_score" && Array.isArray(parameters.deals)) {
+        setRollingWindow(numberValue(parameters.rollingWindow, 240))
+        setZScoreDeals(parameters.deals.map((deal: unknown) => {
+          const item = deal as Record<string, unknown>
+          const exitType = typeof item.exitType === "string" && ["source_z", "strategy_z", "source_hwm", "strategy_hwm"].includes(item.exitType) ? item.exitType as ZScoreDeal["exitType"] : "source_z"
+          return {
+            entryZScore: -Math.abs(numberValue(item.entryZScore ?? item.entryDrawdown, -1.5)),
+            weight: numberValue(item.weight, 0.1) * 100,
+            exitType,
+            exitValue: exitType.endsWith("_hwm") ? numberValue(item.exitValue, 0) * 100 : numberValue(item.exitValue, 0),
+          }
+        }))
       } else if (Array.isArray(parameters.deals) || Array.isArray(parameters.levels)) {
         const rawDeals = (Array.isArray(parameters.deals) ? parameters.deals : parameters.levels) as unknown[]
         setDeals(rawDeals.map((deal: unknown) => {
@@ -248,21 +275,21 @@ export function StrategyScreen() {
               <TabsList aria-label="Режим работы со стратегией"><TabsTrigger value="manual">Ручной расчет</TabsTrigger><TabsTrigger value="optimization">Оптимизация</TabsTrigger></TabsList>
               <TabsContent value="manual" className="mt-5">
                 <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
-                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
-                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationCompactLabel(run, presentationSources)}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field>
                   <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
-                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields deals={deals} onDeals={setDeals} />}
+                  {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : strategyType === "z_score" ? <ZScoreFields rollingWindow={rollingWindow} onRollingWindow={setRollingWindow} deals={zScoreDeals} onDeals={setZScoreDeals} /> : <MddFields deals={deals} onDeals={setDeals} />}
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
-              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{strategyTypeLabel(type)}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "z_score" ? <EmptyPanel text="Для Z-Score оптимизация пока не включена. Используйте ручной расчет." /> : strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationCompactLabel(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationCompactLabel(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>
 
         <section className="mt-7"><SectionTitle icon={<Play className="size-4" />} title="Запуски стратегий" /><StrategyRunTable runs={strategyRuns} selectedId={selectedRunId} onSelect={setSelectedRunId} presentationSources={presentationSources} /></section>
-        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult workspaceId={workspace.id} details={selectedRun} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
         <section className="mt-7"><SectionTitle icon={<Save className="size-4" />} title="Сохраненные стратегии" /><SavedStrategyTable items={savedStrategies} onApply={applySaved} /></section>
+        <section className="mt-7"><SectionTitle icon={<BookMarked className="size-4" />} title="Результат стратегии" /><StrategyResult workspaceId={workspace.id} details={selectedRun} title={selectedRun ? calculationDisplayName(selectedRun.run, presentationSources) : null} points={points} saveName={saveName} onSaveName={setSaveName} onSave={() => void handleSave()} canWrite={workspace.canWrite} /></section>
       </> : null}
     </AppShell>
   )
@@ -279,8 +306,16 @@ function MddFields({ deals, onDeals }: { deals: MddDeal[]; onDeals: (items: MddD
   return <div className="md:col-span-3"><div className="mb-2 flex items-center justify-between"><div><Label>Сделки MDD Mean Reversion</Label><p className="mt-1 text-xs text-slate-500">Каждая строка — независимая сделка. Общий вес равен сумме открытых сделок.</p></div><Button type="button" variant="outline" size="sm" onClick={() => onDeals([...deals, { entryDrawdown: (deals.at(-1)?.entryDrawdown ?? 0) + 10, weight: 10, exitType: "source_dd", exitValue: 0 }])}><Plus />Сделка</Button></div><div className="grid gap-3 md:grid-cols-2">{deals.map((deal, index) => <div key={index} className="grid gap-3 rounded-md border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-sm font-medium text-slate-900">Сделка {index + 1}</p><Button type="button" variant="ghost" size="icon" disabled={deals.length === 1} onClick={() => onDeals(deals.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить сделку"><Trash2 /></Button></div><div className="grid gap-2 sm:grid-cols-2"><NumberField label="Вход при Local DD исходника, %" value={deal.entryDrawdown} onChange={(value) => update(index, "entryDrawdown", value)} min={0.01} /><NumberField label="Вес открытия, %" value={deal.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Field label="Выход по"><Select value={deal.exitType} onValueChange={(value) => update(index, "exitType", value as MddDeal["exitType"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="source_dd">DD исходника</SelectItem><SelectItem value="strategy_dd">DD стратегии</SelectItem><SelectItem value="source_hwm">HWM исходника</SelectItem><SelectItem value="strategy_hwm">HWM стратегии</SelectItem></SelectContent></Select></Field><NumberField label="Значение выхода, %" value={deal.exitValue} onChange={(value) => update(index, "exitValue", value)} /></div></div>)}</div><p className="mt-3 text-sm text-slate-600">Максимально возможный вес конфигурации: {formatPercent(maxConfigWeight / 100)}. Порядок расчета: {sortedDeals.map((deal) => `${deal.entryDrawdown}%`).join(" → ")}.</p></div>
 }
 
+
+function ZScoreFields({ rollingWindow, onRollingWindow, deals, onDeals }: { rollingWindow: number; onRollingWindow: (value: number) => void; deals: ZScoreDeal[]; onDeals: (items: ZScoreDeal[]) => void }) {
+  const sortedDeals = [...deals].sort((left, right) => Math.abs(left.entryZScore) - Math.abs(right.entryZScore))
+  const maxConfigWeight = deals.reduce((sum, deal) => sum + deal.weight, 0)
+  function update(index: number, key: keyof ZScoreDeal, value: number | ZScoreDeal["exitType"]) { onDeals(deals.map((deal, itemIndex) => itemIndex === index ? { ...deal, [key]: value } : deal)) }
+  return <div className="md:col-span-3 space-y-4"><NumberField label="Rolling window, точек" value={rollingWindow} onChange={onRollingWindow} min={2} /><div><div className="mb-2 flex items-center justify-between"><div><Label>Сделки Z-Score</Label><p className="mt-1 text-xs text-slate-500">Каждая строка — независимая сделка. Вход срабатывает по Source Z, общий вес равен сумме открытых сделок.</p></div><Button type="button" variant="outline" size="sm" onClick={() => onDeals([...deals, { entryZScore: (deals.at(-1)?.entryZScore ?? -1) - 0.5, weight: 10, exitType: "source_z", exitValue: 0 }])}><Plus />Сделка</Button></div><div className="grid gap-3 md:grid-cols-2">{deals.map((deal, index) => <div key={index} className="grid gap-3 rounded-md border border-slate-200 p-3"><div className="flex items-center justify-between"><p className="text-sm font-medium text-slate-900">Сделка {index + 1}</p><Button type="button" variant="ghost" size="icon" disabled={deals.length === 1} onClick={() => onDeals(deals.filter((_, itemIndex) => itemIndex !== index))} aria-label="Удалить сделку"><Trash2 /></Button></div><div className="grid gap-2 sm:grid-cols-2"><NumberField label="Вход при Source Z" value={deal.entryZScore} onChange={(value) => update(index, "entryZScore", value)} max={-0.01} /><NumberField label="Вес открытия, %" value={deal.weight} onChange={(value) => update(index, "weight", value)} min={0} /><Field label="Выход по"><Select value={deal.exitType} onValueChange={(value) => update(index, "exitType", value as ZScoreDeal["exitType"])}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="source_z">Z исходника</SelectItem><SelectItem value="strategy_z">Z стратегии</SelectItem><SelectItem value="source_hwm">HWM исходника</SelectItem><SelectItem value="strategy_hwm">HWM стратегии</SelectItem></SelectContent></Select></Field><NumberField label={deal.exitType.endsWith("_hwm") ? "Значение выхода, %" : "Значение выхода Z"} value={deal.exitValue} onChange={(value) => update(index, "exitValue", value)} min={deal.exitType.endsWith("_hwm") ? 0 : undefined} /></div></div>)}</div><p className="mt-3 text-sm text-slate-600">Максимально возможный вес конфигурации: {formatPercent(maxConfigWeight / 100)}. Порядок расчета: {sortedDeals.map((deal) => deal.entryZScore.toFixed(2)).join(" → ")}.</p></div></div>
+}
+
 function StrategyRunTable({ runs, selectedId, onSelect, presentationSources }: { runs: CalculationRun[]; selectedId: string; onSelect: (id: string) => void; presentationSources: { portfolios: Portfolio[]; presets: Preset[]; runs: CalculationRun[] } }) {
-  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Accum</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{formatDateTime(run.createdAt)}</div></TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
+  return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Accum</TableHead><TableHead className="w-24 text-right">Результат</TableHead></TableRow></TableHeader><TableBody>{runs.length === 0 ? <EmptyRow columns={4} text="Запусков стратегий пока нет." /> : runs.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationMetaLabel(run)}</div></TableCell><TableCell><Status status={run.status} /></TableCell><TableCell className="hidden md:table-cell">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><Button size="sm" variant="outline" onClick={() => onSelect(run.id)}>Открыть</Button></TableCell></TableRow>)}</TableBody></Table></div>
 }
 
 function StrategyResult({ workspaceId, details, title, points, saveName, onSaveName, onSave, canWrite }: { workspaceId: string; details: CalculationRunDetails | null; title: string | null; points: PortfolioPoint[]; saveName: string; onSaveName: (value: string) => void; onSave: () => void; canWrite: boolean }) {
@@ -334,27 +369,41 @@ function StrategyResult({ workspaceId, details, title, points, saveName, onSaveN
 
   if (!details) return <EmptyPanel text="Выберите запуск стратегии." />
   if (details.run.status !== "completed") return <EmptyPanel text={details.run.status === "failed" || details.run.status === "interrupted" ? `Расчет не завершился: ${details.run.errorCode ?? "unknown_error"}. Повторить его можно на странице «Расчеты».` : "Стратегия выполняется. Статус обновляется автоматически."} />
-  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · расчет {details.run.timeframe} · отображение {selectedDisplayTimeframe}</p></div><Button type="button" variant="outline" onClick={handleExport}><Download />Экспорт CSV</Button></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Accum" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-4 text-sm"><ChartToggle label="Diff" checked={visibleLines.diff} onChange={(checked) => setVisibleLines((current) => ({ ...current, diff: checked }))} /><ChartToggle label="Accum" checked={visibleLines.accum} onChange={(checked) => setVisibleLines((current) => ({ ...current, accum: checked }))} /><ChartToggle label="HWM" checked={visibleLines.highWaterMark} onChange={(checked) => setVisibleLines((current) => ({ ...current, highWaterMark: checked }))} /><ChartToggle label="DD" checked={visibleLines.drawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, drawdown: checked }))} /><ChartToggle label="MDD" checked={visibleLines.maxDrawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, maxDrawdown: checked }))} /></div><div className="flex flex-wrap items-center gap-2"><Select value={selectedDisplayTimeframe} onValueChange={(value) => setDisplayTimeframe(value as Timeframe)}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{displayTimeframes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select><Select value={chartMode} onValueChange={(value) => handleChartModeChange(value as "line" | "histogram")}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="line">Линии</SelectItem><SelectItem value="histogram">Гистограмма</SelectItem></SelectContent></Select></div></div><ChartContainer config={chartConfig} className="h-[360px] w-full aspect-auto" aria-label="Итог стратегии: Diff, Accum, HWM, DD и MDD"><ComposedChart data={chartPoints} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />}/>{visibleLines.diff ? chartMode === "histogram" ? <Bar dataKey="diff" fill="var(--color-diff)" opacity={0.65} /> : <Line type="monotone" dataKey="diff" stroke="var(--color-diff)" strokeWidth={1.25} dot={false} /> : null}{visibleLines.accum ? <Line type="monotone" dataKey="accum" stroke="var(--color-accum)" strokeWidth={1.75} dot={false} /> : null}{visibleLines.highWaterMark ? <Line type="monotone" dataKey="highWaterMark" stroke="var(--color-highWaterMark)" strokeWidth={1.5} dot={false} /> : null}{visibleLines.drawdown ? <Line type="monotone" dataKey="drawdown" stroke="var(--color-drawdown)" strokeWidth={1.35} dot={false} /> : null}{visibleLines.maxDrawdown ? <Line type="monotone" dataKey="maxDrawdown" stroke="var(--color-maxDrawdown)" strokeWidth={1.35} dot={false} strokeDasharray="5 5" /> : null}<Brush dataKey="label" height={28} stroke="#0f766e" travellerWidth={8} /></ComposedChart></ChartContainer></div><StrategyIndicatorChart strategyType={details.run.strategyType} points={indicatorPoints} parameters={strategyParameters} /><StrategyResultTable strategyType={details.run.strategyType} metrics={metrics} /><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div></div>
+  return <div className="space-y-5"><div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-base font-semibold">{title}</p><p className="mt-1 text-sm text-slate-500">{formatDateTime(details.run.periodStart)} - {formatDateTime(details.run.periodEnd)} · расчет {details.run.timeframe} · отображение {selectedDisplayTimeframe}</p></div><Button type="button" variant="outline" onClick={handleExport}><Download />Экспорт CSV</Button></div><div className="grid gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-4"><Metric label="Accum" value={formatPercent(details.run.finalAccum)} /><Metric label="HWM" value={formatPercent(details.run.highWaterMark)} /><Metric label="Макс. просадка" value={formatPercent(details.run.maxDrawdown)} /><Metric label="Сделок" value={details.run.tradeCount.toLocaleString("ru-RU")} /></div><div className="flex flex-wrap gap-3 rounded-lg border border-slate-200 bg-white p-4"><Input className="max-w-sm" value={saveName} onChange={(event) => onSaveName(event.target.value)} placeholder="Название сохраненной стратегии" disabled={!canWrite} /><Button onClick={onSave} disabled={!canWrite || !saveName.trim()}><Save />Сохранить стратегию</Button></div><div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div className="flex flex-wrap items-center gap-4 text-sm"><ChartToggle label="Diff" checked={visibleLines.diff} onChange={(checked) => setVisibleLines((current) => ({ ...current, diff: checked }))} /><ChartToggle label="Accum" checked={visibleLines.accum} onChange={(checked) => setVisibleLines((current) => ({ ...current, accum: checked }))} /><ChartToggle label="HWM" checked={visibleLines.highWaterMark} onChange={(checked) => setVisibleLines((current) => ({ ...current, highWaterMark: checked }))} /><ChartToggle label="DD" checked={visibleLines.drawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, drawdown: checked }))} /><ChartToggle label="MDD" checked={visibleLines.maxDrawdown} onChange={(checked) => setVisibleLines((current) => ({ ...current, maxDrawdown: checked }))} /></div><div className="flex flex-wrap items-center gap-2"><Select value={selectedDisplayTimeframe} onValueChange={(value) => setDisplayTimeframe(value as Timeframe)}><SelectTrigger className="w-32"><SelectValue /></SelectTrigger><SelectContent>{displayTimeframes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select><Select value={chartMode} onValueChange={(value) => handleChartModeChange(value as "line" | "histogram")}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="line">Линии</SelectItem><SelectItem value="histogram">Гистограмма</SelectItem></SelectContent></Select></div></div><ChartContainer config={chartConfig} className="h-[360px] w-full aspect-auto" aria-label="Итог стратегии: Diff, Accum, HWM, DD и MDD"><ComposedChart data={chartPoints} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />}/>{visibleLines.diff ? chartMode === "histogram" ? <Bar dataKey="diff" fill="var(--color-diff)" opacity={0.65} /> : <Line type="monotone" dataKey="diff" stroke="var(--color-diff)" strokeWidth={1.25} dot={false} /> : null}{visibleLines.accum ? <Line type="monotone" dataKey="accum" stroke="var(--color-accum)" strokeWidth={1.75} dot={false} /> : null}{visibleLines.highWaterMark ? <Line type="monotone" dataKey="highWaterMark" stroke="var(--color-highWaterMark)" strokeWidth={1.5} dot={false} /> : null}{visibleLines.drawdown ? <Line type="monotone" dataKey="drawdown" stroke="var(--color-drawdown)" strokeWidth={1.35} dot={false} /> : null}{visibleLines.maxDrawdown ? <Line type="monotone" dataKey="maxDrawdown" stroke="var(--color-maxDrawdown)" strokeWidth={1.35} dot={false} strokeDasharray="5 5" /> : null}<Brush dataKey="label" height={28} stroke="#0f766e" travellerWidth={8} /></ComposedChart></ChartContainer></div><StrategyIndicatorChart strategyType={details.run.strategyType} points={indicatorPoints} parameters={strategyParameters} metrics={metrics} /><StrategyResultTable strategyType={details.run.strategyType} metrics={metrics} /></div>
 }
 
-function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
+function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Стратегия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={2} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{savedStrategyDisplayName(item)}</div><div className="text-xs text-slate-500">{savedStrategyMetaLabel(item)}</div></TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
 
 function StrategyResultTable({ strategyType, metrics }: { strategyType: string | null; metrics: ReturnType<typeof deriveMetricSeries> }) {
-  const rows = metrics.slice(0, 500)
+  const [visibleRows, setVisibleRows] = useState(100)
+  const rows = metrics.slice(0, visibleRows)
   const isMdd = strategyType === "mdd_mean_reversion"
-  return <div className="rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3"><div><p className="text-sm font-semibold text-slate-950">Таблица результата стратегии</p><p className="mt-1 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</p></div></div><div className="overflow-x-auto"><Table className="min-w-[1180px]"><TableHeader><TableRow><TableHead>Время</TableHead>{isMdd ? <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">DD исходника</TableHead><TableHead className="text-right">Local DD</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Active deals</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead><TableHead className="text-right">Max config weight</TableHead><TableHead className="text-right">Max realized weight</TableHead></> : <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">RSI</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} isMdd={isMdd} />)}</TableBody></Table></div></div>
+  const isZScore = strategyType === "z_score"
+  useEffect(() => { setVisibleRows(100) }, [metrics])
+  return <div className="rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3"><div><p className="text-sm font-semibold text-slate-950">Таблица результата стратегии</p><p className="mt-1 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</p></div></div><div className="overflow-x-auto"><Table className="min-w-[1180px] text-xs"><TableHeader><TableRow><TableHead>Время</TableHead>{isMdd ? <><CommonDealHeads /><TableHead className="text-right">IN DD</TableHead><TableHead className="text-right">Local DD</TableHead><DealResultHeads /></> : isZScore ? <><CommonDealHeads /><TableHead className="text-right">IN DD</TableHead><TableHead className="text-right">Source Z</TableHead><TableHead className="text-right">Strategy Z</TableHead><TableHead className="text-right">DD mean</TableHead><TableHead className="text-right">DD std</TableHead><DealResultHeads /></> : <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">RSI</TableHead><TableHead>Signal</TableHead><TableHead>Execution</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} strategyType={strategyType} />)}</TableBody></Table></div>{visibleRows < metrics.length ? <div className="border-t border-slate-200 p-3 text-center"><Button type="button" variant="outline" size="sm" onClick={() => setVisibleRows((current) => Math.min(current + 500, metrics.length))}>Показать ещё {Math.min(500, metrics.length - visibleRows).toLocaleString("ru-RU")}</Button></div> : null}</div>
 }
 
-function StrategyResultRow({ point, isMdd }: { point: ReturnType<typeof deriveMetricSeries>[number]; isMdd: boolean }) {
+function CommonDealHeads() { return <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead></> }
+function DealResultHeads() { return <><TableHead>Signal</TableHead><TableHead>Execution</TableHead><TableHead className="text-right">Active deals</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead><TableHead className="text-right">Max config weight</TableHead><TableHead className="text-right">Max realized weight</TableHead></> }
+
+function StrategyResultRow({ point, strategyType }: { point: ReturnType<typeof deriveMetricSeries>[number]; strategyType: string | null }) {
   const fields = normalizeStrategyFields(point.fields)
-  return <TableRow><TableCell>{point.label}</TableCell>{isMdd ? <><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd ?? fields.base_dd))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.local_mdd))}</TableCell><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{textField(fields.active_deals)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_config_weight))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_realized_weight))}</TableCell></> : <><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell><TableCell className="text-right tabular-nums">{formatNumber(numberField(fields.rsi))}</TableCell><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell></>}</TableRow>
+  const common = <><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_diff), 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_accum))}</TableCell></>
+  const dealResult = <><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{textField(fields.active_deals)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_config_weight))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.max_realized_weight))}</TableCell></>
+  return <TableRow><TableCell>{point.label}</TableCell>{strategyType === "mdd_mean_reversion" ? <>{common}<TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd ?? fields.base_dd))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.local_mdd))}</TableCell>{dealResult}</> : strategyType === "z_score" ? <>{common}<TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd ?? fields.base_dd))}</TableCell><TableCell className="text-right tabular-nums">{formatNumber(numberField(fields.source_z))}</TableCell><TableCell className="text-right tabular-nums">{formatNumber(numberField(fields.strategy_z))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd_mean))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.source_dd_std))}</TableCell>{dealResult}</> : <>{common}<TableCell className="text-right tabular-nums">{formatNumber(numberField(fields.rsi))}</TableCell><TableCell>{textField(fields.signal)}</TableCell><TableCell>{textField(fields.execution)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(numberField(fields.weight ?? fields.position))}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.diff, 3)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.accum)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.highWaterMark)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.drawdown)}</TableCell><TableCell className="text-right tabular-nums">{formatPercent(point.maxDrawdown)}</TableCell></>}</TableRow>
 }
 
-function StrategyIndicatorChart({ strategyType, points, parameters }: { strategyType: string | null; points: StrategyIndicatorPoint[]; parameters: StrategyParameters | null }) {
+function StrategyIndicatorChart({ strategyType, points, parameters, metrics }: { strategyType: string | null; points: StrategyIndicatorPoint[]; parameters: StrategyParameters | null; metrics: ReturnType<typeof deriveMetricSeries> }) {
   if (points.length === 0) return <EmptyPanel text="График торговли появится после загрузки исходного ряда стратегии." />
   if (strategyType === "rsi") {
     const rsiParameters = parameters?.type === "rsi" ? parameters : null
     return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-3"><p className="text-sm font-semibold text-slate-950">График торговли RSI</p><p className="mt-1 text-xs text-slate-500">RSI считается по исходной equity-кривой базового расчета. Линии покупки/продажи показывают выбранные уровни.</p></div><ChartContainer config={chartConfig} className="h-[280px] w-full aspect-auto" aria-label="График RSI"><ComposedChart data={downsampleForChart(points)} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis domain={[0, 100]} width={56} tickLine={false} axisLine={false} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => Number(value).toFixed(2)} />} /><ReferenceLine y={rsiParameters?.buyLevel ?? 30} stroke="#16a34a" strokeDasharray="4 4" label="Купить" /><ReferenceLine y={rsiParameters?.sellLevel ?? 70} stroke="#dc2626" strokeDasharray="4 4" label="Продать" /><Line type="monotone" dataKey="rsi" stroke="var(--color-rsi)" strokeWidth={1.6} dot={false} connectNulls /></ComposedChart></ChartContainer></div>
+  }
+  if (strategyType === "z_score") {
+    const zParameters = parameters?.type === "z_score" ? parameters : null
+    const strategyZByTimestamp = new Map(metrics.map((point) => [point.timestamp, numberField(normalizeStrategyFields(point.fields).strategy_z)]))
+    const chartData = points.map((point) => ({ ...point, strategyZ: strategyZByTimestamp.get(point.timestamp) ?? null }))
+    return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-3"><p className="text-sm font-semibold text-slate-950">График модели Z-Score</p><p className="mt-1 text-xs text-slate-500">Показывает Source Z и Strategy Z. Горизонтальные линии — уровни входа сделок.</p></div><ChartContainer config={chartConfig} className="h-[280px] w-full aspect-auto" aria-label="График модели Z-Score"><ComposedChart data={downsampleForChart(chartData)} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => Number(value).toFixed(2)} />} /><ReferenceLine y={0} stroke="#94a3b8" />{zParameters?.deals.map((deal, index) => <ReferenceLine key={`${index}-${deal.entryZScore}`} y={deal.entryZScore} stroke="#f97316" strokeDasharray="4 4" />)}<Line type="monotone" dataKey="sourceZ" stroke="var(--color-sourceZ)" strokeWidth={1.45} dot={false} /><Line type="monotone" dataKey="strategyZ" stroke="var(--color-strategyZ)" strokeWidth={1.45} dot={false} strokeDasharray="5 5" connectNulls /></ComposedChart></ChartContainer></div>
   }
   return <div className="rounded-lg border border-slate-200 bg-white p-4"><div className="mb-3"><p className="text-sm font-semibold text-slate-950">График модели MDD</p><p className="mt-1 text-xs text-slate-500">Показывает текущий DD исходника и Local DD текущего цикла, по которому срабатывают входы сделок.</p></div><ChartContainer config={chartConfig} className="h-[280px] w-full aspect-auto" aria-label="График MDD модели"><ComposedChart data={downsampleForChart(points)} margin={{ top: 12, right: 16, left: 8, bottom: 12 }}><CartesianGrid vertical={false} /><XAxis dataKey="label" minTickGap={70} tickLine={false} axisLine={false} /><YAxis width={76} tickLine={false} axisLine={false} tickFormatter={(value) => formatPercent(Number(value), 0)} /><ChartTooltip content={<ChartTooltipContent formatter={(value) => formatPercent(Number(value))} />} /><ReferenceLine y={0} stroke="#94a3b8" /><Line type="monotone" dataKey="sourceDrawdown" stroke="var(--color-sourceDrawdown)" strokeWidth={1.45} dot={false} /><Line type="monotone" dataKey="localDrawdown" stroke="var(--color-localDrawdown)" strokeWidth={1.45} dot={false} strokeDasharray="5 5" /></ComposedChart></ChartContainer></div>
 }
@@ -362,6 +411,7 @@ function StrategyIndicatorChart({ strategyType, points, parameters }: { strategy
 type StrategyParameters =
   | { type: "rsi"; period: number; buyLevel: number; sellLevel: number }
   | { type: "mdd"; deals: MddDeal[] }
+  | { type: "z_score"; rollingWindow: number; deals: ZScoreDeal[] }
 
 type StrategyIndicatorPoint = {
   timestamp: string
@@ -369,6 +419,7 @@ type StrategyIndicatorPoint = {
   rsi?: number | null
   sourceDrawdown?: number
   localDrawdown?: number
+  sourceZ?: number
 }
 
 function parseStrategyParameters(json: string | null | undefined): StrategyParameters | null {
@@ -381,6 +432,22 @@ function parseStrategyParameters(json: string | null | undefined): StrategyParam
         period: Math.max(1, Math.trunc(value.rsiPeriod)),
         buyLevel: numberValue(value.buyLevel, 30),
         sellLevel: numberValue(value.sellLevel, 70),
+      }
+    }
+    if (Array.isArray(value.deals) && typeof value.rollingWindow === "number") {
+      return {
+        type: "z_score",
+        rollingWindow: Math.max(2, Math.trunc(value.rollingWindow)),
+        deals: value.deals.map((deal) => {
+          const item = deal as Record<string, unknown>
+          const exitType = typeof item.exitType === "string" && ["source_z", "strategy_z", "source_hwm", "strategy_hwm"].includes(item.exitType) ? item.exitType as ZScoreDeal["exitType"] : "source_z"
+          return {
+            entryZScore: -Math.abs(numberValue(item.entryZScore ?? item.entryDrawdown, -1.5)),
+            weight: numberValue(item.weight, 0.1) * 100,
+            exitType,
+            exitValue: exitType.endsWith("_hwm") ? numberValue(item.exitValue, 0) * 100 : numberValue(item.exitValue, 0),
+          }
+        }),
       }
     }
     if (Array.isArray(value.deals)) {
@@ -408,6 +475,12 @@ function buildIndicatorPoints(sourceMetrics: ReturnType<typeof deriveMetricSerie
     const period = parameters?.type === "rsi" ? parameters.period : 14
     const rsi = calculateRsi(sourceMetrics.map((point) => point.accum), period)
     return sourceMetrics.map((point, index) => ({ timestamp: point.timestamp, label: point.label, rsi: rsi[index] }))
+  }
+
+  if (strategyType === "z_score") {
+    const rollingWindow = parameters?.type === "z_score" ? parameters.rollingWindow : 240
+    const zValues = calculateRollingZ(sourceMetrics.map((point) => point.drawdown), rollingWindow)
+    return sourceMetrics.map((point, index) => ({ timestamp: point.timestamp, label: point.label, sourceDrawdown: point.drawdown, sourceZ: zValues[index] }))
   }
 
   let localDrawdown = 0
@@ -450,6 +523,17 @@ function calculateRsi(accumValues: number[], period: number) {
   return values
 }
 
+function calculateRollingZ(values: number[], rollingWindow: number) {
+  return values.map((value, index) => {
+    if (index < rollingWindow) return 0
+    const window = values.slice(index - rollingWindow + 1, index + 1)
+    const mean = window.reduce((sum, item) => sum + item, 0) / rollingWindow
+    const variance = window.reduce((sum, item) => sum + (item - mean) ** 2, 0) / (rollingWindow - 1)
+    const std = Math.sqrt(variance)
+    return std <= 0 ? 0 : (value - mean) / std
+  })
+}
+
 function toRsi(averageGain: number, averageLoss: number) {
   if (averageLoss === 0) return 100
   const rs = averageGain / averageLoss
@@ -460,7 +544,9 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
   const indicatorByTimestamp = new Map(indicators.map((point) => [point.timestamp, point]))
   const indicatorColumns = strategyType === "rsi"
     ? ["rsi", "signal", "execution", "position", "source_diff", "source_accum", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
-    : ["source_diff", "source_accum", "source_dd", "local_mdd", "signal", "execution", "active_deals", "weight", "max_config_weight", "max_realized_weight", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
+    : strategyType === "z_score"
+      ? ["source_diff", "source_accum", "source_dd", "source_dd_mean", "source_dd_std", "source_z", "strategy_dd_mean", "strategy_dd_std", "strategy_z", "signal", "execution", "active_deals", "weight", "max_config_weight", "max_realized_weight", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
+      : ["source_diff", "source_accum", "source_dd", "local_mdd", "signal", "execution", "active_deals", "weight", "max_config_weight", "max_realized_weight", "strategy_accum", "strategy_hwm", "strategy_dd", "strategy_mdd"]
   const header = ["timestamp", "diff", "accum", "hwm", "dd", "mdd", ...indicatorColumns]
   const lines = metrics.map((point) => {
     const indicator = indicatorByTimestamp.get(point.timestamp)
@@ -468,7 +554,9 @@ function buildStrategyCsv(metrics: ReturnType<typeof deriveMetricSeries>, indica
     if (strategyType === "rsi" && fields.rsi === undefined) fields.rsi = indicator?.rsi ?? null
     if (strategyType !== "rsi") {
       if (fields.source_dd === undefined) fields.source_dd = indicator?.sourceDrawdown ?? null
-      if (fields.local_mdd === undefined) fields.local_mdd = indicator?.localDrawdown ?? null
+      if (strategyType === "z_score") {
+        if (fields.source_z === undefined) fields.source_z = indicator?.sourceZ ?? null
+      } else if (fields.local_mdd === undefined) fields.local_mdd = indicator?.localDrawdown ?? null
     }
     const values: Record<string, string | number | boolean | null | undefined> = { timestamp: point.timestamp, diff: point.diff, accum: point.accum, hwm: point.highWaterMark, dd: point.drawdown, mdd: point.maxDrawdown, ...fields }
     return header.map((column) => formatCsvValue(values[column])).join(",")

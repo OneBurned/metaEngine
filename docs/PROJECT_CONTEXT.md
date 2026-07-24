@@ -195,7 +195,7 @@ If `5173` is needed, explain the reason in product terms before giving commands.
 Do not make the user choose between ports. The agent chooses the correct check
 path and writes concrete commands.
 
-For production UI checks, the user usually needs two terminals:
+For production UI checks, the user needs two terminals:
 
 ```bash
 # Terminal 1: branch, tests, backend/API/Worker/PostgreSQL
@@ -215,9 +215,11 @@ npm install
 VITE_API_TARGET=http://localhost:5080 npm run dev
 ```
 
-Then open Codespaces port `3000`. Port `5080` is checked with `curl`; port
-`5173` is not opened unless the task explicitly says the old local lab must be
-checked.
+Then open Codespaces port `3000` and hard-refresh the page. Port `5080` is
+checked with `curl`; port `5173` is not opened unless the task explicitly says
+the old local lab must be checked. For a quick manual smoke-check, sign in with
+`admin` / `admin`, import a portfolio, run a base calculation, run a strategy,
+and verify CSV preview/download.
 
 For local-lab-only checks, use the shorter legacy flow:
 
@@ -239,13 +241,16 @@ The user is not a coder. Communicate simply. Do not explain implementation detai
 
 Do not say only “pull latest” or “update branch”. Give exact commands.
 
-Preferred format when the user checks an open PR before merge:
+Preferred format when the user checks an open PR before merge. The agent should
+write a concrete PR number when it knows the current PR number; if the number is
+wrong, the user will correct it and the agent must use the corrected number in
+future instructions.
 
 ```bash
 cd /workspaces/metaEngine
 # stop server with Ctrl+C if it is running
 git fetch
-gh pr checkout <PR_NUMBER>
+gh pr checkout <PR_NUMBER> # replace with the known real PR number
 git status
 git log --oneline --decorate -5
 npm test
@@ -458,20 +463,31 @@ If input was `accum`, convert to `diff` before saving.
 UI date format:
 
 ```text
-YYYY-MM-DD HH:MM
+YYYY.MM.DD HH:MM
 ```
 
 Examples:
 
 ```text
-2026-04-30 14:00
-2025-04-09 23:00
-2021-10-03 23:00
+2026.04.30 14:00
+2025.04.09 23:00
+2021.10.03 23:00
 ```
 
 Timestamp values are Unix timestamps in milliseconds.
 
-The user explicitly said not to shift displayed hours. Current implementation formats with UTC getters, so the timestamp is displayed consistently as the intended `YYYY-MM-DD HH:MM` value.
+Production UI date labels use the compact `YYYY.MM.DD HH:MM` format in the
+browser's local timezone. Backend storage, API payloads and timeframe boundaries
+remain UTC; only human-facing labels are localized so user-created runs show the
+user's clock time. Base/strategy calculation and saved-strategy labels share the
+same compact pattern: name/source, `vN`, strategy type when relevant, timeframe,
+completed-or-created timestamp and final Accum when available. This keeps
+repeated items distinguishable without repeating redundant labels such as
+“Базовый расчёт”.
+
+The date rule is global: it applies to labels, cards, selectors, tables, tooltips, portfolio/calculation/strategy periods and visible period input fields such as `Период с` / `Период по`. If a native browser date input cannot guarantee the format, production UI should use the shared text-style date field and parse the local label back to UTC ISO internally.
+
+When a Codespaces/PR check fails, diagnose first: confirm the PR branch and `git log`, check whether containers were rebuilt/restarted, separate frontend proxy errors from backend build/runtime errors, and only then change code. Do not assume every transient Codespaces/GitHub state is a code defect.
 
 ## 9. diff and accum rules
 
@@ -726,7 +742,7 @@ Toggle colors should match chart line colors.
 
 Preset row inputs must not overlap visually. Use responsive grid behavior.
 
-Use date picker fields for date/time inputs.
+Use the shared compact date/time field for visible date/time inputs so period controls also show `YYYY.MM.DD HH:MM`.
 
 ## 18. API endpoints
 
@@ -909,6 +925,12 @@ If the user asks to work directly in `main`, clarify that direct commits to `mai
 
 ## 23. What not to lose
 
+Keep one active PR for a coherent related stage instead of splitting every tiny
+fix into a separate PR. The agent should recommend a new PR when the current PR
+becomes overloaded by scope, risk, or size, but should not force a new PR for
+every small follow-up because that makes context transfer expensive for the
+user.
+
 Do not lose these product decisions:
 
 - use the word `strategy`, not `return`;
@@ -966,7 +988,7 @@ The UI must use “Портфолио” for uploaded CSV return series.
 
 The word “Стратегии” is reserved for trading rules applied on top of the already selected and calculated portfolio/preset from the calculation block.
 
-Current trading strategies include RSI and MDD Mean Reversion.
+Current trading strategies include RSI, MDD Mean Reversion and Z-Score.
 
 RSI:
 
@@ -1000,19 +1022,30 @@ Strategy tables and current-strategy CSV export follow the IN/OUT table conventi
 Strategy optimizer:
 
 - lives in block “5. Стратегии” and follows the selected strategy type;
-- supports RSI and MDD Mean Reversion;
+- supports RSI and MDD Mean Reversion; Z-Score is manual-only for now;
 - can split the selected track into multiple sequential samples before optimization;
 - ranks candidates by Recovery score and shows per-sample accum/MDD/score, compounded sample accum, worst MDD and trade counts;
 - supports stop: the current candidate finishes, then no new candidates are taken and current best results are shown;
 - result rows can be sorted and applied back to block 5 to calculate and plot the strategy.
 
-RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies deal count, entry Local DD levels and additive opening weights; simple mode uses default exit `DD исходника 0%`. MDD weights are independent deal weights, can decrease on deeper entries, and are not limited by their sum.
+RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies deal count, entry Local DD levels and additive opening weights; simple mode uses default exit `DD исходника 0%`. MDD weights are independent deal weights, can decrease on deeper entries, and are not limited by their sum. Z-Score currently has no optimizer.
 
 Graph layout:
 
 1. base portfolio/preset graph and table;
 2. strategy indicator subgraph: RSI levels for RSI or DD/local MDD/grid levels for MDD Mean Reversion;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+
+Z-Score:
+
+- type: `z_score`;
+- uses the same independent-deal model as MDD Mean Reversion;
+- adds user parameter `rollingWindow` with default `240`;
+- calculates Source Z from rolling statistics over source DD and Strategy Z from rolling statistics over OUT DD;
+- each deal enters by Source Z and has additive opening weight, exit type and exit value;
+- supported exits are Z исходника, Z стратегии, HWM исходника and HWM стратегии;
+- all entry and exit signals are executed on the next point;
+- optimizer is intentionally not enabled in the first production iteration.
 ## Экспорт CSV
 
 В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.
@@ -1050,3 +1083,24 @@ strategy_result_timestamp_diff_accum_mdd.csv
 ```
 
 - P4 production UI parity update: portfolio library rows now include imported source periods, and completed calculation results restore display-timeframe switching through `1M/1Y` plus line/histogram chart modes. Line mode shows Accum/HWM/DD/MDD on one shared percent scale; histogram mode switches to Diff bars by default, matching the old local lab behavior.
+
+## 26. Handoff format requested by the user
+
+When the user asks for a handoff/context/summary for the next chat or for
+HANDOFF.md content, answer with exactly one markdown code block using `md` as
+the language and no text before or after the block. The block must be
+self-contained for the next agent: current state, completed work, unfinished
+work, accepted product decisions, important user complaints, next plan, and
+important files/docs/modules. Do not add terminal commands unless they are part
+of the requested handoff. If code or commands are needed inside the handoff, use
+four-backtick nested fences or indentation so the outer `md` block remains
+valid.
+
+
+## 27. Export layout rule
+
+Download actions must be placed above preview tables. A user should not scroll through a long preview to find `Скачать CSV`. Preview and downloaded CSV must use the same selected columns and order; numeric cells must not receive leading apostrophes.
+
+## 28. Codespaces development auth shortcut
+
+For local/Codespaces Docker Compose checks, the API can use a development-only login shortcut: `admin` / `admin`. It is enabled by `MetaEngine__DevAuth__Enabled=true` only under `ASPNETCORE_ENVIRONMENT=Development`. On first successful shortcut login the API creates a local active admin user, `Personal` workspace and admin membership if they do not already exist. This avoids manual bootstrap during PR smoke checks while keeping production auth and bootstrap rules unchanged.

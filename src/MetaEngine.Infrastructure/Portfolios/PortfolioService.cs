@@ -26,16 +26,6 @@ internal sealed class PortfolioService(
         }
 
         var normalized = await normalizer.NormalizeAsync(command.Content, command.SourceValueType, cancellationToken);
-        var duplicate = await FindDuplicateAsync(
-            command.WorkspaceId,
-            normalized.SourceChecksum,
-            normalized.SeriesChecksum,
-            cancellationToken);
-        if (duplicate is not null)
-        {
-            return BuildResult(created: false, duplicate, normalized);
-        }
-
         var (portfolioKey, version) = await ResolveVersionAsync(
             command.WorkspaceId,
             command.PortfolioKey,
@@ -82,25 +72,7 @@ internal sealed class PortfolioService(
                 portfolio.SeriesChecksum
             })
         });
-        try
-        {
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (DbUpdateException)
-        {
-            dbContext.ChangeTracker.Clear();
-            duplicate = await FindDuplicateAsync(
-                command.WorkspaceId,
-                normalized.SourceChecksum,
-                normalized.SeriesChecksum,
-                cancellationToken);
-            if (duplicate is null)
-            {
-                throw;
-            }
-
-            return BuildResult(created: false, duplicate, normalized);
-        }
+        await dbContext.SaveChangesAsync(cancellationToken);
 
         return BuildResult(created: true, portfolio, normalized);
     }
@@ -184,19 +156,6 @@ internal sealed class PortfolioService(
             .ToArrayAsync(cancellationToken);
         return new PortfolioPointPage(offset, limit, total.Value, items);
     }
-
-    private async Task<PortfolioVersion?> FindDuplicateAsync(
-        Guid workspaceId,
-        string sourceChecksum,
-        string seriesChecksum,
-        CancellationToken cancellationToken) =>
-        await dbContext.Portfolios
-            .AsNoTracking()
-            .Where(portfolio =>
-                portfolio.WorkspaceId == workspaceId &&
-                (portfolio.SourceChecksum == sourceChecksum || portfolio.SeriesChecksum == seriesChecksum))
-            .OrderBy(portfolio => portfolio.CreatedAt)
-            .FirstOrDefaultAsync(cancellationToken);
 
     private async Task<(Guid PortfolioKey, int Version)> ResolveVersionAsync(
         Guid workspaceId,

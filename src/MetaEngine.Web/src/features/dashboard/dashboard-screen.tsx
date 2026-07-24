@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell"
+import { DateTimeField } from "@/components/date-time-field"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -13,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ComparisonPanel } from "@/features/calculations/comparison-panel"
-import { calculationDisplayName, calculationKindLabel } from "@/features/calculations/run-presentation"
+import { calculationDisplayName, calculationMetaLabel } from "@/features/calculations/run-presentation"
 import { useSession } from "@/features/session/session-context"
 import { getAllCalculationResult, getCalculationRun, getPortfolioBounds, getPresetBounds, listCalculationRuns, listPortfolios, listPresets, listSavedStrategies, queueCalculation, retryCalculationRun, timeframeOptions, type CalculationRun, type CalculationRunDetails, type Portfolio, type PortfolioPoint, type Preset, type SavedStrategy, type Timeframe } from "@/lib/api"
 import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent, toDateTimeLocal, toIsoDateTime } from "@/lib/metrics"
@@ -59,25 +60,33 @@ export function DashboardScreen() {
       return
     }
 
-    try {
-      const [nextPortfolios, nextPresets, nextStrategies, nextRuns] = await Promise.all([
-        listPortfolios(workspace.id),
-        listPresets(workspace.id),
-        listSavedStrategies(workspace.id),
-        listCalculationRuns(workspace.id),
-      ])
-      const nextBaseRuns = nextRuns.filter((run) => run.kind === "base")
-      setPortfolios(nextPortfolios)
-      setPresets(nextPresets)
-      setStrategies(nextStrategies)
+    const [portfolioResult, presetResult, strategyResult, runResult] = await Promise.allSettled([
+      listPortfolios(workspace.id),
+      listPresets(workspace.id),
+      listSavedStrategies(workspace.id),
+      listCalculationRuns(workspace.id),
+    ])
+
+    if (portfolioResult.status === "fulfilled") {
+      setPortfolios(portfolioResult.value)
+    }
+    if (presetResult.status === "fulfilled") {
+      setPresets(presetResult.value)
+    }
+    if (strategyResult.status === "fulfilled") {
+      setStrategies(strategyResult.value)
+    }
+    if (runResult.status === "fulfilled") {
+      const nextBaseRuns = runResult.value.filter((run) => run.kind === "base")
       setRuns(nextBaseRuns)
       setSelectedRunId((current) => current && nextBaseRuns.some((run) => run.id === current) ? current : (nextBaseRuns[0]?.id ?? null))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
     }
+
+    const failures = [portfolioResult, presetResult, strategyResult, runResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const loadRun = useCallback(async (runId: string) => {
@@ -231,8 +240,8 @@ function CalculationPanel({ canWrite, portfolios, presets, workspaceId, onQueue 
   return <Card className="rounded-lg border-slate-200 shadow-none"><CardHeader className="flex-row items-center justify-between gap-4"><CardTitle className="text-base">Новый расчёт</CardTitle><Badge variant="outline" className="border-teal-200 bg-teal-50 text-teal-800">Базовый</Badge></CardHeader><CardContent><form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
     <div className="grid gap-2 md:col-span-3"><Label>Источник</Label><Tabs value={sourceType} onValueChange={(value) => setSourceType(value as "portfolio" | "preset")}><TabsList><TabsTrigger value="portfolio">Портфолио</TabsTrigger><TabsTrigger value="preset">Пресет</TabsTrigger></TabsList></Tabs>{sourceType === "portfolio" ? <Select value={portfolioId} onValueChange={setPortfolioId} disabled={!portfolios.length || isSubmitting}><SelectTrigger><SelectValue placeholder="Выберите портфолио" /></SelectTrigger><SelectContent>{portfolios.map((portfolio) => <SelectItem key={portfolio.id} value={portfolio.id}>{portfolio.name} · v{portfolio.version}</SelectItem>)}</SelectContent></Select> : <Select value={presetId} onValueChange={setPresetId} disabled={!presets.length || isSubmitting}><SelectTrigger><SelectValue placeholder="Выберите пресет" /></SelectTrigger><SelectContent>{presets.map((preset) => <SelectItem key={preset.id} value={preset.id}>{preset.name} · v{preset.version}</SelectItem>)}</SelectContent></Select>}</div>
     <Field label="Таймфрейм" htmlFor="calculation-timeframe"><Select value={timeframe} onValueChange={(value) => setTimeframe(value as Timeframe)} disabled={!bounds || isLoadingBounds || isSubmitting}><SelectTrigger id="calculation-timeframe"><SelectValue /></SelectTrigger><SelectContent>{allowedTimeframes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}</SelectContent></Select></Field>
-    <Field label="Период с" htmlFor="period-start"><Input id="period-start" type="datetime-local" value={periodStart} min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined} max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined} onChange={(event) => setPeriodStart(event.target.value)} disabled={!bounds || isLoadingBounds || isSubmitting} /></Field>
-    <Field label="Период по" htmlFor="period-end"><Input id="period-end" type="datetime-local" value={periodEnd} min={bounds ? toDateTimeLocal(bounds.startsAt) : undefined} max={bounds ? toDateTimeLocal(bounds.endsAt) : undefined} onChange={(event) => setPeriodEnd(event.target.value)} disabled={!bounds || isLoadingBounds || isSubmitting} /></Field>
+    <DateTimeField id="period-start" label="Период с" value={periodStart} onChange={setPeriodStart} disabled={!bounds || isLoadingBounds || isSubmitting} />
+    <DateTimeField id="period-end" label="Период по" value={periodEnd} onChange={setPeriodEnd} disabled={!bounds || isLoadingBounds || isSubmitting} />
     {isLoadingBounds ? <Progress className="md:col-span-3" value={55} /> : null}{error ? <p className="md:col-span-3 text-sm text-rose-700">{error}</p> : null}
     <div className="flex md:col-span-3"><Button type="submit" disabled={!canWrite || !bounds || isLoadingBounds || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать</Button></div>
   </form></CardContent></Card>
@@ -242,7 +251,7 @@ function RecentRunTable({ isLoading, runs, selectedId, onSelect, onRetry, canWri
   const [showAll, setShowAll] = useState(false)
   const visibleRuns = showAll ? runs : runs.slice(0, 5)
 
-  return <div className="space-y-3"><div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Период</TableHead><TableHead className="hidden lg:table-cell text-right">Accum</TableHead><TableHead className="w-28 text-right">Детали</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRows columns={5} /> : null}{!isLoading && runs.length === 0 ? <EmptyRow columns={5} text="Запусков пока нет." /> : visibleRuns.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationKindLabel(run)} · {run.timeframe}</div></TableCell><TableCell><StatusBadge status={run.status} />{queueStatusNote(run) ? <div className="mt-1 text-xs text-slate-500">{queueStatusNote(run)}</div> : null}</TableCell><TableCell className="hidden md:table-cell text-sm">{formatDateTime(run.periodStart)} - {formatDateTime(run.periodEnd)}</TableCell><TableCell className="hidden lg:table-cell text-right tabular-nums">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1">{canWrite && isRetryable(run) ? <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onRetry(run.id)} aria-label="Повторить расчёт"><RotateCcw className="size-4" /></Button></TooltipTrigger><TooltipContent>Повторить</TooltipContent></Tooltip> : null}<Button variant="outline" size="sm" onClick={() => onSelect(run.id)}>Открыть</Button></div></TableCell></TableRow>)}</TableBody></Table></div>{runs.length > 5 ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>{showAll ? <ChevronUp /> : <ChevronDown />}{showAll ? "Скрыть старые" : `Вся история (${runs.length})`}</Button></div> : null}</div>
+  return <div className="space-y-3"><div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Расчёт</TableHead><TableHead>Статус</TableHead><TableHead className="hidden md:table-cell">Период</TableHead><TableHead className="hidden lg:table-cell text-right">Accum</TableHead><TableHead className="w-28 text-right">Детали</TableHead></TableRow></TableHeader><TableBody>{isLoading ? <LoadingRows columns={5} /> : null}{!isLoading && runs.length === 0 ? <EmptyRow columns={5} text="Запусков пока нет." /> : visibleRuns.map((run) => <TableRow key={run.id} data-state={run.id === selectedId ? "selected" : undefined}><TableCell><div className="font-medium">{calculationDisplayName(run, presentationSources)}</div><div className="text-xs text-slate-500">{calculationMetaLabel(run)}</div></TableCell><TableCell><StatusBadge status={run.status} />{queueStatusNote(run) ? <div className="mt-1 text-xs text-slate-500">{queueStatusNote(run)}</div> : null}</TableCell><TableCell className="hidden md:table-cell text-sm">{formatDateTime(run.periodStart)} - {formatDateTime(run.periodEnd)}</TableCell><TableCell className="hidden lg:table-cell text-right tabular-nums">{formatPercent(run.finalAccum)}</TableCell><TableCell className="text-right"><div className="flex justify-end gap-1">{canWrite && isRetryable(run) ? <Tooltip><TooltipTrigger asChild><Button variant="outline" size="icon" onClick={() => onRetry(run.id)} aria-label="Повторить расчёт"><RotateCcw className="size-4" /></Button></TooltipTrigger><TooltipContent>Повторить</TooltipContent></Tooltip> : null}<Button variant="outline" size="sm" onClick={() => onSelect(run.id)}>Открыть</Button></div></TableCell></TableRow>)}</TableBody></Table></div>{runs.length > 5 ? <div className="flex justify-center"><Button type="button" variant="outline" size="sm" onClick={() => setShowAll((current) => !current)}>{showAll ? <ChevronUp /> : <ChevronDown />}{showAll ? "Скрыть старые" : `Вся история (${runs.length})`}</Button></div> : null}</div>
 }
 
 function ResultPanel({ details, isLoading, points, title, canRetry, onRetry }: { details: CalculationRunDetails | null; isLoading: boolean; points: PortfolioPoint[]; title: string | null; canRetry: boolean; onRetry: (id: string) => void }) {
@@ -261,7 +270,7 @@ function ResultPanel({ details, isLoading, points, title, canRetry, onRetry }: {
 
   if (isLoading) return <div className="grid min-h-56 place-items-center rounded-lg border border-slate-200 bg-white text-sm text-slate-500"><LoaderCircle className="mr-2 inline size-4 animate-spin" /> Загрузка результата</div>
   if (!details) return <EmptyResult text="Выберите запуск расчёта." />
-  if (details.run.status !== "completed") return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500"><div className="grid justify-items-center gap-3">{isRetryable(details.run) ? <p>Расчёт не завершился: {details.run.errorCode ?? "unknown_error"}. Попыток: {details.run.attemptCount}.</p> : <p>Расчёт выполняется. Статус обновляется автоматически.</p>}{canRetry && isRetryable(details.run) ? <Button variant="outline" onClick={() => onRetry(details.run.id)}><RotateCcw />Повторить расчёт</Button> : null}</div></div>
+  if (details.run.status !== "completed") return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500"><div className="grid max-w-xl justify-items-center gap-3">{isRetryable(details.run) ? <><p className="font-medium text-slate-700">Расчёт не завершился.</p><p>{calculationFailureMessage(details.run)}</p></> : <p>Расчёт выполняется. Статус обновляется автоматически.</p>}{canRetry && isRetryable(details.run) ? <Button variant="outline" onClick={() => onRetry(details.run.id)}><RotateCcw />Повторить расчёт</Button> : null}</div></div>
 
   const displayedSummary = summarizeMetrics(metrics)
   function handleChartModeChange(value: "line" | "histogram") {
@@ -283,7 +292,8 @@ function Field({ label, htmlFor, children }: { label: string; htmlFor: string; c
 function Metric({ label, value }: { label: string; value: string }) { return <div className="bg-white px-4 py-3"><p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p><p className="mt-1 text-lg font-semibold tabular-nums">{value}</p></div> }
 function StatusBadge({ status }: { status: CalculationRun["status"] }) { const styles: Record<CalculationRun["status"], string> = { queued: "border-amber-200 bg-amber-50 text-amber-800", running: "border-sky-200 bg-sky-50 text-sky-800", completed: "border-emerald-200 bg-emerald-50 text-emerald-800", failed: "border-rose-200 bg-rose-50 text-rose-800", interrupted: "border-orange-200 bg-orange-50 text-orange-800" }; const labels: Record<CalculationRun["status"], string> = { queued: "В очереди", running: "Считается", completed: "Готово", failed: "Ошибка", interrupted: "Прервана" }; return <Badge variant="outline" className={styles[status]}>{labels[status]}</Badge> }
 function isRetryable(run: CalculationRun) { return run.status === "failed" || run.status === "interrupted" }
-function queueStatusNote(run: CalculationRun) { if (run.status === "queued" && run.retryNotBefore) return `Автоповтор после ${formatDateTime(run.retryNotBefore)}`; if (run.status === "running" && run.attemptCount > 1) return `Попытка ${run.attemptCount}`; if (isRetryable(run)) return `Попыток: ${run.attemptCount}`; return null }
+function queueStatusNote(run: CalculationRun) { if (run.status === "queued" && run.retryNotBefore) return `Автоповтор после ${formatDateTime(run.retryNotBefore)}`; if (run.status === "running" && run.attemptCount > 1) return `Попытка ${run.attemptCount}`; if (isRetryable(run)) return `${calculationFailureMessage(run)} Попыток: ${run.attemptCount}`; return null }
+function calculationFailureMessage(run: CalculationRun) { const code = run.errorCode ?? "unknown_error"; const details = run.errorMessage ? ` Причина: ${run.errorMessage}` : ""; const messages: Record<string, string> = { calculation_failed: "Внутренняя ошибка расчёта.", invalid_period: "Период расчёта задан неверно: дата окончания раньше даты начала.", portfolio_not_found: "Портфолио для расчёта не найдено в текущем workspace.", preset_not_found: "Пресет для расчёта не найден в текущем workspace.", unsupported_timeframe: "Выбранный таймфрейм нельзя посчитать из этого источника.", unknown_timeframe: "Выбранный таймфрейм не поддерживается.", transient_database_error: "Временная ошибка базы данных. Расчёт будет повторён автоматически или его можно повторить вручную.", unknown_error: "Backend не вернул код причины. Нужно смотреть logs API/Worker." }; return `${messages[code] ?? `Backend вернул код ошибки: ${code}.`} Код: ${code}.${details}` }
 function LoadingRows({ columns }: { columns: number }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">Загрузка...</TableCell></TableRow> }
 function EmptyRow({ columns, text }: { columns: number; text: string }) { return <TableRow><TableCell colSpan={columns} className="py-9 text-center text-sm text-slate-500">{text}</TableCell></TableRow> }
 function EmptyResult({ text }: { text: string }) { return <div className="grid min-h-56 place-items-center rounded-lg border border-dashed border-slate-300 bg-white px-5 text-center text-sm text-slate-500">{text}</div> }

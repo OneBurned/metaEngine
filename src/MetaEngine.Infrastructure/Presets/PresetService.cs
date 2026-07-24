@@ -81,7 +81,14 @@ internal sealed class PresetService(MetaEngineDbContext dbContext) : IPresetServ
             .OrderBy(preset => preset.Name)
             .ThenBy(preset => preset.PresetKey)
             .ThenByDescending(preset => preset.Version)
-            .Select(preset => ToSummary(preset))
+            .Select(preset => new PresetSummary(
+                preset.Id,
+                preset.PresetKey,
+                preset.Version,
+                preset.Name,
+                preset.Items.Count,
+                preset.CreatedAt,
+                preset.CreatedByUserId))
             .ToArrayAsync(cancellationToken);
 
     public async Task<PresetDetails?> FindAsync(

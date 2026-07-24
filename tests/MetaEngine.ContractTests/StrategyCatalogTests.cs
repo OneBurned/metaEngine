@@ -1,6 +1,7 @@
 using MetaEngine.Strategies.Abstractions;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
+using MetaEngine.Strategies.ZScore;
 
 namespace MetaEngine.ContractTests;
 
@@ -9,7 +10,8 @@ public sealed class StrategyCatalogTests
     private static StrategyModuleCatalog CreateCatalog() => new(
     [
         new RsiStrategyModuleDescriptor(),
-        new MddMeanReversionStrategyModuleDescriptor()
+        new MddMeanReversionStrategyModuleDescriptor(),
+        new ZScoreStrategyModuleDescriptor()
     ]);
 
     [Fact]
@@ -18,12 +20,15 @@ public sealed class StrategyCatalogTests
         var catalog = CreateCatalog();
 
         Assert.Equal(
-            ["mdd_mean_reversion", "rsi"],
+            ["mdd_mean_reversion", "rsi", "z_score"],
             catalog.Descriptors.Select(descriptor => descriptor.StrategyType));
-        Assert.All(catalog.Descriptors, descriptor => Assert.Equal(1, descriptor.SchemaVersion));
+        Assert.Equal(2, catalog.GetRequired("mdd_mean_reversion").SchemaVersion);
+        Assert.Equal(1, catalog.GetRequired("rsi").SchemaVersion);
+        Assert.Equal(1, catalog.GetRequired("z_score").SchemaVersion);
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Parameters));
-        Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.Optimization.Supported));
-        Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Optimization.Controls));
+        Assert.All(catalog.Descriptors.Where(descriptor => descriptor.StrategyType != "z_score"), descriptor => Assert.True(descriptor.Optimization.Supported));
+        Assert.False(catalog.GetRequired("z_score").Optimization.Supported);
+        Assert.All(catalog.Descriptors.Where(descriptor => descriptor.StrategyType != "z_score"), descriptor => Assert.NotEmpty(descriptor.Optimization.Controls));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Outputs));
         Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.IsProductionCalculationAvailable));
     }
@@ -55,9 +60,31 @@ public sealed class StrategyCatalogTests
     {
         var descriptor = CreateCatalog().GetRequired("mdd_mean_reversion");
 
+        Assert.Equal(["deals"], descriptor.Parameters.Select(parameter => parameter.Key));
         Assert.All(descriptor.Parameters, parameter => Assert.Equal("decimal", parameter.Unit));
         Assert.Equal(
             "percent_points",
-            descriptor.Optimization.Controls.Single(control => control.Key == "takeProfit").Unit);
+            descriptor.Optimization.Controls.Single(control => control.Key == "drawdown").Unit);
+        Assert.Equal(
+            "percent_points",
+            descriptor.Optimization.Controls.Single(control => control.Key == "weight").Unit);
+        Assert.Equal(
+            "percent_points",
+            descriptor.Optimization.Controls.Single(control => control.Key == "exitValue").Unit);
+        Assert.DoesNotContain(descriptor.Optimization.Controls, control => control.Key == "takeProfit");
+    }
+
+
+    [Fact]
+    public void ZScore_descriptor_uses_rolling_window_and_deals_without_optimizer()
+    {
+        var descriptor = CreateCatalog().GetRequired("z_score");
+
+        Assert.Equal("Z-Score", descriptor.DisplayName);
+        Assert.Equal(["rollingWindow", "deals"], descriptor.Parameters.Select(parameter => parameter.Key));
+        Assert.False(descriptor.IsProductionOptimizationAvailable);
+        Assert.False(descriptor.Optimization.Supported);
+        Assert.Contains(descriptor.Outputs, output => output.Key == "source_z");
+        Assert.Contains(descriptor.Outputs, output => output.Key == "strategy_z");
     }
 }

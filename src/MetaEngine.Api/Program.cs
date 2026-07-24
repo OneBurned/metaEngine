@@ -11,6 +11,7 @@ using MetaEngine.Infrastructure.Persistence;
 using MetaEngine.Strategies.Abstractions;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
+using MetaEngine.Strategies.ZScore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
@@ -27,10 +28,13 @@ if (!migrationMode)
     builder.Services.AddMetaEngineAuthentication(builder.Environment, builder.Configuration);
     builder.Services.AddSingleton<RsiStrategyModule>();
     builder.Services.AddSingleton<MddMeanReversionStrategyModule>();
+    builder.Services.AddSingleton<ZScoreStrategyModule>();
     builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
     builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModule>(serviceProvider => serviceProvider.GetRequiredService<ZScoreStrategyModule>());
     builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<RsiStrategyModule>());
     builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<MddMeanReversionStrategyModule>());
+    builder.Services.AddSingleton<IStrategyModuleDescriptorProvider>(serviceProvider => serviceProvider.GetRequiredService<ZScoreStrategyModule>());
     builder.Services.AddSingleton<StrategyModuleCatalog>();
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
@@ -131,11 +135,24 @@ auth.MapPost("/login", async (
     SignInManager<IdentityAccount> signInManager,
     MetaEngineDbContext dbContext,
     IWorkspaceAccessService workspaceAccessService,
+    DevAuthService devAuthService,
+    IHostEnvironment environment,
     CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.BadRequest(new { code = "validation_error", message = "Email and password are required." });
+    }
+
+    if (devAuthService.IsEnabled(environment) && devAuthService.MatchesCredentials(request.Email, request.Password))
+    {
+        var devProfile = await devAuthService.EnsureAdminAsync(cancellationToken);
+        var devIdentity = await devAuthService.EnsureIdentityAsync(devProfile, cancellationToken);
+        await signInManager.SignInAsync(devIdentity, isPersistent: false);
+        return Results.Ok(await BuildCurrentUserAsync(
+            devProfile,
+            workspaceAccessService,
+            cancellationToken));
     }
 
     var identity = await userManager.FindByEmailAsync(request.Email.Trim());

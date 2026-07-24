@@ -48,6 +48,7 @@ public sealed record CalculationRunSummary(
     double? HighWaterMark,
     double? MaxDrawdown,
     string? ErrorCode,
+    string? ErrorMessage,
     DateTimeOffset CreatedAt,
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,

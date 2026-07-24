@@ -108,6 +108,11 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(100)")
                         .HasColumnName("error_code");
 
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("error_message");
+
                     b.Property<double?>("FinalAccum")
                         .HasColumnType("double precision")
                         .HasColumnName("final_accum");
@@ -625,11 +630,9 @@ namespace MetaEngine.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_portfolios_created_by_user_id");
 
                     b.HasIndex("WorkspaceId", "SeriesChecksum")
-                        .IsUnique()
                         .HasDatabaseName("ix_portfolios_workspace_id_series_checksum");
 
                     b.HasIndex("WorkspaceId", "SourceChecksum")
-                        .IsUnique()
                         .HasDatabaseName("ix_portfolios_workspace_id_source_checksum");
 
                     b.HasIndex("WorkspaceId", "PortfolioKey", "Version")

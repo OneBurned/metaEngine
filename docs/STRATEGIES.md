@@ -32,6 +32,7 @@ Detailed per-strategy docs live in:
 ```text
 docs/strategies/RSI.md
 docs/strategies/MDD_MEAN_REVERSION.md
+docs/strategies/Z_SCORE.md
 ```
 
 This overview keeps shared rules, module locations, and cross-strategy UX conventions.
@@ -87,6 +88,22 @@ The second trading strategy is MDD Mean Reversion:
 - every entry and exit signal is executed on the next point;
 - supported exits are `DD исходника`, `DD стратегии`, `HWM исходника`, and `HWM стратегии`;
 - weights may decrease between deeper entries and the sum of weights is not capped.
+
+## Z-Score strategy rules
+
+The third trading strategy is Z-Score:
+
+- type: `z_score`;
+- source: already calculated base portfolio/preset rows;
+- `rollingWindow` defaults to `240`;
+- Source Z is calculated from rolling statistics over source DD;
+- Strategy Z is calculated from rolling statistics over OUT DD;
+- each configuration row is an independent deal with entry Z-score, additive opening weight, exit type and exit value;
+- supported exits are `Z исходника`, `Z стратегии`, `HWM исходника`, and `HWM стратегии`;
+- every entry and exit signal is executed on the next point;
+- optimizer is not enabled for Z-Score yet.
+
+Z-Score strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, rolling DD mean/std, Source Z), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`, Strategy Z).
 
 MDD strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, Local DD исходника), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). Summary/result metadata exposes “Максимально возможный вес конфигурации” and “Максимально набранный вес в расчете”.
 

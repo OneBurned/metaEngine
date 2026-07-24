@@ -95,6 +95,8 @@ docker compose logs --follow worker
 
 ## First owner and UI
 
+Do not enable `MetaEngine__DevAuth__Enabled` in production. The `admin` / `admin` development shortcut is only for local/Codespaces checks under `Development`.
+
 After migrations complete, bootstrap the initial owner once:
 
 ```bash
