@@ -74,7 +74,8 @@ base or strategy run, marks it `running`, then records one of:
 
 - `completed`: summary, warnings and a `BaseResult` or `StrategyResult` artifact are saved;
 - `failed`: a stable error code is recorded, for example an unsupported source
-  or a leveraged return below `-100%`.
+  or a leveraged return below `-100%`. Unexpected runtime failures also store a
+  short diagnostic message so the UI can show more than generic `calculation_failed`.
 - `interrupted`: automatic retries were exhausted or the Worker lease expired
   after the configured retry budget.
 

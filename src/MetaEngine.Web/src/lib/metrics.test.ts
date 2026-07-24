@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatPercent } from "./metrics"
+import { aggregatePortfolioPoints, allowedDisplayTimeframes, deriveMetricSeries, downsampleForChart, formatDateTime, formatPercent, toIsoDateTime } from "./metrics"
 
 describe("deriveMetricSeries", () => {
   it("builds accum, high water mark and drawdown from canonical diffs", () => {
@@ -49,5 +49,16 @@ describe("formatPercent", () => {
   it("formats decimal coefficients for chart axes as percentages", () => {
     expect(formatPercent(7.4, 0).replace(/\s/g, "")).toBe("740%")
     expect(formatPercent(-0.316, 1).replace(/\s/g, "")).toBe("-31,6%")
+  })
+})
+
+describe("formatDateTime", () => {
+  it("uses compact UTC YYYY.MM.DD HH:MM labels", () => {
+    expect(formatDateTime("2026-07-21T21:56:30Z")).toBe("2026.07.21 21:56")
+    expect(formatDateTime(null)).toBe("-")
+  })
+
+  it("parses compact dotted UTC labels back to ISO", () => {
+    expect(toIsoDateTime("2026.07.21 21:56")).toBe("2026-07-21T21:56:00.000Z")
   })
 })

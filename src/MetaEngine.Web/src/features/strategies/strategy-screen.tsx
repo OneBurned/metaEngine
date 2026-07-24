@@ -1,5 +1,5 @@
 import { AppShell } from "@/components/app-shell"
-import { calculationDisplayName } from "@/features/calculations/run-presentation"
+import { calculationCompactLabel, calculationDisplayName } from "@/features/calculations/run-presentation"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -91,29 +91,29 @@ export function StrategyScreen() {
       setIsLoading(false)
       return
     }
-    try {
-      const [allRuns, nextPortfolios, nextPresets, saved, availableTypes] = await Promise.all([
-        listCalculationRuns(workspace.id),
-        listPortfolios(workspace.id),
-        listPresets(workspace.id),
-        listSavedStrategies(workspace.id),
-        listStrategyTypes(),
-      ])
-      setRuns(allRuns)
-      setPortfolios(nextPortfolios)
-      setPresets(nextPresets)
-      setSavedStrategies(saved)
-      setStrategyTypes(availableTypes.map((item) => item.strategyType))
-      const baseRuns = allRuns.filter((run) => run.kind === "base" && run.status === "completed")
+    const [runResult, portfolioResult, presetResult, savedResult, typeResult] = await Promise.allSettled([
+      listCalculationRuns(workspace.id),
+      listPortfolios(workspace.id),
+      listPresets(workspace.id),
+      listSavedStrategies(workspace.id),
+      listStrategyTypes(),
+    ])
+    if (runResult.status === "fulfilled") {
+      setRuns(runResult.value)
+      const baseRuns = runResult.value.filter((run) => run.kind === "base" && run.status === "completed")
       setSourceRunId((current) => baseRuns.some((run) => run.id === current) ? current : (baseRuns[0]?.id ?? ""))
-      const strategyRuns = allRuns.filter((run) => run.kind === "strategy")
+      const strategyRuns = runResult.value.filter((run) => run.kind === "strategy")
       setSelectedRunId((current) => strategyRuns.some((run) => run.id === current) ? current : (strategyRuns[0]?.id ?? ""))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
     }
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    if (savedResult.status === "fulfilled") setSavedStrategies(savedResult.value)
+    if (typeResult.status === "fulfilled") setStrategyTypes(typeResult.value.map((item) => item.strategyType))
+    const failures = [runResult, portfolioResult, presetResult, savedResult, typeResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const loadResult = useCallback(async () => {
@@ -248,14 +248,14 @@ export function StrategyScreen() {
               <TabsList aria-label="Режим работы со стратегией"><TabsTrigger value="manual">Ручной расчет</TabsTrigger><TabsTrigger value="optimization">Оптимизация</TabsTrigger></TabsList>
               <TabsContent value="manual" className="mt-5">
                 <form className="grid gap-4 md:grid-cols-3" onSubmit={handleSubmit}>
-                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationDisplayName(run, presentationSources)} · {formatPercent(run.finalAccum)}</SelectItem>)}</SelectContent></Select></Field>
+                  <Field label="Базовый расчет"><Select value={sourceRunId} onValueChange={setSourceRunId} disabled={isLoading || !baseRuns.length}><SelectTrigger><SelectValue placeholder="Выберите базовый расчет" /></SelectTrigger><SelectContent>{baseRuns.map((run) => <SelectItem key={run.id} value={run.id}>{calculationCompactLabel(run, presentationSources)}</SelectItem>)}</SelectContent></Select></Field>
                   <Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field>
                   <div className="flex items-end"><Button type="submit" className="w-full" disabled={!workspace.canWrite || !sourceRunId || isSubmitting}>{isSubmitting ? <LoaderCircle className="animate-spin" /> : <Play />}Рассчитать стратегию</Button></div>
                   {strategyType === "rsi" ? <RsiFields period={rsiPeriod} buy={buyLevel} sell={sellLevel} onPeriod={setRsiPeriod} onBuy={setBuyLevel} onSell={setSellLevel} /> : <MddFields deals={deals} onDeals={setDeals} />}
                 </form>
                 {!baseRuns.length ? <p className="mt-4 text-sm text-amber-700">Сначала завершите базовый расчет в разделе «Расчеты».</p> : null}
               </TabsContent>
-              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationDisplayName(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
+              <TabsContent value="optimization" className="mt-5"><div className="mb-5 max-w-sm"><Field label="Тип стратегии"><Select value={strategyType} onValueChange={setStrategyType}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{strategyTypes.map((type) => <SelectItem key={type} value={type}>{type === "rsi" ? "RSI" : "MDD Mean Reversion"}</SelectItem>)}</SelectContent></Select></Field></div>{strategyType === "mdd_mean_reversion" ? <MddOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationCompactLabel(run, presentationSources)} onStrategyQueued={handleMddOptimizationStrategyQueued} /> : <RsiOptimizationPanel workspaceId={workspace.id} canWrite={workspace.canWrite} sourceRuns={baseRuns} sourceRunId={sourceRunId} onSourceRunIdChange={setSourceRunId} sourceRunLabel={(run) => calculationCompactLabel(run, presentationSources)} onStrategyQueued={handleOptimizationStrategyQueued} />}</TabsContent>
             </Tabs>
           </CardContent>
         </Card>
@@ -340,9 +340,11 @@ function StrategyResult({ workspaceId, details, title, points, saveName, onSaveN
 function SavedStrategyTable({ items, onApply }: { items: SavedStrategy[]; onApply: (item: SavedStrategy) => void }) { return <div className="overflow-hidden rounded-lg border border-slate-200 bg-white"><Table><TableHeader><TableRow><TableHead>Название</TableHead><TableHead>Тип</TableHead><TableHead className="hidden md:table-cell">Версия</TableHead><TableHead className="w-28 text-right">Параметры</TableHead></TableRow></TableHeader><TableBody>{items.length === 0 ? <EmptyRow columns={4} text="Сохраненных стратегий пока нет." /> : items.map((item) => <TableRow key={item.id}><TableCell><div className="font-medium">{item.name}</div><div className="text-xs text-slate-500">{formatDateTime(item.createdAt)}</div></TableCell><TableCell>{item.strategyType === "rsi" ? "RSI" : "MDD Mean Reversion"}</TableCell><TableCell className="hidden md:table-cell">v{item.version}</TableCell><TableCell className="text-right"><Button variant="outline" size="sm" onClick={() => onApply(item)}>Применить</Button></TableCell></TableRow>)}</TableBody></Table></div> }
 
 function StrategyResultTable({ strategyType, metrics }: { strategyType: string | null; metrics: ReturnType<typeof deriveMetricSeries> }) {
-  const rows = metrics.slice(0, 500)
+  const [visibleRows, setVisibleRows] = useState(100)
+  const rows = metrics.slice(0, visibleRows)
   const isMdd = strategyType === "mdd_mean_reversion"
-  return <div className="rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3"><div><p className="text-sm font-semibold text-slate-950">Таблица результата стратегии</p><p className="mt-1 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</p></div></div><div className="overflow-x-auto"><Table className="min-w-[1180px]"><TableHeader><TableRow><TableHead>Время</TableHead>{isMdd ? <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">DD исходника</TableHead><TableHead className="text-right">Local DD</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Active deals</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead><TableHead className="text-right">Max config weight</TableHead><TableHead className="text-right">Max realized weight</TableHead></> : <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">RSI</TableHead><TableHead>Сигнал</TableHead><TableHead>Исполнение</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} isMdd={isMdd} />)}</TableBody></Table></div></div>
+  useEffect(() => { setVisibleRows(100) }, [metrics])
+  return <div className="rounded-lg border border-slate-200 bg-white"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3"><div><p className="text-sm font-semibold text-slate-950">Таблица результата стратегии</p><p className="mt-1 text-xs text-slate-500">Показаны первые {rows.length.toLocaleString("ru-RU")} строк из {metrics.length.toLocaleString("ru-RU")}. Полный набор строк можно выгрузить через CSV.</p></div></div><div className="overflow-x-auto"><Table className="min-w-[1180px] text-xs"><TableHeader><TableRow><TableHead>Время</TableHead>{isMdd ? <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">IN DD</TableHead><TableHead className="text-right">Local DD</TableHead><TableHead>Signal</TableHead><TableHead>Execution</TableHead><TableHead className="text-right">Active deals</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead><TableHead className="text-right">Max config weight</TableHead><TableHead className="text-right">Max realized weight</TableHead></> : <><TableHead className="text-right">IN Diff</TableHead><TableHead className="text-right">IN Accum</TableHead><TableHead className="text-right">RSI</TableHead><TableHead>Signal</TableHead><TableHead>Execution</TableHead><TableHead className="text-right">Weight</TableHead><TableHead className="text-right">OUT Diff</TableHead><TableHead className="text-right">OUT Accum</TableHead><TableHead className="text-right">OUT HWM</TableHead><TableHead className="text-right">OUT DD</TableHead><TableHead className="text-right">OUT MDD</TableHead></>}</TableRow></TableHeader><TableBody>{rows.map((point) => <StrategyResultRow key={point.timestamp} point={point} isMdd={isMdd} />)}</TableBody></Table></div>{visibleRows < metrics.length ? <div className="border-t border-slate-200 p-3 text-center"><Button type="button" variant="outline" size="sm" onClick={() => setVisibleRows((current) => Math.min(current + 500, metrics.length))}>Показать ещё {Math.min(500, metrics.length - visibleRows).toLocaleString("ru-RU")}</Button></div> : null}</div>
 }
 
 function StrategyResultRow({ point, isMdd }: { point: ReturnType<typeof deriveMetricSeries>[number]; isMdd: boolean }) {

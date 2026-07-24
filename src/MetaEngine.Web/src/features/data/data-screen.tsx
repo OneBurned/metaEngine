@@ -36,21 +36,19 @@ export function DataScreen() {
     }
 
     setIsLoading(true)
-    try {
-      const [nextPortfolios, nextStrategies, nextPresets] = await Promise.all([
-        listPortfolios(workspace.id),
-        listSavedStrategies(workspace.id),
-        listPresets(workspace.id),
-      ])
-      setPortfolios(nextPortfolios)
-      setStrategies(nextStrategies)
-      setPresets(nextPresets)
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
-    }
+    const [portfolioResult, strategyResult, presetResult] = await Promise.allSettled([
+      listPortfolios(workspace.id),
+      listSavedStrategies(workspace.id),
+      listPresets(workspace.id),
+    ])
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (strategyResult.status === "fulfilled") setStrategies(strategyResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    const failures = [portfolioResult, strategyResult, presetResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   useEffect(() => { void refresh() }, [refresh])
@@ -126,6 +124,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    const form = event.currentTarget
     if (!file || !name.trim()) {
       setError("Выберите CSV и укажите название.")
       return
@@ -137,7 +136,7 @@ function ImportForm({ disabled, onImport }: { disabled: boolean; onImport: (file
       await onImport(file, name.trim(), valueType)
       setFile(null)
       setName("")
-      event.currentTarget.reset()
+      form.reset()
     } catch (requestError) {
       setError(toDisplayMessage(requestError))
     } finally {

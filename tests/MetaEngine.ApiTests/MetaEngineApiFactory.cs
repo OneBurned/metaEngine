@@ -20,9 +20,13 @@ public sealed class MetaEngineApiFactory : WebApplicationFactory<Program>
     private const string ConnectionStringEnvironmentKey = "ConnectionStrings__MetaEngine";
     private readonly string databaseName = $"metaengine-api-tests-{Guid.NewGuid():N}";
     private readonly string? previousConnectionString;
+    private readonly string environment;
+    private readonly Dictionary<string, string?> configurationValues;
 
-    public MetaEngineApiFactory()
+    public MetaEngineApiFactory(string environment = "Testing", Dictionary<string, string?>? configurationValues = null)
     {
+        this.environment = environment;
+        this.configurationValues = configurationValues ?? [];
         previousConnectionString = Environment.GetEnvironmentVariable(ConnectionStringEnvironmentKey);
         Environment.SetEnvironmentVariable(
             ConnectionStringEnvironmentKey,
@@ -31,13 +35,16 @@ public sealed class MetaEngineApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(environment);
         builder.ConfigureAppConfiguration(configuration =>
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            var values = new Dictionary<string, string?>(configurationValues)
             {
                 ["ConnectionStrings:MetaEngine"] =
                     "Host=localhost;Database=metaengine_api_tests;Username=unused;Password=unused"
-            }));
+            };
+            configuration.AddInMemoryCollection(values);
+        });
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<MetaEngineDbContext>();

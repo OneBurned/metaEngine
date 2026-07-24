@@ -20,7 +20,8 @@ public sealed class StrategyCatalogTests
         Assert.Equal(
             ["mdd_mean_reversion", "rsi"],
             catalog.Descriptors.Select(descriptor => descriptor.StrategyType));
-        Assert.All(catalog.Descriptors, descriptor => Assert.Equal(1, descriptor.SchemaVersion));
+        Assert.Equal(2, catalog.GetRequired("mdd_mean_reversion").SchemaVersion);
+        Assert.Equal(1, catalog.GetRequired("rsi").SchemaVersion);
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Parameters));
         Assert.All(catalog.Descriptors, descriptor => Assert.True(descriptor.Optimization.Supported));
         Assert.All(catalog.Descriptors, descriptor => Assert.NotEmpty(descriptor.Optimization.Controls));
@@ -55,9 +56,17 @@ public sealed class StrategyCatalogTests
     {
         var descriptor = CreateCatalog().GetRequired("mdd_mean_reversion");
 
+        Assert.Equal(["deals"], descriptor.Parameters.Select(parameter => parameter.Key));
         Assert.All(descriptor.Parameters, parameter => Assert.Equal("decimal", parameter.Unit));
         Assert.Equal(
             "percent_points",
-            descriptor.Optimization.Controls.Single(control => control.Key == "takeProfit").Unit);
+            descriptor.Optimization.Controls.Single(control => control.Key == "drawdown").Unit);
+        Assert.Equal(
+            "percent_points",
+            descriptor.Optimization.Controls.Single(control => control.Key == "weight").Unit);
+        Assert.Equal(
+            "percent_points",
+            descriptor.Optimization.Controls.Single(control => control.Key == "exitValue").Unit);
+        Assert.DoesNotContain(descriptor.Optimization.Controls, control => control.Key == "takeProfit");
     }
 }

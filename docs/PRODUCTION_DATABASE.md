@@ -130,6 +130,13 @@ dotnet ef migrations has-pending-model-changes --project src/MetaEngine.Infrastr
 dotnet ef migrations add MeaningfulMigrationName --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure --output-dir Persistence/Migrations
 ```
 
+Если migration правится вручную, класс должен иметь атрибут
+`[Migration("<timestamp>_<Name>")]`; иначе EF Core может не увидеть migration,
+и контейнер `migrations` посчитает базу актуальной. Для repair-migration
+допустим idempotent SQL (`IF EXISTS` / `IF NOT EXISTS`), чтобы существующие
+локальные Codespaces-базы обновлялись без удаления volume и потери загруженных
+данных.
+
 Применить локально:
 
 ```bash
@@ -141,6 +148,28 @@ dotnet ef database update --project src/MetaEngine.Infrastructure --startup-proj
 
 ```bash
 dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
+```
+
+### Быстрый ремонт локального Codespaces volume
+
+Если после обновления PR в Codespaces API/Worker падает из-за отсутствующей
+колонки в PostgreSQL, не удаляй volume сразу: сначала принудительно перезапусти
+одноразовый migrations-контейнер и затем API/Worker:
+
+```bash
+docker compose stop api worker
+docker compose up --build --force-recreate migrations
+docker compose up -d --build api worker
+```
+
+Если локальная база уже drifted и ошибка всё равно указывает на отсутствующие
+`calculation_runs.error_message` или `run_artifact_points.fields_json`, эти две
+команды безопасно добавляют недостающие колонки без удаления загруженных данных:
+
+```bash
+docker compose exec -T postgres psql -U metaengine -d metaengine -c 'ALTER TABLE calculation_runs ADD COLUMN IF NOT EXISTS error_message character varying(1000);'
+docker compose exec -T postgres psql -U metaengine -d metaengine -c "ALTER TABLE run_artifact_points ADD COLUMN IF NOT EXISTS fields_json jsonb NOT NULL DEFAULT '{}';"
+docker compose restart api worker
 ```
 
 ## Следующие шаги

@@ -97,7 +97,7 @@ public sealed class PersistenceModelTests
     }
 
     [Fact]
-    public void Portfolio_checksums_are_unique_inside_a_workspace()
+    public void Portfolio_checksums_are_indexed_but_not_unique_inside_a_workspace()
     {
         using var dbContext = CreateDbContext();
         var portfolio = dbContext.Model.FindEntityType(typeof(PortfolioVersion));
@@ -105,12 +105,12 @@ public sealed class PersistenceModelTests
         Assert.NotNull(portfolio);
         Assert.Contains(
             portfolio.GetIndexes(),
-            index => index.IsUnique &&
+            index => !index.IsUnique &&
                 index.Properties.Select(property => property.Name).SequenceEqual(
                     [nameof(PortfolioVersion.WorkspaceId), nameof(PortfolioVersion.SourceChecksum)]));
         Assert.Contains(
             portfolio.GetIndexes(),
-            index => index.IsUnique &&
+            index => !index.IsUnique &&
                 index.Properties.Select(property => property.Name).SequenceEqual(
                     [nameof(PortfolioVersion.WorkspaceId), nameof(PortfolioVersion.SeriesChecksum)]));
     }
