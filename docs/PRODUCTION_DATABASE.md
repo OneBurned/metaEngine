@@ -130,6 +130,13 @@ dotnet ef migrations has-pending-model-changes --project src/MetaEngine.Infrastr
 dotnet ef migrations add MeaningfulMigrationName --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure --output-dir Persistence/Migrations
 ```
 
+Если migration правится вручную, класс должен иметь атрибут
+`[Migration("<timestamp>_<Name>")]`; иначе EF Core может не увидеть migration,
+и контейнер `migrations` посчитает базу актуальной. Для repair-migration
+допустим idempotent SQL (`IF EXISTS` / `IF NOT EXISTS`), чтобы существующие
+локальные Codespaces-базы обновлялись без удаления volume и потери загруженных
+данных.
+
 Применить локально:
 
 ```bash
