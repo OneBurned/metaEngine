@@ -32,8 +32,8 @@ public sealed class ZScoreStrategyModuleDescriptor : IStrategyModuleDescriptorPr
         Outputs:
         [
             new("strategy_diff", "OUT Diff", StrategyOutputKind.ResultSeries, "decimal"),
-            new("source_z", "Source Z", StrategyOutputKind.Indicator, "points"),
-            new("strategy_z", "Strategy Z", StrategyOutputKind.Indicator, "points"),
+            new("source_z", "IN Z", StrategyOutputKind.Indicator, "points"),
+            new("strategy_z", "OUT Z", StrategyOutputKind.Indicator, "points"),
             new("source_dd_mean", "IN DD rolling mean", StrategyOutputKind.Indicator, "decimal"),
             new("source_dd_std", "IN DD rolling std", StrategyOutputKind.Indicator, "decimal"),
             new("signal", "Сигнал", StrategyOutputKind.Signal),

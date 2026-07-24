@@ -128,7 +128,7 @@ public sealed class ZScoreStrategyModule : IStrategyModule
                     state.SourceHwmStartEquity = null;
                     state.StrategyHwmStartEquity = null;
                     buyCount++;
-                    executions.Add($"opened deal {pending.DealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                    executions.Add($"OPEN #{pending.DealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
                 }
                 else if (pending.Kind == PendingEventKind.Close && state.IsActive)
                 {
@@ -136,7 +136,7 @@ public sealed class ZScoreStrategyModule : IStrategyModule
                     state.SourceHwmStartEquity = null;
                     state.StrategyHwmStartEquity = null;
                     sellCount++;
-                    executions.Add($"closed deal {pending.DealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
+                    executions.Add($"CLOSE #{pending.DealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
                 }
             }
             pendingEvents.Clear();
@@ -171,7 +171,7 @@ public sealed class ZScoreStrategyModule : IStrategyModule
                 {
                     state.OpenedInCycle = true;
                     pendingEvents.Add(new(PendingEventKind.Open, dealIndex));
-                    signals.Add($"entry deal {dealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
+                    signals.Add($"IN #{dealIndex + 1} +{FormatPercent(state.Deal.Weight)}");
                 }
             }
 
@@ -186,7 +186,7 @@ public sealed class ZScoreStrategyModule : IStrategyModule
                 if (ShouldClose(state, source.ZScore, source.Equity, strategyStats.ZScore, 1 + accum, source.Drawdown, strategyDrawdown))
                 {
                     pendingEvents.Add(new(PendingEventKind.Close, dealIndex));
-                    signals.Add($"exit deal {dealIndex + 1} -{FormatPercent(state.Deal.Weight)}");
+                    signals.Add($"EXIT #{dealIndex + 1}");
                 }
             }
 
@@ -206,8 +206,8 @@ public sealed class ZScoreStrategyModule : IStrategyModule
                         ["strategy_dd_mean"] = JsonSerializer.SerializeToElement(strategyStats.Mean),
                         ["strategy_dd_std"] = JsonSerializer.SerializeToElement(strategyStats.StandardDeviation),
                         ["strategy_z"] = JsonSerializer.SerializeToElement(strategyStats.ZScore),
-                        ["signal"] = JsonSerializer.SerializeToElement(string.Join("; ", signals)),
-                        ["execution"] = JsonSerializer.SerializeToElement(string.Join("; ", executions)),
+                        ["signal"] = JsonSerializer.SerializeToElement(string.Join(" - ", signals)),
+                        ["execution"] = JsonSerializer.SerializeToElement(string.Join(" - ", executions)),
                         ["position"] = JsonSerializer.SerializeToElement(activeWeight),
                         ["active_deals"] = JsonSerializer.SerializeToElement(string.Join(", ", states.Select((state, stateIndex) => state.IsActive ? (stateIndex + 1).ToString() : string.Empty).Where(value => value.Length > 0))),
                         ["max_config_weight"] = JsonSerializer.SerializeToElement(maxConfigWeight),

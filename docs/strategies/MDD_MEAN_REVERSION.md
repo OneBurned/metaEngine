@@ -7,13 +7,13 @@ MDD Mean Reversion is a trading strategy module with type `mdd_mean_reversion`.
 The strategy works on the current base portfolio/preset calculation from block **3. Расчет**.
 Input values use the `IN` prefix: `IN Diff`, `IN Accum`, `IN DD`.
 
-The entry indicator is **Local DD исходника**: the worst source DD inside the current source drawdown cycle. It resets to `0` when source DD returns to `0`; the next negative source DD starts a new cycle.
+The entry indicator is **Local MDD исходника**: the worst source DD inside the current source drawdown cycle. It resets to `0` when source DD returns to `0`; the next negative source DD starts a new cycle.
 
 ## Independent deals
 
 MDD now uses independent deals instead of one target-weight grid. One deal contains:
 
-1. entry by Local DD исходника;
+1. entry by Local MDD исходника;
 2. additive opening weight;
 3. exit type;
 4. exit value.
@@ -24,7 +24,7 @@ Deals are sorted by entry DD from the smaller drawdown to the deeper drawdown. W
 
 ## Entry, signal and execution
 
-Every deal enters only by Local DD исходника. When one point gaps through several entries, all crossed deals receive entry signals. Signals are executed on the next point, never on the signal point.
+Every deal enters only by Local MDD исходника. When one point gaps through several entries, all crossed deals receive entry signals. Signals are executed on the next point, never on the signal point.
 
 Each deal can open only once during the current source drawdown cycle. If a deal closes before the source recovers to `DD исходника = 0%`, it cannot open again until that recovery starts a new cycle.
 
@@ -71,7 +71,7 @@ Table/export columns include:
 IN Diff
 IN Accum
 IN DD
-Local DD исходника
+Local MDD исходника
 Local Accum (legacy TP field; not used by independent-deal exits)
 Сигнал
 Исполнение
@@ -90,4 +90,4 @@ CSV export for the current strategy result exports the current calculated strate
 
 ## Production optimization
 
-Production MDD optimization evaluates candidates under the same independent-deal model. Simple mode searches entry Local DD исходника and additive weight, while defaulting the exit to `DD исходника 0%`. Detailed mode can be extended with per-deal exit type/value. The optimizer does not require nondecreasing weights and does not reject candidates because the sum of weights exceeds `100%`.
+Production MDD optimization evaluates candidates under the same independent-deal model. Simple mode searches entry Local MDD исходника and additive weight, while defaulting the exit to `DD исходника 0%`. Detailed mode can be extended with per-deal exit type/value. The optimizer does not require nondecreasing weights and does not reject candidates because the sum of weights exceeds `100%`.

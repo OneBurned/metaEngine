@@ -14,19 +14,19 @@ source equity = 1 + IN Accum
 source DD = source equity / source HWM - 1
 ```
 
-The user sets `rollingWindow`; the default is `240` points. Until the rolling window is available, rolling mean/std are empty and Source Z is `0`. After that, Source Z is:
+The user sets `rollingWindow`; the default is `240` points. Until the rolling window is available, rolling mean/std are empty and IN Z is `0`. After that, IN Z is:
 
 ```text
-Source Z = (source DD - rolling source DD mean) / rolling source DD std
+IN Z = (source DD - rolling IN DD mean) / rolling IN DD std
 ```
 
-The strategy also calculates Strategy Z from OUT DD with the same rolling window, so exits can use either source-side or strategy-side Z recovery.
+The strategy also calculates OUT Z from OUT DD with the same rolling window, so exits can use either IN-side or OUT-side Z recovery.
 
 ## Independent deals
 
 One deal contains:
 
-1. entry by Source Z;
+1. entry by IN Z;
 2. additive opening weight;
 3. exit type;
 4. exit value.
@@ -37,7 +37,7 @@ Deals are sorted from the smaller Z anomaly to the deeper Z anomaly. Weights do 
 
 ## Entry, signal and execution
 
-A deal enters when current Source Z is less than or equal to its configured entry Z-score. When one point gaps through several entries, all crossed deals receive entry signals. Signals are executed on the next point, never on the signal point.
+A deal enters when current IN Z is less than or equal to its configured entry Z-score. When one point gaps through several entries, all crossed deals receive entry signals. Signals are executed on the next point, never on the signal point.
 
 Each deal can open only once during the current source drawdown cycle. If a deal closes before the source recovers to `DD исходника = 0%`, it cannot open again until that recovery starts a new cycle.
 
@@ -47,8 +47,8 @@ Each deal supports one of four exit types:
 
 | Technical value | User label | Meaning |
 | --- | --- | --- |
-| `source_z` | Z исходника | close when current Source Z recovered to the configured level or better |
-| `strategy_z` | Z стратегии | close when current Strategy Z recovered to the configured level or better |
+| `source_z` | Z исходника | close when current IN Z recovered to the configured level or better |
+| `strategy_z` | Z стратегии | close when current OUT Z recovered to the configured level or better |
 | `source_hwm` | HWM исходника | after source DD recovers to `0%`, close after source growth by the configured percentage points |
 | `strategy_hwm` | HWM стратегии | after strategy DD recovers to `0%`, close after strategy growth by the configured percentage points |
 
@@ -87,10 +87,7 @@ IN Accum
 IN DD
 IN DD rolling mean
 IN DD rolling std
-Source Z
-OUT DD rolling mean
-OUT DD rolling std
-Strategy Z
+IN Z
 Signal
 Execution
 Active deals
@@ -99,9 +96,12 @@ OUT Diff
 OUT Accum
 OUT HWM
 OUT DD
+OUT DD rolling mean
+OUT DD rolling std
+OUT Z
 OUT MDD
 Max config weight
 Max realized weight
 ```
 
-CSV signal/execution values are stored as ASCII English tokens such as `entry deal`, `opened deal`, `exit deal` and `closed deal` so spreadsheet preview/download remains safe.
+CSV signal/execution values are stored as short ASCII English tokens such as `IN #1 +10%`, `OPEN #1 +10%`, `EXIT #1` and `CLOSE #1 -10%`. Multiple events inside one CSV cell are separated with ` - ` so preview/download remain spreadsheet-safe.

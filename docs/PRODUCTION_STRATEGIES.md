@@ -45,12 +45,12 @@ Queue body example:
 
 MDD parameters use decimal values: `entryDrawdown: -0.1` is -10%, `weight: 0.1`
 is 10%, and `exitValue: 0` means the configured exit threshold. MDD configs now
-store independent `deals`; each deal has entry by Local DD исходника, additive
+store independent `deals`; each deal has entry by Local MDD исходника, additive
 opening weight, `exitType` (`source_dd`, `strategy_dd`, `source_hwm`,
 `strategy_hwm`) and `exitValue`. Weights do not have to be nondecreasing and the
 sum of open deal weights is not capped.
 
-Z-Score parameters also use decimal weights and independent `deals`, but each deal enters by `entryZScore` instead of Local DD. `rollingWindow` defaults to `240`; Z exits use `source_z` or `strategy_z`, while HWM exits keep `source_hwm` and `strategy_hwm`.
+Z-Score parameters also use decimal weights and independent `deals`, but each deal enters by `entryZScore` instead of Local MDD. `rollingWindow` defaults to `240`; Z exits use `source_z` or `strategy_z`, while HWM exits keep `source_hwm` and `strategy_hwm`.
 
 Save body example:
 
@@ -84,9 +84,9 @@ and Z-Score parameters, follows queued/running status, displays the strategy res
 with Diff/Accum/HWM/DD/MDD on one percent scale, and saves its configuration.
 The result block also restores the trading-model chart from the old local lab:
 RSI shows its indicator with buy/sell thresholds, MDD shows source DD and
-Local DD used for deal entries, and Z-Score shows source/strategy Z values with deal entry levels. The strategy result table shows IN/OUT columns,
+Local MDD used for deal entries, and Z-Score shows IN/OUT Z values with deal entry levels. The strategy result table shows IN/OUT columns,
 signals, executions and position/weight fields. Stored MDD/Z-Score signal/execution
-values use ASCII English tokens such as `entry deal` and `opened deal` so CSV
+values use ASCII English tokens such as `IN #1` and `OPEN #1` so CSV
 preview/download stays spreadsheet-safe even when the UI labels are localized.
 A current-result CSV export shortcut downloads the visible strategy result
 columns, while the dedicated **Экспорт** tab can export strategy results
