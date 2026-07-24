@@ -150,6 +150,28 @@ dotnet ef database update --project src/MetaEngine.Infrastructure --startup-proj
 dotnet ef migrations script --idempotent --project src/MetaEngine.Infrastructure --startup-project src/MetaEngine.Infrastructure
 ```
 
+### Быстрый ремонт локального Codespaces volume
+
+Если после обновления PR в Codespaces API/Worker падает из-за отсутствующей
+колонки в PostgreSQL, не удаляй volume сразу: сначала принудительно перезапусти
+одноразовый migrations-контейнер и затем API/Worker:
+
+```bash
+docker compose stop api worker
+docker compose up --build --force-recreate migrations
+docker compose up -d --build api worker
+```
+
+Если локальная база уже drifted и ошибка всё равно указывает на отсутствующие
+`calculation_runs.error_message` или `run_artifact_points.fields_json`, эти две
+команды безопасно добавляют недостающие колонки без удаления загруженных данных:
+
+```bash
+docker compose exec -T postgres psql -U metaengine -d metaengine -c 'ALTER TABLE calculation_runs ADD COLUMN IF NOT EXISTS error_message character varying(1000);'
+docker compose exec -T postgres psql -U metaengine -d metaengine -c "ALTER TABLE run_artifact_points ADD COLUMN IF NOT EXISTS fields_json jsonb NOT NULL DEFAULT '{}';"
+docker compose restart api worker
+```
+
 ## Следующие шаги
 
 - добавить управление участниками, восстановление пароля, 2FA/OIDC и rate limiting;
