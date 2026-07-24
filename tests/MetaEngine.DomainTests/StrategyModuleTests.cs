@@ -132,8 +132,9 @@ public sealed class StrategyModuleTests
         Assert.Equal(0, result.Rows[1].Fields["position"].GetDouble());
         Assert.Equal(0.6, result.Rows[2].Fields["position"].GetDouble(), 10);
         Assert.Equal(3, result.Summary.BuyCount);
-        Assert.Contains("#1", result.Rows[1].Fields["signal"].GetString());
-        Assert.Contains("#3", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("IN #1 +10%", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("IN #3 +30%", result.Rows[1].Fields["signal"].GetString());
+        Assert.DoesNotContain(" %", result.Rows[1].Fields["signal"].GetString());
     }
 
     [Fact]
@@ -299,7 +300,8 @@ public sealed class StrategyModuleTests
         Assert.Equal(0, result.Rows[2].Diff);
         AssertClose(0.1, result.Rows[3].Diff);
         Assert.Equal(1, result.Summary.BuyCount);
-        Assert.Contains("#1", result.Rows[2].Fields["signal"].GetString());
+        Assert.Contains("IN #1 +100%", result.Rows[2].Fields["signal"].GetString());
+        Assert.DoesNotContain(" %", result.Rows[2].Fields["signal"].GetString());
         Assert.True(result.Rows[2].Fields["source_z"].GetDouble() < 0);
     }
 

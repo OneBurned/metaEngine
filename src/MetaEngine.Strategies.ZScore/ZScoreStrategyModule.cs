@@ -372,7 +372,7 @@ public sealed class ZScoreStrategyModule : IStrategyModule
         return value is "source_z" or "strategy_z" or "source_hwm" or "strategy_hwm";
     }
 
-    private static string FormatPercent(double value) => $"{value:P0}";
+    private static string FormatPercent(double value) => FormattableString.Invariant($"{value * 100:0.########}%");
 
     private static int ReadInt(JsonElement parameters, string name, int fallback) =>
         parameters.TryGetProperty(name, out var property) && property.TryGetInt32(out var value) ? value : fallback;
