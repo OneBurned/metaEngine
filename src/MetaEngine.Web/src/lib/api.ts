@@ -251,7 +251,7 @@ export class ApiError extends Error {
 async function getCsrfToken() {
   const response = await fetch("/api/v1/auth/csrf", { credentials: "same-origin" })
   if (!response.ok) {
-    throw await toApiError(response)
+    throw await toApiError(response, "/api/v1/auth/csrf")
   }
 
   const body = (await response.json()) as { token: string }
@@ -275,7 +275,7 @@ async function request<T>(
   })
 
   if (!response.ok) {
-    throw await toApiError(response)
+    throw await toApiError(response, path)
   }
 
   if (response.status === 204) {
@@ -285,8 +285,8 @@ async function request<T>(
   return (await response.json()) as T
 }
 
-async function toApiError(response: Response) {
-  const fallback = `Request failed with status ${response.status}.`
+async function toApiError(response: Response, path: string) {
+  const fallback = `${path} failed with status ${response.status}.`
   try {
     const body = (await response.json()) as { code?: string; message?: string }
     return new ApiError(body.message ?? fallback, body.code ?? "request_failed", response.status)

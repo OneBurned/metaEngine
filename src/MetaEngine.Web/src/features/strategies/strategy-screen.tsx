@@ -91,29 +91,29 @@ export function StrategyScreen() {
       setIsLoading(false)
       return
     }
-    try {
-      const [allRuns, nextPortfolios, nextPresets, saved, availableTypes] = await Promise.all([
-        listCalculationRuns(workspace.id),
-        listPortfolios(workspace.id),
-        listPresets(workspace.id),
-        listSavedStrategies(workspace.id),
-        listStrategyTypes(),
-      ])
-      setRuns(allRuns)
-      setPortfolios(nextPortfolios)
-      setPresets(nextPresets)
-      setSavedStrategies(saved)
-      setStrategyTypes(availableTypes.map((item) => item.strategyType))
-      const baseRuns = allRuns.filter((run) => run.kind === "base" && run.status === "completed")
+    const [runResult, portfolioResult, presetResult, savedResult, typeResult] = await Promise.allSettled([
+      listCalculationRuns(workspace.id),
+      listPortfolios(workspace.id),
+      listPresets(workspace.id),
+      listSavedStrategies(workspace.id),
+      listStrategyTypes(),
+    ])
+    if (runResult.status === "fulfilled") {
+      setRuns(runResult.value)
+      const baseRuns = runResult.value.filter((run) => run.kind === "base" && run.status === "completed")
       setSourceRunId((current) => baseRuns.some((run) => run.id === current) ? current : (baseRuns[0]?.id ?? ""))
-      const strategyRuns = allRuns.filter((run) => run.kind === "strategy")
+      const strategyRuns = runResult.value.filter((run) => run.kind === "strategy")
       setSelectedRunId((current) => strategyRuns.some((run) => run.id === current) ? current : (strategyRuns[0]?.id ?? ""))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
     }
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    if (savedResult.status === "fulfilled") setSavedStrategies(savedResult.value)
+    if (typeResult.status === "fulfilled") setStrategyTypes(typeResult.value.map((item) => item.strategyType))
+    const failures = [runResult, portfolioResult, presetResult, savedResult, typeResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const loadResult = useCallback(async () => {

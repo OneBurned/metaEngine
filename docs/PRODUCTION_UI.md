@@ -53,6 +53,8 @@ management remains future work. CSV export is available through a dedicated
 **Экспорт** tab with separate source groups for portfolios, base calculations,
 strategy results and saved strategy results.
 
+Workspace overview screens load independent source lists separately, so a failure in presets, saved strategies or run history is shown as an actionable API endpoint error but does not wipe already loaded portfolios or block portfolio-based calculations.
+
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only
 the rendered chart so a long series remains responsive; the summary always

@@ -43,10 +43,16 @@ export function ExportScreen() {
 
   const refresh = useCallback(async () => {
     if (!workspace) { setIsLoading(false); return }
-    try {
-      const [nextPortfolios, nextPresets, nextRuns, nextStrategies] = await Promise.all([listPortfolios(workspace.id), listPresets(workspace.id), listCalculationRuns(workspace.id), listSavedStrategies(workspace.id)])
-      setPortfolios(nextPortfolios); setPresets(nextPresets); setRuns(nextRuns); setSavedStrategies(nextStrategies); setError(null)
-    } catch (requestError) { setError(toDisplayMessage(requestError)) } finally { setIsLoading(false) }
+    const [portfolioResult, presetResult, runResult, strategyResult] = await Promise.allSettled([listPortfolios(workspace.id), listPresets(workspace.id), listCalculationRuns(workspace.id), listSavedStrategies(workspace.id)])
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (presetResult.status === "fulfilled") setPresets(presetResult.value)
+    if (runResult.status === "fulfilled") setRuns(runResult.value)
+    if (strategyResult.status === "fulfilled") setSavedStrategies(strategyResult.value)
+    const failures = [portfolioResult, presetResult, runResult, strategyResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
   useEffect(() => { void refresh() }, [refresh])
 

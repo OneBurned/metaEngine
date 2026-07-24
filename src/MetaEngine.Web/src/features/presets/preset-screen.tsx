@@ -81,22 +81,22 @@ export function PresetScreen() {
       return
     }
 
-    try {
-      const [nextPortfolios, nextStrategies, nextPresets] = await Promise.all([
-        listPortfolios(workspace.id),
-        listSavedStrategies(workspace.id),
-        listPresets(workspace.id),
-      ])
-      setPortfolios(nextPortfolios)
-      setStrategies(nextStrategies)
-      setPresets(nextPresets)
-      setSelectedPresetId((current) => nextPresets.some((preset) => preset.id === current) ? current : (nextPresets[0]?.id ?? ""))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
+    const [portfolioResult, strategyResult, presetResult] = await Promise.allSettled([
+      listPortfolios(workspace.id),
+      listSavedStrategies(workspace.id),
+      listPresets(workspace.id),
+    ])
+    if (portfolioResult.status === "fulfilled") setPortfolios(portfolioResult.value)
+    if (strategyResult.status === "fulfilled") setStrategies(strategyResult.value)
+    if (presetResult.status === "fulfilled") {
+      setPresets(presetResult.value)
+      setSelectedPresetId((current) => presetResult.value.some((preset) => preset.id === current) ? current : (presetResult.value[0]?.id ?? ""))
     }
+    const failures = [portfolioResult, strategyResult, presetResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const options = useMemo<SourceOption[]>(() => [

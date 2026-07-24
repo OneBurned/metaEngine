@@ -60,25 +60,33 @@ export function DashboardScreen() {
       return
     }
 
-    try {
-      const [nextPortfolios, nextPresets, nextStrategies, nextRuns] = await Promise.all([
-        listPortfolios(workspace.id),
-        listPresets(workspace.id),
-        listSavedStrategies(workspace.id),
-        listCalculationRuns(workspace.id),
-      ])
-      const nextBaseRuns = nextRuns.filter((run) => run.kind === "base")
-      setPortfolios(nextPortfolios)
-      setPresets(nextPresets)
-      setStrategies(nextStrategies)
+    const [portfolioResult, presetResult, strategyResult, runResult] = await Promise.allSettled([
+      listPortfolios(workspace.id),
+      listPresets(workspace.id),
+      listSavedStrategies(workspace.id),
+      listCalculationRuns(workspace.id),
+    ])
+
+    if (portfolioResult.status === "fulfilled") {
+      setPortfolios(portfolioResult.value)
+    }
+    if (presetResult.status === "fulfilled") {
+      setPresets(presetResult.value)
+    }
+    if (strategyResult.status === "fulfilled") {
+      setStrategies(strategyResult.value)
+    }
+    if (runResult.status === "fulfilled") {
+      const nextBaseRuns = runResult.value.filter((run) => run.kind === "base")
       setRuns(nextBaseRuns)
       setSelectedRunId((current) => current && nextBaseRuns.some((run) => run.id === current) ? current : (nextBaseRuns[0]?.id ?? null))
-      setError(null)
-    } catch (requestError) {
-      setError(toDisplayMessage(requestError))
-    } finally {
-      setIsLoading(false)
     }
+
+    const failures = [portfolioResult, presetResult, strategyResult, runResult]
+      .filter((result) => result.status === "rejected")
+      .map((result) => toDisplayMessage(result.reason))
+    setError(failures.length > 0 ? failures.join(" ") : null)
+    setIsLoading(false)
   }, [workspace])
 
   const loadRun = useCallback(async (runId: string) => {
