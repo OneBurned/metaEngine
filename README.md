@@ -86,12 +86,14 @@ Backend API работает отдельно:
 ### Как проверять PR с основным production UI
 
 Для PR, который меняет вход, workspace, данные, расчеты, стратегии, оптимизации,
-пресеты, API или Worker, проверка идет в двух терминалах.
+пресеты, API или Worker, проверка production UI **всегда идет в двух
+терминалах**.
 
 **Терминал 1** получает PR-ветку, запускает тесты и backend/API/Worker/PostgreSQL:
 
 ```bash
 cd /workspaces/metaEngine
+# если backend/API/Worker уже запущены в этом терминале — останови через Ctrl+C
 git fetch
 gh pr checkout <номер_PR>
 git status
@@ -102,17 +104,24 @@ docker compose up -d --build
 curl -s http://localhost:5080/health/ready
 ```
 
-**Терминал 2** запускает frontend:
+**Терминал 2** запускает frontend на `3000`:
 
 ```bash
 cd /workspaces/metaEngine/src/MetaEngine.Web
+# если frontend уже запущен в этом терминале — останови через Ctrl+C
 npm install
 VITE_API_TARGET=http://localhost:5080 npm run dev
 ```
 
-После этого в Codespaces открывай `Ports → 3000 → Open in Browser`.
-Порт `5080` не открывают как сайт; его проверяют `curl`. Порт `5173` нужен
-только для старого local lab/reference.
+После этого в Codespaces открывай `Ports → 3000 → Open in Browser` и делай
+жесткое обновление страницы (`Ctrl + Shift + R`). Порт `5080` не открывают как
+сайт; его проверяют `curl`. Порт `5173` нужен только для старого local
+lab/reference.
+
+Минимальный ручной smoke-check: войти `admin` / `admin`, загрузить portfolio
+CSV во вкладке **Данные**, поставить расчет во вкладке **Расчеты**, дождаться
+`completed`, запустить RSI или MDD strategy во вкладке **Стратегии** и проверить
+CSV preview/download во вкладке **Экспорт**.
 
 ## Что уже умеет локальная версия
 
@@ -454,7 +463,9 @@ YYYY.MM.DD HH:MM
 2021.10.03 23:00
 ```
 
-Timestamp читается как Unix timestamp в миллисекундах. Внутри используется UTC-форматирование без дополнительного пользовательского сдвига часового пояса.
+Timestamp читается как Unix timestamp в миллисекундах и внутри нормализуется к UTC.
+В интерфейсе даты показываются в локальном часовом поясе браузера пользователя,
+чтобы созданные расчеты и стратегии выглядели как локальное время действия.
 
 ## Правило отсутствующих данных
 

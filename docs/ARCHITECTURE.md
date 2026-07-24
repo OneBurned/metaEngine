@@ -116,7 +116,6 @@ lease восстанавливается, временная ошибка Postgr
 - backups, проверенный restore и rollback procedure;
 - централизованные metrics, alerts и operational runbook;
 - управление участниками workspace, password recovery, 2FA/OIDC и rate limiting;
-- production CSV export. Экспорт в local lab существует отдельно.
 
 ## Подробные документы
 

@@ -39,11 +39,19 @@ The forms fill source start/end automatically. The user may narrow the period.
 A `Viewer` can inspect data but does not get active import or calculation
 controls.
 
-Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact UTC
-`YYYY.MM.DD HH:MM` format. Base calculation selectors show the source name,
-version, completed/created timestamp and final Accum, for example
-`Portfolio · v1 · 2026.07.21 21:56 · 1114,43%`, so repeated calculations
-with the same name remain distinguishable without long localized date labels. Native browser date controls are not used where they would render localized `ДД.ММ.ГГГГ` values instead of the shared format. Date fields show the example in the input placeholder; duplicate helper text under every period field is intentionally avoided.
+Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact
+`YYYY.MM.DD HH:MM` format in the browser's local timezone. Backend storage, API
+payloads and timeframe boundaries remain UTC; only the human-facing label is
+localized. Calculation, strategy result selectors and saved-strategy library/export rows show the
+source/name, version, strategy type when relevant, timeframe, completed/created
+timestamp and final Accum when the contract has it, for example
+`Portfolio · v1 · 1h · 2026.07.21 21:56 · 1114,43%` or
+`Recovery MDD · v3 · MDD Mean Reversion · 1h · 2026.07.21 21:56`, so repeated
+items with the same name remain distinguishable without long localized date
+labels. Native browser date controls are not used where they would render
+localized `ДД.ММ.ГГГГ` values instead of the shared format. Date fields show the
+example in the input placeholder; duplicate helper text under every period field
+is intentionally avoided.
 
 ## Client boundaries
 
@@ -76,23 +84,31 @@ reviewed as a dedicated security change.
 
 ## Local run
 
-Apply migrations and start PostgreSQL first. Then use three terminals:
+The normal Codespaces/manual production UI check uses **two terminals**.
+Terminal 1 starts PostgreSQL, migrations, API and Worker through Docker Compose;
+Terminal 2 starts the Vite frontend on `3000`.
 
 ```bash
-# terminal 1: API
-dotnet run --project src/MetaEngine.Api --urls http://0.0.0.0:5080
-
-# terminal 2: Worker
-dotnet run --project src/MetaEngine.Worker
-
-# terminal 3: production UI
-cd src/MetaEngine.Web
-npm install
-npm run dev
+# terminal 1: backend/API/Worker/PostgreSQL
+cd /workspaces/metaEngine
+docker compose up -d --build
+curl -s http://localhost:5080/health/ready
 ```
 
-Open port `3000` in Codespaces. In the default Docker Compose development setup, sign in with `admin` / `admin`; the API creates the local admin workspace automatically. The Worker must be running for a calculation to
-progress beyond `queued`.
+```bash
+# terminal 2: production UI
+cd /workspaces/metaEngine/src/MetaEngine.Web
+npm install
+VITE_API_TARGET=http://localhost:5080 npm run dev
+```
+
+Open port `3000` in Codespaces and hard-refresh the page. In the default Docker
+Compose development setup, sign in with `admin` / `admin`; the API creates the
+local admin workspace automatically. The Worker must be running for a
+calculation to progress beyond `queued`.
+
+Use separate raw `dotnet run` API and Worker terminals only when debugging the
+backend process itself instead of doing a normal production UI smoke-check.
 
 ## Verification
 

@@ -79,6 +79,8 @@ public sealed class PresetTests(MetaEngineApiFactory factory) : IClassFixture<Me
         Assert.Equal(first.Preset.PresetKey, second.Preset.PresetKey);
         Assert.Equal(2, second.Preset.Version);
         Assert.Equal(2, list.GetProperty("items").GetArrayLength());
+        var firstListItem = list.GetProperty("items").EnumerateArray().Single(item => item.GetProperty("id").GetGuid() == first.Preset.Id);
+        Assert.Equal(3, firstListItem.GetProperty("itemCount").GetInt32());
         Assert.NotNull(found);
         Assert.Equal(first.Preset.Id, found.Preset.Id);
         Assert.Equal(3, found.Items.Count);
