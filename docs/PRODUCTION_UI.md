@@ -42,7 +42,7 @@ controls.
 Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact
 `YYYY.MM.DD HH:MM` format in the browser's local timezone. Backend storage, API
 payloads and timeframe boundaries remain UTC; only the human-facing label is
-localized. Calculation, strategy result and saved-strategy selectors show the
+localized. Calculation, strategy result selectors and saved-strategy library/export rows show the
 source/name, version, strategy type when relevant, timeframe, completed/created
 timestamp and final Accum when the contract has it, for example
 `Portfolio · v1 · 1h · 2026.07.21 21:56 · 1114,43%` or
