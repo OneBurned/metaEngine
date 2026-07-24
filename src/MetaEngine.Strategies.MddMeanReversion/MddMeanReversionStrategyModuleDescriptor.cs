@@ -34,7 +34,7 @@ public sealed class MddMeanReversionStrategyModuleDescriptor : IStrategyModuleDe
                 new("parameterMode", "Режим параметров", StrategyParameterKind.Choice, "simple", Choices: ["simple", "detailed"]),
                 new("levelCount", "Количество сделок", StrategyParameterKind.Integer, 5, 1, 10, 1),
                 new("minEntryDelta", "Мин. дельта входов", StrategyParameterKind.Decimal, 5, 0, null, 1, Unit: "percent_points"),
-                new("drawdown", "Вход Local DD исходника", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(0, 80, 1), 0, 100, Unit: "percent_points"),
+                new("drawdown", "Вход Local MDD исходника", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(0, 80, 1), 0, 100, Unit: "percent_points"),
                 new("weight", "Вес открытия", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(1, 100, 1), 0, null, Unit: "percent_points"),
                 new("exitValue", "Выход DD исходника", StrategyParameterKind.DecimalRange, new StrategyNumericRangeDefault(0, 0, 1), 0, null, Unit: "percent_points"),
                 new("searchMode", "Режим поиска", StrategyParameterKind.Choice, "random", Choices: ["random", "full"]),
@@ -45,7 +45,7 @@ public sealed class MddMeanReversionStrategyModuleDescriptor : IStrategyModuleDe
         [
             new("strategy_diff", "OUT Diff", StrategyOutputKind.ResultSeries, "decimal"),
             new("base_dd", "IN DD", StrategyOutputKind.Indicator, "decimal"),
-            new("local_mdd", "Local DD исходника", StrategyOutputKind.Indicator, "decimal"),
+            new("local_mdd", "Local MDD исходника", StrategyOutputKind.Indicator, "decimal"),
             new("signal", "Сигнал", StrategyOutputKind.Signal),
             new("execution", "Исполнение", StrategyOutputKind.Signal),
             new("active_deals", "Активные сделки", StrategyOutputKind.Signal),

@@ -135,7 +135,7 @@ only the current period's prepared RSI series and reuses it for all buy/sell
 pairs; it then discards that series when the period changes. Optimizer
 evaluations use summary metrics without allocating full candidate result rows.
 
-MDD uses the same bounded result workflow. Its simple mode expands a common entry Local DD range and additive weight range into the chosen number of independent deals while enforcing only the minimum DD delta between entries. Detailed mode provides an independent DD/weight range for every deal. Random search has a finite requested candidate
+MDD uses the same bounded result workflow. Its simple mode expands a common entry Local MDD range and additive weight range into the chosen number of independent deals while enforcing only the minimum DD delta between entries. Detailed mode provides an independent DD/weight range for every deal. Random search has a finite requested candidate
 count; full search remains streamed and intentionally avoids counting the whole
 space before running.
 
@@ -988,7 +988,7 @@ The UI must use “Портфолио” for uploaded CSV return series.
 
 The word “Стратегии” is reserved for trading rules applied on top of the already selected and calculated portfolio/preset from the calculation block.
 
-Current trading strategies include RSI and MDD Mean Reversion.
+Current trading strategies include RSI, MDD Mean Reversion and Z-Score.
 
 RSI:
 
@@ -1008,9 +1008,9 @@ Strategy calculation UX is documented in `docs/STRATEGIES.md`. In short: the str
 MDD Mean Reversion:
 
 - type: `mdd_mean_reversion`;
-- calculates Local DD исходника for the current source drawdown cycle and resets it when source DD returns to `0`;
+- calculates Local MDD исходника for the current source drawdown cycle and resets it when source DD returns to `0`;
 - uses independent deals rather than one target-weight grid;
-- each deal has entry Local DD исходника, additive opening weight, exit type and exit value;
+- each deal has entry Local MDD исходника, additive opening weight, exit type and exit value;
 - supported exits are DD исходника, DD стратегии, HWM исходника and HWM стратегии;
 - active weight is the sum of open deals, so leverage such as 150% is valid;
 - a deal can open only once in a source drawdown cycle and can open again only after source DD recovers to `0`;
@@ -1022,19 +1022,30 @@ Strategy tables and current-strategy CSV export follow the IN/OUT table conventi
 Strategy optimizer:
 
 - lives in block “5. Стратегии” and follows the selected strategy type;
-- supports RSI and MDD Mean Reversion;
+- supports RSI and MDD Mean Reversion; Z-Score is manual-only for now;
 - can split the selected track into multiple sequential samples before optimization;
 - ranks candidates by Recovery score and shows per-sample accum/MDD/score, compounded sample accum, worst MDD and trade counts;
 - supports stop: the current candidate finishes, then no new candidates are taken and current best results are shown;
 - result rows can be sorted and applied back to block 5 to calculate and plot the strategy.
 
-RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies deal count, entry Local DD levels and additive opening weights; simple mode uses default exit `DD исходника 0%`. MDD weights are independent deal weights, can decrease on deeper entries, and are not limited by their sum.
+RSI optimizer varies `rsiPeriod`, `buyLevel` and `sellLevel`; `baseline` is not part of optimization, and UI upper/lower levels mirror sell/buy levels. MDD optimizer varies deal count, entry Local MDD levels and additive opening weights; simple mode uses default exit `DD исходника 0%`. MDD weights are independent deal weights, can decrease on deeper entries, and are not limited by their sum. Z-Score currently has no optimizer.
 
 Graph layout:
 
 1. base portfolio/preset graph and table;
 2. strategy indicator subgraph: RSI levels for RSI or DD/local MDD/grid levels for MDD Mean Reversion;
 3. separate strategy-result graph and table with strategy diff/accum/HWM/DD/MDD.
+
+Z-Score:
+
+- type: `z_score`;
+- uses the same independent-deal model as MDD Mean Reversion;
+- adds user parameter `rollingWindow` with default `240`;
+- calculates IN Z from rolling statistics over source DD and OUT Z from rolling statistics over OUT DD;
+- each deal enters by IN Z and has additive opening weight, exit type and exit value;
+- supported exits are Z исходника, Z стратегии, HWM исходника and HWM стратегии;
+- all entry and exit signals are executed on the next point;
+- optimizer is intentionally not enabled in the first production iteration.
 ## Экспорт CSV
 
 В local lab есть отдельный блок **“Экспорт CSV”**. Кнопка открывает popup-окно в стиле кастомного date-picker.

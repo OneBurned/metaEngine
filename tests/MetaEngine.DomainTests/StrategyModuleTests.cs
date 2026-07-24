@@ -2,6 +2,7 @@ using System.Text.Json;
 using MetaEngine.Strategies.Abstractions;
 using MetaEngine.Strategies.MddMeanReversion;
 using MetaEngine.Strategies.Rsi;
+using MetaEngine.Strategies.ZScore;
 
 namespace MetaEngine.DomainTests;
 
@@ -131,8 +132,9 @@ public sealed class StrategyModuleTests
         Assert.Equal(0, result.Rows[1].Fields["position"].GetDouble());
         Assert.Equal(0.6, result.Rows[2].Fields["position"].GetDouble(), 10);
         Assert.Equal(3, result.Summary.BuyCount);
-        Assert.Contains("deal 1", result.Rows[1].Fields["signal"].GetString());
-        Assert.Contains("deal 3", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("IN #1 +10%", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("IN #3 +30%", result.Rows[1].Fields["signal"].GetString());
+        Assert.DoesNotContain(" %", result.Rows[1].Fields["signal"].GetString());
     }
 
     [Fact]
@@ -274,6 +276,49 @@ public sealed class StrategyModuleTests
 
         Assert.False(validation.IsValid);
         Assert.Contains(validation.Errors, error => error.Path == "drawdown");
+    }
+
+
+    [Fact]
+    public async Task ZScore_executes_independent_deal_on_the_point_after_source_z_entry()
+    {
+        var module = new ZScoreStrategyModule();
+        var source = new[]
+        {
+            new StrategySourcePoint(1, 0),
+            new StrategySourcePoint(2, -0.1),
+            new StrategySourcePoint(3, -0.1),
+            new StrategySourcePoint(4, 0.1)
+        };
+        using var parameters = JsonDocument.Parse("""
+            {"rollingWindow":2,"deals":[{"entryZScore":-0.5,"weight":1,"exitType":"source_z","exitValue":0}]}
+            """);
+
+        var prepared = await module.PrepareAsync(source, CancellationToken.None);
+        var result = await module.CalculateAsync(prepared, parameters.RootElement, CancellationToken.None);
+
+        Assert.Equal(0, result.Rows[2].Diff);
+        AssertClose(0.1, result.Rows[3].Diff);
+        Assert.Equal(1, result.Summary.BuyCount);
+        Assert.Contains("IN #1 +100%", result.Rows[2].Fields["signal"].GetString());
+        Assert.DoesNotContain(" %", result.Rows[2].Fields["signal"].GetString());
+        Assert.True(result.Rows[2].Fields["source_z"].GetDouble() < 0);
+    }
+
+    [Fact]
+    public void ZScore_validates_z_exit_types_and_rolling_window()
+    {
+        var module = new ZScoreStrategyModule();
+        using var parameters = JsonDocument.Parse("""
+            {"rollingWindow":240,"deals":[
+              {"entryZScore":-1.5,"weight":0.1,"exitType":"source_z","exitValue":0},
+              {"entryZScore":-2.0,"weight":0.2,"exitType":"strategy_z","exitValue":0},
+              {"entryZScore":-2.5,"weight":0.3,"exitType":"source_hwm","exitValue":0.1},
+              {"entryZScore":-3.0,"weight":0.4,"exitType":"strategy_hwm","exitValue":0.1}
+            ]}
+            """);
+
+        Assert.True(module.ValidateParameters(parameters.RootElement).IsValid);
     }
 
     private static void AssertClose(double expected, double actual) =>

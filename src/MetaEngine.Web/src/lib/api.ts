@@ -103,7 +103,7 @@ export type CalculationRun = {
 }
 
 export type StrategyType = {
-  strategyType: "rsi" | "mdd_mean_reversion"
+  strategyType: "rsi" | "mdd_mean_reversion" | "z_score"
   displayName: string
   schemaVersion: number
   isProductionCalculationAvailable: boolean
@@ -479,7 +479,7 @@ export async function queueOptimization(
   workspaceId: string,
   sourceRunId: string,
   input: {
-    strategyType: "rsi" | "mdd_mean_reversion"
+    strategyType: "rsi" | "mdd_mean_reversion" | "z_score"
     searchSpace: RsiOptimizationSearchSpace | MddOptimizationSearchSpace
     sampleCount: number
     seed: number

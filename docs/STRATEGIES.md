@@ -32,6 +32,7 @@ Detailed per-strategy docs live in:
 ```text
 docs/strategies/RSI.md
 docs/strategies/MDD_MEAN_REVERSION.md
+docs/strategies/Z_SCORE.md
 ```
 
 This overview keeps shared rules, module locations, and cross-strategy UX conventions.
@@ -78,7 +79,7 @@ The second trading strategy is MDD Mean Reversion:
 
 - type: `mdd_mean_reversion`;
 - source: already calculated base portfolio/preset rows;
-- entry uses **Local DD исходника**, the worst source DD inside the current source drawdown cycle;
+- entry uses **Local MDD исходника**, the worst source DD inside the current source drawdown cycle;
 - each configuration row is an independent deal with entry DD, additive opening weight, exit type and exit value;
 - the active strategy weight is the sum of all open deals;
 - default deals are `-10% → 10%`, `-20% → 20%`, `-30% → 30%`, `-40% → 40%`, `-50% → 50%`, all exiting by `DD исходника 0%`;
@@ -88,7 +89,23 @@ The second trading strategy is MDD Mean Reversion:
 - supported exits are `DD исходника`, `DD стратегии`, `HWM исходника`, and `HWM стратегии`;
 - weights may decrease between deeper entries and the sum of weights is not capped.
 
-MDD strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, Local DD исходника), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). Summary/result metadata exposes “Максимально возможный вес конфигурации” and “Максимально набранный вес в расчете”.
+## Z-Score strategy rules
+
+The third trading strategy is Z-Score:
+
+- type: `z_score`;
+- source: already calculated base portfolio/preset rows;
+- `rollingWindow` defaults to `240`;
+- IN Z is calculated from rolling statistics over source DD;
+- OUT Z is calculated from rolling statistics over OUT DD;
+- each configuration row is an independent deal with entry Z-score, additive opening weight, exit type and exit value;
+- supported exits are `Z исходника`, `Z стратегии`, `HWM исходника`, and `HWM стратегии`;
+- every entry and exit signal is executed on the next point;
+- optimizer is not enabled for Z-Score yet.
+
+Z-Score strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, rolling DD mean/std, `IN Z`), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, rolling DD mean/std, `OUT Z`, `OUT MDD`).
+
+MDD strategy rows distinguish source metrics (`IN Diff`, `IN Accum`, `IN DD`, Local MDD исходника), deal events (`Сигнал`, `Исполнение`, `Активные сделки`, `Вес`) and strategy result metrics (`OUT Diff`, `OUT Accum`, `OUT HWM`, `OUT DD`, `OUT MDD`). Summary/result metadata exposes “Максимально возможный вес конфигурации” and “Максимально набранный вес в расчете”.
 
 ## Strategy optimizer
 
@@ -114,7 +131,7 @@ For RSI, `upperLevel` and `lowerLevel` in the form mirror `sellLevel` and `buyLe
 MDD Mean Reversion optimizer parameters:
 
 - deal count;
-- entry Local DD исходника;
+- entry Local MDD исходника;
 - additive opening weights;
 - default exit `DD исходника 0%` in simple mode;
 - minimum drawdown delta between entries.
