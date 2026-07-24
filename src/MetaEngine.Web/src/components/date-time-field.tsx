@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label"
 
 export function DateTimeField({
   disabled,
+  help,
   id,
   label,
   onChange,
