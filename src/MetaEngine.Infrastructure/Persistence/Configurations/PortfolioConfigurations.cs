@@ -23,8 +23,8 @@ internal sealed class PortfolioVersionConfiguration : IEntityTypeConfiguration<P
         builder.Property(portfolio => portfolio.SourceChecksum).HasMaxLength(64);
         builder.Property(portfolio => portfolio.SeriesChecksum).HasMaxLength(64);
         builder.HasIndex(portfolio => new { portfolio.WorkspaceId, portfolio.PortfolioKey, portfolio.Version }).IsUnique();
-        builder.HasIndex(portfolio => new { portfolio.WorkspaceId, portfolio.SourceChecksum }).IsUnique();
-        builder.HasIndex(portfolio => new { portfolio.WorkspaceId, portfolio.SeriesChecksum }).IsUnique();
+        builder.HasIndex(portfolio => new { portfolio.WorkspaceId, portfolio.SourceChecksum });
+        builder.HasIndex(portfolio => new { portfolio.WorkspaceId, portfolio.SeriesChecksum });
 
         builder
             .HasOne(portfolio => portfolio.Workspace)

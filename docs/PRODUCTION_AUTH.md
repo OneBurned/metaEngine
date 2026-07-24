@@ -4,6 +4,18 @@
 регистрации нет: первый владелец создается отдельно, а остальные пользователи
 позже будут добавляться через управление участниками workspace.
 
+
+## Development-вход для Codespaces/local проверки
+
+В Docker Compose development-запуске можно не выполнять bootstrap вручную: при
+`ASPNETCORE_ENVIRONMENT=Development` и `MetaEngine__DevAuth__Enabled=true` API
+принимает логин `admin` и пароль `admin`, сам создает локального администратора
+и workspace `Personal`, если их еще нет. Этот режим нужен только для быстрой
+проверки PR в Codespaces/local окружении.
+
+В `Production` dev-вход не используется: для настоящего окружения остается
+bootstrap первого владельца ниже и полноценная cookie-auth схема.
+
 ## Первый владелец
 
 Сначала применить migrations, затем один раз выполнить в корне проекта:

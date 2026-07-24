@@ -32,8 +32,8 @@ Timestamp,Unrealized_profits
 multipart field `valueType=accum|diff`; для обратной совместимости отсутствие
 поля трактуется как `diff`.
 
-`timestamp` принимается как Unix milliseconds, `YYYY-MM-DD HH:mm`,
-`YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. Значения доходности
+`timestamp` принимается как Unix milliseconds, `YYYY.MM.DD HH:mm`,
+`YYYY-MM-DD HH:mm`, `YYYY-MM-DDTHH:mm` или ISO 8601. Время нормализуется в UTC. Значения доходности
 пока принимаются в decimal scale: `0.01` означает `1%`. Если выбран `Accum`, API
 пересчитывает накопленную доходность в canonical `diff` перед сохранением.
 Percent input появится отдельным расширением.
@@ -65,9 +65,12 @@ API считает два SHA-256:
 - `sourceChecksum` по исходным bytes;
 - `seriesChecksum` по отсортированному canonical ряду.
 
-Если любой checksum уже существует в workspace, API возвращает существующую
-версию с `created=false`. Новая запись возвращается с `created=true` и HTTP
-`201`. Успешное создание записывает `portfolio_imported` в `audit_events`.
+Checksum сохраняются как metadata и индексы поиска, но не блокируют повторный
+import. Даже если `sourceChecksum` или `seriesChecksum` совпадает с уже
+загруженной версией, явная загрузка пользователя создает новую видимую запись с
+`created=true` и HTTP `201`. Имя исходного файла не участвует в дедупликации:
+несколько разных файлов с одинаковым именем должны импортироваться как разные
+портфели. Успешное создание записывает `portfolio_imported` в `audit_events`.
 
 ## API и доступ
 

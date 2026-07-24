@@ -5,25 +5,25 @@
 namespace MetaEngine.Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
+    [Migration("20260721150000_AddRunArtifactPointFields")]
     public partial class AddRunArtifactPointFields : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<string>(
-                name: "fields_json",
-                table: "run_artifact_points",
-                type: "jsonb",
-                nullable: false,
-                defaultValue: "{}");
+            migrationBuilder.Sql("""
+                ALTER TABLE run_artifact_points
+                ADD COLUMN IF NOT EXISTS fields_json jsonb NOT NULL DEFAULT '{}';
+                """);
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(
-                name: "fields_json",
-                table: "run_artifact_points");
+            migrationBuilder.Sql("""
+                ALTER TABLE run_artifact_points
+                DROP COLUMN IF EXISTS fields_json;
+                """);
         }
     }
 }

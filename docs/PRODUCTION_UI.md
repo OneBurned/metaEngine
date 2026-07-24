@@ -39,6 +39,12 @@ The forms fill source start/end automatically. The user may narrow the period.
 A `Viewer` can inspect data but does not get active import or calculation
 controls.
 
+Production UI dates in lists, cards, source selectors, tables, tooltips and visible period fields use a compact UTC
+`YYYY.MM.DD HH:MM` format. Base calculation selectors show the source name,
+version, completed/created timestamp and final Accum, for example
+`Portfolio · v1 · 2026.07.21 21:56 · 1114,43%`, so repeated calculations
+with the same name remain distinguishable without long localized date labels. Native browser date controls are not used where they would render localized `ДД.ММ.ГГГГ` values instead of the shared format. Date fields show the example in the input placeholder; duplicate helper text under every period field is intentionally avoided.
+
 ## Client boundaries
 
 The UI supports RSI and MDD Mean Reversion optimization. Retry actions are
@@ -46,6 +52,8 @@ available for failed or interrupted calculation and optimization jobs. User
 management remains future work. CSV export is available through a dedicated
 **Экспорт** tab with separate source groups for portfolios, base calculations,
 strategy results and saved strategy results.
+
+Workspace overview screens load independent source lists separately, so a failure in presets, saved strategies or run history is shown as an actionable API endpoint error but does not wipe already loaded portfolios or block portfolio-based calculations.
 
 The result API stores canonical `timestamp,diff`. The client derives `accum`,
 HWM and drawdown for display. It loads all result pages, then down-samples only
@@ -83,7 +91,7 @@ npm install
 npm run dev
 ```
 
-Open port `3000` in Codespaces. The Worker must be running for a calculation to
+Open port `3000` in Codespaces. In the default Docker Compose development setup, sign in with `admin` / `admin`; the API creates the local admin workspace automatically. The Worker must be running for a calculation to
 progress beyond `queued`.
 
 ## Verification

@@ -469,10 +469,11 @@ internal sealed class OptimizationJobService(
             });
         }
 
-        var job = await dbContext.OptimizationJobs.SingleOrDefaultAsync(candidate =>
-            candidate.Status == JobStatus.Queued &&
-            (candidate.RetryNotBefore == null || candidate.RetryNotBefore <= now),
-            cancellationToken);
+        var job = await dbContext.OptimizationJobs
+            .Where(candidate => candidate.Status == JobStatus.Queued &&
+                (candidate.RetryNotBefore == null || candidate.RetryNotBefore <= now))
+            .OrderBy(candidate => candidate.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
         if (job is null)
         {
             return null;

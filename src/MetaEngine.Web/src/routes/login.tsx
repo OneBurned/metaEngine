@@ -51,8 +51,8 @@ function LoginScreen() {
         </CardHeader>
         <CardContent>
           <form className="grid gap-4" onSubmit={handleSubmit}>
-            <Field label="Email" htmlFor="email"><Input id="email" type="email" autoComplete="email" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
-            <Field label="Пароль" htmlFor="password"><Input id="password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></Field>
+            <Field label="Email / login" htmlFor="email"><Input id="email" type="text" autoComplete="username" placeholder="admin" value={email} onChange={(event) => setEmail(event.target.value)} required /></Field>
+            <Field label="Пароль" htmlFor="password"><Input id="password" type="password" autoComplete="current-password" placeholder="admin" value={password} onChange={(event) => setPassword(event.target.value)} required /></Field>
             {error ? <Alert variant="destructive" className="rounded-md"><AlertDescription>{error}</AlertDescription></Alert> : null}
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? <LoaderCircle className="animate-spin" /> : null}

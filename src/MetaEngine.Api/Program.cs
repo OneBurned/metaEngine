@@ -131,11 +131,24 @@ auth.MapPost("/login", async (
     SignInManager<IdentityAccount> signInManager,
     MetaEngineDbContext dbContext,
     IWorkspaceAccessService workspaceAccessService,
+    DevAuthService devAuthService,
+    IHostEnvironment environment,
     CancellationToken cancellationToken) =>
 {
     if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
     {
         return Results.BadRequest(new { code = "validation_error", message = "Email and password are required." });
+    }
+
+    if (devAuthService.IsEnabled(environment) && devAuthService.MatchesCredentials(request.Email, request.Password))
+    {
+        var devProfile = await devAuthService.EnsureAdminAsync(cancellationToken);
+        var devIdentity = await devAuthService.EnsureIdentityAsync(devProfile, cancellationToken);
+        await signInManager.SignInAsync(devIdentity, isPersistent: false);
+        return Results.Ok(await BuildCurrentUserAsync(
+            devProfile,
+            workspaceAccessService,
+            cancellationToken));
     }
 
     var identity = await userManager.FindByEmailAsync(request.Email.Trim());

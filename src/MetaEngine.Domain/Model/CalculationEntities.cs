@@ -113,6 +113,8 @@ public sealed class CalculationRun
 
     public string? ErrorCode { get; set; }
 
+    public string? ErrorMessage { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     public DateTimeOffset? StartedAt { get; set; }

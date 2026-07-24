@@ -95,6 +95,7 @@ export type CalculationRun = {
   highWaterMark: number | null
   maxDrawdown: number | null
   errorCode: string | null
+  errorMessage: string | null
   createdAt: string
   startedAt: string | null
   completedAt: string | null
@@ -250,7 +251,7 @@ export class ApiError extends Error {
 async function getCsrfToken() {
   const response = await fetch("/api/v1/auth/csrf", { credentials: "same-origin" })
   if (!response.ok) {
-    throw await toApiError(response)
+    throw await toApiError(response, "/api/v1/auth/csrf")
   }
 
   const body = (await response.json()) as { token: string }
@@ -274,7 +275,7 @@ async function request<T>(
   })
 
   if (!response.ok) {
-    throw await toApiError(response)
+    throw await toApiError(response, path)
   }
 
   if (response.status === 204) {
@@ -284,8 +285,8 @@ async function request<T>(
   return (await response.json()) as T
 }
 
-async function toApiError(response: Response) {
-  const fallback = `Request failed with status ${response.status}.`
+async function toApiError(response: Response, path: string) {
+  const fallback = `${path} failed with status ${response.status}.`
   try {
     const body = (await response.json()) as { code?: string; message?: string }
     return new ApiError(body.message ?? fallback, body.code ?? "request_failed", response.status)
@@ -524,6 +525,7 @@ export async function retryOptimizationJob(workspaceId: string, jobId: string) {
   return request<OptimizationJob>(
     `/api/v1/workspaces/${workspaceId}/optimization-jobs/${jobId}/retry`,
     { method: "POST" },
+    true,
   )
 }
 
@@ -556,6 +558,7 @@ export async function retryCalculationRun(workspaceId: string, runId: string) {
   return request<CalculationRun>(
     `/api/v1/workspaces/${workspaceId}/calculation-runs/${runId}/retry`,
     { method: "POST" },
+    true,
   )
 }
 

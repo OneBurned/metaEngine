@@ -171,6 +171,7 @@ public sealed class RsiStrategyModule : IStrategyModule
         var accum = 0d;
         var highWaterMark = 0d;
         var maxDrawdown = 0d;
+        var sourceAccum = 0d;
 
         for (var index = 0; index < prepared.Source.Count; index++)
         {
@@ -180,7 +181,9 @@ public sealed class RsiStrategyModule : IStrategyModule
             pendingExecution = string.Empty;
             if (execution == "buy") position = 1;
             if (execution == "sell") position = 0;
-            var diff = position > 0 ? prepared.Source[index].Diff : 0;
+            var sourceDiff = prepared.Source[index].Diff;
+            sourceAccum = (1 + sourceDiff) * (1 + sourceAccum) - 1;
+            var diff = position > 0 ? sourceDiff : 0;
 
             if (index > 0 && rsi[index - 1] is double previous && rsi[index] is double current)
             {
@@ -217,8 +220,8 @@ public sealed class RsiStrategyModule : IStrategyModule
                         ["signal"] = JsonSerializer.SerializeToElement(signal),
                         ["execution"] = JsonSerializer.SerializeToElement(execution),
                         ["position"] = JsonSerializer.SerializeToElement(position),
-                        ["source_diff"] = JsonSerializer.SerializeToElement(prepared.Source[index].Diff),
-                        ["source_accum"] = JsonSerializer.SerializeToElement(prepared.Source[index].Accum),
+                        ["source_diff"] = JsonSerializer.SerializeToElement(sourceDiff),
+                        ["source_accum"] = JsonSerializer.SerializeToElement(sourceAccum),
                         ["strategy_accum"] = JsonSerializer.SerializeToElement(accum),
                         ["strategy_hwm"] = JsonSerializer.SerializeToElement(highWaterMark),
                         ["strategy_dd"] = JsonSerializer.SerializeToElement(drawdown),
