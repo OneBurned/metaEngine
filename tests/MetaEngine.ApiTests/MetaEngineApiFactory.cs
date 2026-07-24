@@ -23,7 +23,12 @@ public sealed class MetaEngineApiFactory : WebApplicationFactory<Program>
     private readonly string environment;
     private readonly Dictionary<string, string?> configurationValues;
 
-    public MetaEngineApiFactory(string environment = "Testing", Dictionary<string, string?>? configurationValues = null)
+    public MetaEngineApiFactory()
+        : this("Testing", null)
+    {
+    }
+
+    public MetaEngineApiFactory(string environment, Dictionary<string, string?>? configurationValues = null)
     {
         this.environment = environment;
         this.configurationValues = configurationValues ?? [];
