@@ -40,13 +40,17 @@ export function calculationSourceLabel(run: CalculationRun, sources: RunPresenta
 }
 
 export function calculationDisplayName(run: CalculationRun, sources: RunPresentationSources) {
-  return `${calculationSourceLabel(run, sources)} · ${calculationKindLabel(run)}`
+  const source = calculationSourceLabel(run, sources)
+  return run.kind === "strategy" ? `${source} · ${calculationKindLabel(run)}` : source
+}
+
+export function calculationMetaLabel(run: CalculationRun) {
+  return `${run.timeframe} · ${formatDateTime(run.completedAt ?? run.createdAt)}`
 }
 
 export function calculationCompactLabel(run: CalculationRun, sources: RunPresentationSources) {
-  const completedOrCreatedAt = run.completedAt ?? run.createdAt
   const finalAccum = formatPercent(run.finalAccum)
-  const parts = [calculationSourceLabel(run, sources), formatDateTime(completedOrCreatedAt)]
+  const parts = [calculationDisplayName(run, sources), calculationMetaLabel(run)]
   if (finalAccum !== "-") {
     parts.push(finalAccum)
   }

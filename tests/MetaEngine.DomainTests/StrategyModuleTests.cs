@@ -131,8 +131,8 @@ public sealed class StrategyModuleTests
         Assert.Equal(0, result.Rows[1].Fields["position"].GetDouble());
         Assert.Equal(0.6, result.Rows[2].Fields["position"].GetDouble(), 10);
         Assert.Equal(3, result.Summary.BuyCount);
-        Assert.Contains("сделка 1", result.Rows[1].Fields["signal"].GetString());
-        Assert.Contains("сделка 3", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("deal 1", result.Rows[1].Fields["signal"].GetString());
+        Assert.Contains("deal 3", result.Rows[1].Fields["signal"].GetString());
     }
 
     [Fact]

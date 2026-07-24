@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-import { calculationCompactLabel, calculationDisplayName, strategyTypeLabel } from "./run-presentation"
+import { calculationCompactLabel, calculationDisplayName, calculationMetaLabel, strategyTypeLabel } from "./run-presentation"
+import { formatDateTime } from "@/lib/metrics"
 
 const portfolio = {
   id: "portfolio-1",
@@ -50,9 +51,9 @@ const baseRun = {
 }
 
 describe("calculationDisplayName", () => {
-  it("uses the source name and calculation type", () => {
+  it("uses only the source name for base calculations", () => {
     expect(calculationDisplayName(baseRun, { portfolios: [portfolio], presets: [], runs: [baseRun] }))
-      .toBe("Core allocation · v2 · Базовый расчёт")
+      .toBe("Core allocation · v2")
   })
 
   it("keeps the base source for strategy results", () => {
@@ -70,8 +71,14 @@ describe("strategyTypeLabel", () => {
 
 
 describe("calculationCompactLabel", () => {
-  it("uses source, completed date and final Accum without repeating the calculation type", () => {
+  it("uses source, timeframe, completed date and final Accum", () => {
+    const completedAt = formatDateTime(baseRun.completedAt)
+
     expect(calculationCompactLabel(baseRun, { portfolios: [portfolio], presets: [], runs: [baseRun] }))
-      .toBe("Core allocation · v2 · 2026.01.01 03:04 · 10,00%")
+      .toBe(`Core allocation · v2 · 1h · ${completedAt} · 10,00%`)
+  })
+
+  it("uses timeframe and completed-or-created date as metadata", () => {
+    expect(calculationMetaLabel(baseRun)).toBe(`1h · ${formatDateTime(baseRun.completedAt)}`)
   })
 })

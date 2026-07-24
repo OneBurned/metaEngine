@@ -53,12 +53,15 @@ describe("formatPercent", () => {
 })
 
 describe("formatDateTime", () => {
-  it("uses compact UTC YYYY.MM.DD HH:MM labels", () => {
-    expect(formatDateTime("2026-07-21T21:56:30Z")).toBe("2026.07.21 21:56")
+  it("uses compact local YYYY.MM.DD HH:MM labels", () => {
+    const date = new Date("2026-07-21T21:56:30Z")
+    const expected = `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, "0")}.${String(date.getDate()).padStart(2, "0")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+
+    expect(formatDateTime("2026-07-21T21:56:30Z")).toBe(expected)
     expect(formatDateTime(null)).toBe("-")
   })
 
-  it("parses compact dotted UTC labels back to ISO", () => {
-    expect(toIsoDateTime("2026.07.21 21:56")).toBe("2026-07-21T21:56:00.000Z")
+  it("parses compact dotted local labels back to ISO", () => {
+    expect(toIsoDateTime("2026.07.21 21:56")).toBe(new Date(2026, 6, 21, 21, 56).toISOString())
   })
 })

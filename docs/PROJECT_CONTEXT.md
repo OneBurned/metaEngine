@@ -476,9 +476,9 @@ Examples:
 
 Timestamp values are Unix timestamps in milliseconds.
 
-The user explicitly said not to shift displayed hours. Production UI date labels now use UTC getters and the compact `YYYY.MM.DD HH:MM` format, so list, card and selector timestamps are consistent and do not fall back to long localized Russian dates. Base calculation selector labels include the source name/version, completed-or-created timestamp and final Accum to distinguish repeated calculations.
+Production UI date labels use the compact `YYYY.MM.DD HH:MM` format in the browser's local timezone. Backend storage, API payloads and timeframe boundaries remain UTC; only human-facing labels are localized so user-created runs show the user's clock time. Base/strategy calculation labels include source name/version, timeframe, completed-or-created timestamp and final Accum to distinguish repeated calculations without repeating redundant labels such as “Базовый расчёт”.
 
-The date rule is global: it applies to labels, cards, selectors, tables, tooltips, portfolio/calculation/strategy periods and visible period input fields such as `Период с` / `Период по`. If a native browser date input cannot guarantee the format, production UI should use the shared text-style date field and parse it back to UTC ISO internally.
+The date rule is global: it applies to labels, cards, selectors, tables, tooltips, portfolio/calculation/strategy periods and visible period input fields such as `Период с` / `Период по`. If a native browser date input cannot guarantee the format, production UI should use the shared text-style date field and parse the local label back to UTC ISO internally.
 
 When a Codespaces/PR check fails, diagnose first: confirm the PR branch and `git log`, check whether containers were rebuilt/restarted, separate frontend proxy errors from backend build/runtime errors, and only then change code. Do not assume every transient Codespaces/GitHub state is a code defect.
 
